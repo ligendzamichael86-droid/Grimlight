@@ -1,0 +1,1139 @@
+// Headless-Smoke-Test Slice 0 + 1 + 2: importiert NUR Module ohne Browser-
+// Bezug auf Modulebene (world/entities/art/core/ui/items). Aufrufbar aus
+// jedem CWD via node tools/smoke_test.mjs, Exit 0 = grün.
+
+import { PALETTE } from '../game/js/art/palette.js';
+import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
+import { createTilemap } from '../game/js/world/tilemap.js';
+import { GRAVEYARD, CATACOMBS, MAPS } from '../game/js/world/maps.js';
+import { aabbOverlap, moveWithCollision, getEvent } from '../game/js/entities/entity.js';
+import { createPlayer } from '../game/js/entities/player.js';
+import { createSkeleton, createGhoul, createHound, createRust, createEnemy, updateEnemies, updateDrops } from '../game/js/entities/enemies.js';
+import { createProps, updateProps } from '../game/js/entities/props.js';
+import { createProjectiles } from '../game/js/entities/projectiles.js';
+import { rollItem, createInventory, addItem, equipItem, computeStats, AFFIXES } from '../game/js/items/items.js';
+import { createInventoryUI } from '../game/js/ui/inventory_ui.js';
+import { createLighting } from '../game/js/core/lighting.js';
+import { drawFog } from '../game/js/ui/hud.js';
+
+const DT = 1 / 60;
+const failures = [];
+let totalTicks = 0;
+
+function check(name, cond, detail = '') {
+  if (cond) {
+    console.log(`  ok  ${name}`);
+  } else {
+    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
+    console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ''}`);
+  }
+}
+
+function makeInput() {
+  return { dirX: 0, dirY: 0, attack: false, potion: false, confirm: false };
+}
+
+function makeWorld({ mapDef = GRAVEYARD, skeletonSpawns = [], ghoulSpawns = [], propSpawns = [] } = {}) {
+  const map = createTilemap(mapDef.rows, mapDef.legend);
+  const player = createPlayer(mapDef.playerSpawn);
+  const enemies = [...skeletonSpawns.map(createSkeleton), ...ghoulSpawns.map(createGhoul)];
+  const props = createProps(propSpawns);
+  return { map, player, enemies, props, drops: [], events: [], input: makeInput() };
+}
+
+// Ein Tick (Update-Reihenfolge wie main.js) + Invarianten: keine Entity und
+// kein Drop endet in einem soliden Tile.
+function tick(w) {
+  w.player.update(DT, w.input, w.map, w.enemies, w.events);
+  updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events);
+  updateProps(DT, w.props, w.player, w.map, w.drops, w.events);
+  updateDrops(DT, w.drops, w.player, w.events);
+  totalTicks++;
+  if (w.map.rectCollides(w.player)) failures.push(`Invariante: Spieler in solidem Tile bei (${w.player.x},${w.player.y})`);
+  for (const e of w.enemies) {
+    if (w.map.rectCollides(e)) failures.push(`Invariante: Gegner (${e.kind}) in solidem Tile bei (${e.x},${e.y})`);
+  }
+  for (const d of w.drops) {
+    if (w.map.rectCollides(d)) failures.push(`Invariante: Drop in solidem Tile bei (${d.x},${d.y})`);
+  }
+}
+
+function ticks(w, n) {
+  for (let i = 0; i < n; i++) tick(w);
+}
+
+// --- 1. Art: alle Sprites referenzieren nur existierende Palettenfarben ---
+{
+  let bad = null;
+  for (const [setName, set] of [['SPRITES', SPRITES], ['TILE_ART', TILE_ART]]) {
+    for (const [name, grid] of Object.entries(set)) {
+      for (const row of grid) {
+        for (const ch of row) {
+          if (ch !== '.' && !PALETTE[ch]) bad = `${setName}.${name}: '${ch}'`;
+        }
+      }
+    }
+  }
+  check('Sprites nutzen nur existierende Palettenfarben', bad === null, bad || '');
+}
+
+// --- 2. Beide Maps: Legende, Ränder, Spawns, Portale (Slice 1) ---
+for (const [name, def] of Object.entries(MAPS)) {
+  let badCh = null;
+  for (const row of def.rows) {
+    for (const ch of row) if (!def.legend[ch]) badCh = ch;
+  }
+  check(`${name}: Legende deckt alle Zeichen ab`, badCh === null, badCh ? `'${badCh}'` : '');
+
+  let m = null;
+  let threw = null;
+  try { m = createTilemap(def.rows, def.legend); } catch (e) { threw = e.message; }
+  check(`${name}: createTilemap baut ohne Fehler`, threw === null, threw || '');
+  if (!m) continue;
+
+  let openBorder = null;
+  for (let tx = 0; tx < m.wTiles; tx++) {
+    if (!m.isSolidAt(tx * 16 + 8, 8)) openBorder = `(${tx},0)`;
+    if (!m.isSolidAt(tx * 16 + 8, m.hPx - 8)) openBorder = `(${tx},${m.hTiles - 1})`;
+  }
+  for (let ty = 0; ty < m.hTiles; ty++) {
+    if (!m.isSolidAt(8, ty * 16 + 8)) openBorder = `(0,${ty})`;
+    if (!m.isSolidAt(m.wPx - 8, ty * 16 + 8)) openBorder = `(${m.wTiles - 1},${ty})`;
+  }
+  check(`${name}: Rand komplett solide`, openBorder === null, openBorder || '');
+
+  const box = (s, w, h) => ({ x: s.x - w / 2, y: s.y - h / 2, w, h });
+  check(`${name}: Spieler-Spawn frei`, !m.rectCollides(box(def.playerSpawn, 12, 14)));
+  const badSkel = def.skeletonSpawns.findIndex((s) => m.rectCollides(box(s, 12, 14)));
+  check(`${name}: alle ${def.skeletonSpawns.length} Skelett-Spawns frei`, badSkel === -1,
+    badSkel >= 0 ? `Spawn ${badSkel} solide` : '');
+  const badGhoul = def.ghoulSpawns.findIndex((s) => m.rectCollides(box(s, 14, 14)));
+  check(`${name}: alle ${def.ghoulSpawns.length} Ghul-Spawns frei`, badGhoul === -1,
+    badGhoul >= 0 ? `Spawn ${badGhoul} solide` : '');
+  const badProp = def.propSpawns.findIndex((s) =>
+    m.rectCollides(box(s, s.kind === 'chest' ? 16 : 12, s.kind === 'chest' ? 14 : 12)));
+  check(`${name}: alle ${def.propSpawns.length} Prop-Spawns frei`, badProp === -1,
+    badProp >= 0 ? `Spawn ${badProp} solide` : '');
+  // Slice 2: enemySpawns begehbar und kind gültig (createEnemy wirft bei
+  // unbekanntem kind, die echte AABB kommt aus dem Erzeuger).
+  const badEnemy = (() => {
+    const spawns = def.enemySpawns || [];
+    for (let i = 0; i < spawns.length; i++) {
+      try {
+        const e = createEnemy(spawns[i]);
+        if (m.rectCollides(e)) return `Spawn ${i} solide`;
+      } catch { return `Spawn ${i}: kind '${spawns[i].kind}' ungültig`; }
+    }
+    return null;
+  })();
+  check(`${name}: alle ${(def.enemySpawns || []).length} enemySpawns begehbar mit gültigem kind`,
+    badEnemy === null, badEnemy || '');
+
+  for (const portal of def.portals) {
+    check(`${name}: Portal-target '${portal.target}' existiert in MAPS`, !!MAPS[portal.target]);
+    if (!MAPS[portal.target]) continue;
+    const targetDef = MAPS[portal.target];
+    const tm = createTilemap(targetDef.rows, targetDef.legend);
+    const sb = box(portal.spawn, 12, 14);
+    check(`${name}→${portal.target}: Portal-Ziel-Spawn begehbar`, !tm.rectCollides(sb));
+    const inPortal = targetDef.portals.some((p2) => aabbOverlap(sb, p2));
+    check(`${name}→${portal.target}: Ziel-Spawn liegt NICHT im Gegenportal`, !inPortal);
+  }
+}
+
+// GRAVEYARD-Erwartungen aus der Spec bleiben fixiert (Slice-0-Regression)
+check('GRAVEYARD hat weiterhin 6 Skelette', GRAVEYARD.skeletonSpawns.length === 6);
+// Slice 2 ersetzt den alten "genau 1 Truhe"-Check: Siegtruhe ('treasure',
+// Default zählt mit) und Bumerang-Truhe existieren je genau einmal.
+check("CATACOMBS: genau 1 Siegtruhe ('treasure'/Default) und genau 1 Bumerang-Truhe",
+  CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && (p.content ?? 'treasure') === 'treasure').length === 1
+  && CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && p.content === 'boomerang').length === 1);
+
+// --- 3. Spieler bewegt sich ---
+{
+  const w = makeWorld();
+  const x0 = w.player.x;
+  w.input.dirX = 1;
+  ticks(w, 60);
+  check('Spieler bewegt sich (1 s nach rechts ≈ 90 px)', w.player.x > x0 + 80,
+    `x0=${x0} x=${w.player.x}`);
+}
+
+// --- 4. Wand stoppt Spieler (Snap exakt an Tile-Kante) ---
+{
+  const w = makeWorld();
+  w.input.dirX = -1;
+  ticks(w, 150);
+  check('Wand stoppt Spieler, Position exakt an Wandkante (x=16)', w.player.x === 16,
+    `x=${w.player.x}`);
+}
+
+// --- 5. Schwert tötet Skelett in genau 2 Treffern ---
+let fightWorld = null;
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ skeletonSpawns: [{ x: s.x + 20, y: s.y }] });
+  w.input.dirX = 1;
+  tick(w); // Blickrichtung rechts setzen
+  w.input.dirX = 0;
+  w.input.attack = true;
+  const skel = w.enemies[0];
+  const hits = [];
+  let prevHp = skel.hp;
+  for (let i = 0; i < 600 && w.enemies.length > 0; i++) {
+    tick(w);
+    if (skel.hp < prevHp) { hits.push(i); prevHp = skel.hp; }
+  }
+  check('Skelett stirbt durch Schwert', w.events.includes('enemy_died') && w.enemies.length === 0);
+  check('Genau 2 Treffer nötig (kein Mehrfachschaden pro Schwung)', hits.length === 2,
+    `Treffer bei Ticks [${hits}]`);
+  check('Treffer stammen aus getrennten Schwüngen (Abstand ≥ 0,2 s)',
+    hits.length === 2 && hits[1] - hits[0] >= 12, `Abstand ${hits[1] - hits[0]} Ticks`);
+  w.input.attack = false;
+  ticks(w, 30); // Streu-Impuls der Münzen auslaufen lassen
+  // Münzen können schon während des Kampfs eingesammelt worden sein (Radius 12)
+  const totalCoins = w.drops.length + w.player.gold;
+  check('Toter Gegner hinterlässt 1-3 Münzen', totalCoins >= 1 && totalCoins <= 3,
+    `münzen=${totalCoins}`);
+  const badDrop = w.drops.findIndex((d) => w.map.rectCollides(d));
+  check('Münzen liegen auf begehbaren Tiles (Streuung kollidiert)', badDrop === -1);
+  const badKind = w.drops.find((d) => d.kind !== 'coin');
+  check("Skelett-Drops haben kind 'coin'", badKind === undefined, badKind ? `${badKind.kind}` : '');
+  fightWorld = w;
+  fightWorld.totalCoins = totalCoins;
+}
+
+// --- 6. Münz-Drop wird eingesammelt, Gold steigt ---
+{
+  const w = fightWorld;
+  check('Spieler hat den Kampf überlebt', w.player.hp > 0, `hp=${w.player.hp}`);
+  for (let i = 0; i < 600 && w.drops.length > 0; i++) {
+    const d = w.drops[0];
+    const dx = d.x + d.w / 2 - (w.player.x + w.player.w / 2);
+    const dy = d.y + d.h / 2 - (w.player.y + w.player.h / 2);
+    const len = Math.hypot(dx, dy) || 1;
+    w.input.dirX = dx / len;
+    w.input.dirY = dy / len;
+    tick(w);
+  }
+  check('Alle Münzen eingesammelt, Gold steigt entsprechend',
+    w.drops.length === 0 && w.player.gold === w.totalCoins && w.events.includes('gold_pickup'),
+    `drops=${w.drops.length} gold=${w.player.gold} erwartet=${w.totalCoins}`);
+}
+
+// --- 7. Skelett verfolgt und verletzt Spieler (1 Schaden!); Game Over ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ skeletonSpawns: [{ x: s.x + 60, y: s.y }] });
+  const skel = w.enemies[0];
+  const dist0 = Math.abs(skel.x - w.player.x);
+  ticks(w, 30);
+  check('Skelett verfolgt Spieler (Distanz sinkt)', Math.abs(skel.x - w.player.x) < dist0,
+    `vorher=${dist0} nachher=${Math.abs(skel.x - w.player.x)}`);
+  let firstHit = -1;
+  for (let i = 0; i < 300 && firstHit < 0; i++) {
+    tick(w);
+    if (w.player.hp < w.player.maxHp) firstHit = i;
+  }
+  check('Skelett-Kontakt macht weiterhin GENAU 1 Schaden (Regression)',
+    firstHit >= 0 && w.player.hp === 5, `hp=${w.player.hp}`);
+  check('Spieler ist nach Treffer unverwundbar', w.player.invulnTimer > 0);
+  const hpAfterHit = w.player.hp;
+  ticks(w, 50); // < 1 s Unverwundbarkeit bei Dauerkontakt
+  check('Unverwundbarkeit verhindert Doppelschaden (0,83 s Dauerkontakt)',
+    w.player.hp === hpAfterHit, `hp=${w.player.hp}`);
+  let died = false;
+  for (let i = 0; i < 900 && !died; i++) {
+    tick(w);
+    died = w.events.includes('player_died');
+  }
+  check("Spieler stirbt an Dauerkontakt, Event 'player_died'", died && w.player.state === 'dead',
+    `hp=${w.player.hp} state=${w.player.state}`);
+}
+
+// --- 8. Basisfunktionen entity.js ---
+{
+  check('aabbOverlap: Überlappung erkannt',
+    aabbOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }));
+  check('aabbOverlap: reine Kantenberührung zählt nicht',
+    !aabbOverlap({ x: 0, y: 0, w: 10, h: 10 }, { x: 10, y: 0, w: 10, h: 10 }));
+  const map = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend);
+  const ent = { x: 20, y: 194, w: 12, h: 14 };
+  const hit = moveWithCollision(ent, map, -100, 0);
+  check('moveWithCollision meldet Wandtreffer und snappt', hit.x === true && ent.x === 16,
+    `x=${ent.x}`);
+}
+
+// --- 9. Vase zerbricht durch Schwert-Treffer (Slice 1) ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ propSpawns: [{ x: s.x + 20, y: s.y, kind: 'vase' }] });
+  w.input.dirX = 1;
+  tick(w); // Blickrichtung rechts
+  w.input.dirX = 0;
+  w.input.attack = true;
+  let broke = -1;
+  for (let i = 0; i < 120 && broke < 0; i++) {
+    tick(w);
+    if (w.props.length === 0 || w.props[0].state === 'break') broke = i;
+  }
+  w.input.attack = false;
+  check('Vase zerbricht durch Schwert-Treffer', broke >= 0);
+  ticks(w, 20); // Scherben-Animation (0,25 s) auslaufen lassen
+  check('Vase nach Scherben-Animation entfernt', w.props.length === 0, `props=${w.props.length}`);
+  const badKind = w.drops.find((d) => d.kind !== 'coin' && d.kind !== 'potion');
+  check("Vasen-Drop-Kinds nur 'coin'/'potion'", badKind === undefined, badKind ? `${badKind.kind}` : '');
+  const noMap = w.drops.find((d) => !d.map || typeof d.map.rectCollides !== 'function');
+  check('Vasen-Drops tragen map-Referenz (Festlegung 4)', noMap === undefined);
+}
+
+// --- 10. Urne zerbricht durch Berührung ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ propSpawns: [{ x: s.x + 30, y: s.y, kind: 'urn' }] });
+  const urn = w.props[0];
+  w.input.dirX = 1;
+  let broke = -1;
+  for (let i = 0; i < 60 && broke < 0; i++) {
+    tick(w);
+    if (urn.state === 'break') broke = i;
+  }
+  check('Urne zerbricht durch Spieler-Berührung (ohne Schwert)', broke >= 0);
+}
+
+// --- 11. Truhe: nur Schwert öffnet, genau einmal, 8-12 Münzen ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ propSpawns: [{ x: s.x + 22, y: s.y, kind: 'chest' }] });
+  const chest = w.props[0];
+  w.input.dirX = 1;
+  ticks(w, 10); // in die Truhe hineinlaufen (Props nicht solide)
+  w.input.dirX = 0;
+  check('Truhe öffnet NICHT durch Berührung', !chest.opened && w.props.includes(chest));
+  const gold0 = w.player.gold;
+  w.input.attack = true;
+  let opened = -1;
+  for (let i = 0; i < 180 && opened < 0; i++) {
+    tick(w);
+    if (chest.opened) opened = i;
+  }
+  check('Truhe öffnet durch Schwert-Treffer', opened >= 0);
+  ticks(w, 240); // weiter draufschlagen: mehrere weitere Schwünge
+  w.input.attack = false;
+  const openEvents = w.events.filter((e) => e === 'chest_opened').length;
+  check("'chest_opened' wird genau EINMAL gepusht", openEvents === 1, `${openEvents}×`);
+  check('Truhe bleibt offen bestehen (kein Despawn)', w.props.includes(chest) && chest.opened);
+  ticks(w, 30);
+  const coins = w.drops.filter((d) => d.kind === 'coin').length + (w.player.gold - gold0);
+  check('Truhe wirft 8-12 Münzen mit Streu-Impuls', coins >= 8 && coins <= 12, `münzen=${coins}`);
+  const noMap = w.drops.find((d) => !d.map || typeof d.map.rectCollides !== 'function');
+  check('Truhen-Drops tragen map-Referenz (Festlegung 4)', noMap === undefined);
+  const badDrop = w.drops.findIndex((d) => w.map.rectCollides(d));
+  check('Truhen-Münzen liegen auf begehbaren Tiles', badDrop === -1);
+}
+
+// --- 12. Tränke: Pickup (max 3, Überlauf +2 Gold), Trinken ---
+{
+  const w = makeWorld();
+  const p = w.player;
+  const dropPotion = () => w.drops.push({
+    x: p.x, y: p.y, w: 8, h: 8, vx: 0, vy: 0, age: 1, kind: 'potion', map: w.map,
+  });
+  check('Start: 0 Tränke, max 3', p.potions === 0 && p.maxPotions === 3);
+  for (let i = 0; i < 3; i++) { dropPotion(); tick(w); }
+  check("Pickup erhöht potions bis max 3 (Event 'potion_pickup')",
+    p.potions === 3 && w.events.filter((e) => e === 'potion_pickup').length === 3,
+    `potions=${p.potions}`);
+  const gold0 = p.gold;
+  dropPotion();
+  tick(w);
+  check("Überlauf bei vollen Taschen: +2 Gold, Event 'potion_full_gold'",
+    p.potions === 3 && p.gold === gold0 + 2 && w.events.includes('potion_full_gold'),
+    `potions=${p.potions} gold=${p.gold}`);
+  p.hp = 3;
+  w.input.potion = true;
+  tick(w);
+  check("Trinken heilt 2 HP, verbraucht 1 Trank, Event 'potion_drunk'",
+    p.hp === 5 && p.potions === 2 && w.events.includes('potion_drunk'),
+    `hp=${p.hp} potions=${p.potions}`);
+  ticks(w, 30); // Taste gehalten (Pegel): darf NICHT erneut trinken
+  check('Gehaltene Taste trinkt nicht erneut (Flankenerkennung)',
+    p.hp === 5 && p.potions === 2, `hp=${p.hp} potions=${p.potions}`);
+  w.input.potion = false;
+  ticks(w, 5);
+  w.input.potion = true;
+  tick(w);
+  check('Heilung überschreitet maxHp nicht (5+2 → 6)', p.hp === 6 && p.potions === 1,
+    `hp=${p.hp} potions=${p.potions}`);
+  w.input.potion = false;
+  ticks(w, 30);
+  w.input.potion = true;
+  tick(w);
+  check('Volle Herzen: Trank wird nicht verbraucht', p.hp === 6 && p.potions === 1,
+    `hp=${p.hp} potions=${p.potions}`);
+  w.input.potion = false;
+  ticks(w, 5);
+  p.potions = 0;
+  p.hp = 2;
+  w.input.potion = true;
+  tick(w);
+  check('0 Tränke: Trinken ohne Vorrat unmöglich', p.hp === 2 && p.potions === 0,
+    `hp=${p.hp} potions=${p.potions}`);
+  w.input.potion = false;
+}
+
+// --- 13. Ghul: 4 Treffer aus 4 getrennten Schwüngen, Drops ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ ghoulSpawns: [{ x: s.x + 20, y: s.y }] });
+  w.input.dirX = 1;
+  tick(w);
+  w.input.dirX = 0;
+  w.input.attack = true;
+  const gh = w.enemies[0];
+  const hits = [];
+  let prevHp = gh.hp;
+  for (let i = 0; i < 900 && w.enemies.length > 0; i++) {
+    w.player.invulnTimer = 5; // Testfokus: Ghul-HP, nicht Spieler-Schaden
+    tick(w);
+    if (w.enemies.length > 0 && gh.hp < prevHp) { hits.push(i); prevHp = gh.hp; }
+  }
+  w.input.attack = false;
+  check('Ghul stirbt nach genau 4 Treffern', w.enemies.length === 0 && hits.length === 4,
+    `Treffer bei Ticks [${hits}]`);
+  let separated = hits.length === 4;
+  for (let i = 1; i < hits.length; i++) if (hits[i] - hits[i - 1] < 12) separated = false;
+  check('Ghul-Treffer stammen aus getrennten Schwüngen', separated, `[${hits}]`);
+  ticks(w, 30);
+  const badKind = w.drops.find((d) => d.kind !== 'coin' && d.kind !== 'potion');
+  check("Ghul-Drop-Kinds nur 'coin'/'potion'", badKind === undefined, badKind ? `${badKind.kind}` : '');
+  const noMap = w.drops.find((d) => !d.map || typeof d.map.rectCollides !== 'function');
+  check('Ghul-Drops tragen map-Referenz (Festlegung 4)', noMap === undefined);
+}
+
+// --- 14. Ghul: Kontaktschaden 2 ---
+{
+  const s = GRAVEYARD.playerSpawn;
+  const w = makeWorld({ ghoulSpawns: [{ x: s.x + 40, y: s.y }] });
+  let firstHit = -1;
+  for (let i = 0; i < 300 && firstHit < 0; i++) {
+    tick(w);
+    if (w.player.hp < w.player.maxHp) firstHit = i;
+  }
+  check('Ghul-Kontakt macht 2 Schaden', firstHit >= 0 && w.player.hp === 4, `hp=${w.player.hp}`);
+}
+
+// --- 15. Ghul-Knockback = 50 % des Skelett-Knockbacks ---
+{
+  const w = makeWorld();
+  const skel = createSkeleton({ x: 320, y: 200 });
+  const gh = createGhoul({ x: 352, y: 200 });
+  w.enemies.push(skel, gh);
+  for (const e of [skel, gh]) { e.knockTimer = 0.15; e.knockX = 1; e.knockY = 0; }
+  const sx0 = skel.x;
+  const gx0 = gh.x;
+  ticks(w, 8); // Knockback läuft noch (9 Ticks = 0,15 s) → keine AI-Bewegung dabei
+  const sd = skel.x - sx0;
+  const gd = gh.x - gx0;
+  check('Skelett-Knockback unverändert in voller Stärke (Regression)', sd > 8,
+    `distanz=${sd.toFixed(2)}`);
+  check('Ghul-Knockback wirkt nur 50 %', sd > 0 && Math.abs(gd - sd / 2) < 0.5,
+    `skelett=${sd.toFixed(2)} ghul=${gd.toFixed(2)}`);
+}
+
+// --- 16. Neue Sprite-/Tile-Schlüssel, 4-Frame-Zyklen, Flip-Quellen ---
+{
+  const newSprites = [
+    'player_down_2', 'player_down_3', 'player_up_2', 'player_up_3',
+    'player_side_2', 'player_side_3', 'player_die_0', 'player_die_1',
+    'ghoul_0', 'ghoul_1', 'ghoul_die', 'vase', 'urn',
+    'prop_break_0', 'prop_break_1', 'chest_closed', 'chest_open',
+    'potion', 'fog_blob',
+  ];
+  const missing = newSprites.filter((k) => !SPRITES[k]);
+  check('Alle neuen SPRITES-Schlüssel existieren', missing.length === 0, missing.join(','));
+  const newTiles = [
+    'gravestone_2', 'gravestone_3', 'bush_dead', 'bones', 'skull', 'fence',
+    'crypt_stairs_down', 'stairs_up', 'stone_floor', 'stone_floor_cracked',
+    'brick_wall', 'pillar', 'rubble', 'sarcophagus', 'torch_wall_0', 'torch_wall_1',
+  ];
+  const missingT = newTiles.filter((k) => !TILE_ART[k]);
+  check('Alle neuen TILE_ART-Schlüssel existieren', missingT.length === 0, missingT.join(','));
+  let cyc = null;
+  for (const dir of ['down', 'up', 'side']) {
+    for (let f = 0; f < 4; f++) if (!SPRITES[`player_${dir}_${f}`]) cyc = `player_${dir}_${f}`;
+  }
+  check('4-Frame-Laufzyklen vollständig (_0.._3 je Richtung)', cyc === null, cyc || '');
+  // Flip-Liste aus main.js: für jeden Key muss das Quell-Grid existieren,
+  // sonst drawImage(undefined) im Browser.
+  const flipBases = [
+    'player_side_0', 'player_side_1', 'player_side_2', 'player_side_3',
+    'player_attack_side', 'sword_slash_side',
+    'skeleton_0', 'skeleton_1', 'skeleton_die',
+    'ghoul_0', 'ghoul_1', 'ghoul_die',
+  ];
+  const missingF = flipBases.filter((k) => !SPRITES[k]);
+  check('Alle Flip-Quell-Grids der main.js-Liste existieren', missingF.length === 0, missingF.join(','));
+  // Alle über Legenden erreichbaren Tile-Arts (inkl. anim-Frames) existieren
+  let missingArt = null;
+  for (const def of Object.values(MAPS)) {
+    for (const cell of Object.values(def.legend)) {
+      if (!TILE_ART[cell.art]) missingArt = cell.art;
+      for (const a of cell.anim || []) if (!TILE_ART[a]) missingArt = a;
+    }
+  }
+  check('Alle Legenden-Tile-Arts (inkl. anim) existieren', missingArt === null, missingArt || '');
+}
+
+// --- 17. createLighting/drawFog in Node importierbar ---
+{
+  const l = createLighting(320, 180);
+  check('createLighting liefert draw-Funktion (ohne Browser-Zugriff)',
+    !!l && typeof l.draw === 'function');
+  check('drawFog ist ohne Browser importierbar', typeof drawFog === 'function');
+}
+
+// --- 18. findTiles: Fackel-Extraktion für beide Maps ---
+{
+  for (const [name, def] of Object.entries(MAPS)) {
+    const m = createTilemap(def.rows, def.legend);
+    const torches = def.torchChars.flatMap((ch) => m.findTiles(ch));
+    const bad = torches.find((t) => t.x !== t.tx * 16 + 8 || t.y !== t.ty * 16 + 8);
+    check(`${name}: findTiles liefert Fackeln (${torches.length}) mit Tile-Zentren`,
+      torches.length > 0 && bad === undefined);
+  }
+}
+
+// --- 19. Integrations-Soak Friedhof (Slice-0-Regression) ---
+{
+  const w = makeWorld({
+    skeletonSpawns: GRAVEYARD.skeletonSpawns,
+    propSpawns: GRAVEYARD.propSpawns,
+  });
+  w.input.dirX = 0.7;
+  w.input.dirY = -0.7;
+  w.input.attack = true;
+  const before = failures.length;
+  ticks(w, 600);
+  check('600-Tick-Soak Friedhof ohne Invarianten-Verletzung', failures.length === before);
+}
+
+// --- 20. Integrations-Soak Katakomben (Skelette+Ghule+Props) ---
+{
+  const w = makeWorld({
+    mapDef: CATACOMBS,
+    skeletonSpawns: CATACOMBS.skeletonSpawns,
+    ghoulSpawns: CATACOMBS.ghoulSpawns,
+    propSpawns: CATACOMBS.propSpawns,
+  });
+  w.input.dirX = 0.7;
+  w.input.dirY = 0.7;
+  w.input.attack = true;
+  const before = failures.length;
+  ticks(w, 600);
+  check('600-Tick-Soak Katakomben ohne Invarianten-Verletzung', failures.length === before);
+}
+
+// --- 21. Over-Layer + Fringe (Slice 1.5): Datenintegrität, Zeichnung, Wächter ---
+{
+  const over = GRAVEYARD.overRows;
+  check('GRAVEYARD hat overRows in Map-Dimension',
+    Array.isArray(over) && over.length === GRAVEYARD.rows.length &&
+    over.every((r) => r.length === GRAVEYARD.rows[0].length));
+
+  const overChars = [...new Set(over.join('').replace(/\./g, ''))];
+  check('Alle Over-Zeichen in Legende und NIE solid',
+    overChars.length > 0 &&
+    overChars.every((ch) => GRAVEYARD.legend[ch] && !GRAVEYARD.legend[ch].solid),
+    `Zeichen: ${overChars.join(',')}`);
+
+  check('Keine Fackel-Zeichen im Over-Layer (findTiles bleibt ground-only)',
+    overChars.every((ch) => !GRAVEYARD.torchChars.includes(ch)));
+
+  // Jeder Stamm trägt eine Krone (canopy_bottom auf der Stamm-Zelle)
+  let trunksCovered = true;
+  GRAVEYARD.rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === 'T' && over[y][x] === '.') trunksCovered = false;
+  }));
+  check('Jeder Baumstamm trägt eine Krone im Over-Layer', trunksCovered);
+
+  check('Friedhof-Fringe-Flags: Gras Source, Weg+Wasser Target',
+    !!(GRAVEYARD.legend['.'].fringeSource && GRAVEYARD.legend[','].fringeSource &&
+       GRAVEYARD.legend['='].fringeTarget && GRAVEYARD.legend['~'].fringeTarget));
+  check('Katakomben-Fringe-Flags: brick_wall moss-Source, Steinboden Target',
+    !!(CATACOMBS.legend['#'].fringeSource && CATACOMBS.legend['#'].fringeSet === 'moss' &&
+       CATACOMBS.legend['.'].fringeTarget && CATACOMBS.legend[','].fringeTarget));
+
+  // Zeichnung headless: Dummy-Tiles (Key als "Bild"), Stub-Kontext zählt Aufrufe
+  const dummyTiles = {};
+  for (const key of Object.keys(TILE_ART)) dummyTiles[key] = key;
+  const drawn = [];
+  const stubCtx = { canvas: { width: 320, height: 180 }, drawImage: (img) => drawn.push(img) };
+  const cam = { x: 0, y: 0 };
+  const tm = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, over);
+
+  drawn.length = 0;
+  tm.draw(stubCtx, cam, dummyTiles, 0, 'over');
+  // Sichtfenster (320×180 bei cam 0,0): Tiles x 0..20, y 0..11
+  let expectedOver = 0;
+  for (let ty = 0; ty <= 11; ty++) for (let tx = 0; tx <= 20; tx++) {
+    if (over[ty][tx] !== '.') expectedOver++;
+  }
+  check('Over-Layer zeichnet genau die Kronen-Zellen im Sichtfenster',
+    drawn.length === expectedOver && drawn.every((k) => String(k).startsWith('tree_canopy')),
+    `gezeichnet ${drawn.length}, erwartet ${expectedOver}`);
+
+  drawn.length = 0;
+  tm.draw(stubCtx, cam, dummyTiles, 0, 'ground');
+  const fringes = drawn.filter((k) => String(k).startsWith('fringe_'));
+  check('Ground-Layer zeichnet Gras-Fringes über Weg-Kanten (> 0 im Sichtfenster)',
+    fringes.length > 0, `Fringe-Zeichnungen: ${fringes.length}`);
+
+  // Wächter: solides Zeichen in overRows muss werfen
+  let threw = false;
+  try {
+    createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, ['#' + over[0].slice(1), ...over.slice(1)]);
+  } catch { threw = true; }
+  check('Solides Zeichen in overRows wirft (Datenwächter)', threw);
+
+  // Katakomben: kein Over-Layer, draw('over') ist ein stiller No-Op
+  const tmCat = createTilemap(CATACOMBS.rows, CATACOMBS.legend, null);
+  drawn.length = 0;
+  tmCat.draw(stubCtx, cam, dummyTiles, 0, 'over');
+  check('Ohne overRows ist draw(over) ein No-Op', drawn.length === 0);
+}
+
+// ===========================================================================
+// Slice 2 (Abschnitte 22-29): Items, Inventar, Bumerang, neue Gegner, Drops
+// ===========================================================================
+
+// Leere Test-Arena: großer freier Raum (GRAVEYARD-Legende, Rand solide) für
+// deterministische Kampf-Checks ohne Grabstein-Störgeometrie.
+const ARENA = {
+  rows: (() => {
+    const wide = 22;
+    const rows = ['#'.repeat(wide)];
+    for (let i = 0; i < 20; i++) rows.push(`#${'.'.repeat(wide - 2)}#`);
+    rows.push('#'.repeat(wide));
+    return rows;
+  })(),
+  legend: GRAVEYARD.legend,
+  playerSpawn: { x: 176, y: 176 },
+};
+
+// Deterministische rng-Sequenz für rollItem (nach Ende immer 0)
+const seq = (vals) => {
+  let i = 0;
+  return () => vals[i++] ?? 0;
+};
+
+// Rekursiver Vergleich: entlarvt Funktions-/undefined-Felder, die
+// JSON.stringify verschlucken würde (Plain-JSON-Wächter für S4).
+function deepEq(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => deepEq(a[k], b[k]));
+}
+
+// Test-Item mit genau einem festen Affix (Werte aus AFFIXES)
+const testItem = (slot, stat) => ({
+  slot, name: 'Testitem', rare: false,
+  affixes: [{ stat, value: AFFIXES[stat].value }],
+});
+
+// Tick-Reihenfolge wie main.js inklusive Projektile (Bumerang-Abschnitte)
+function tickProj(w, proj) {
+  w.player.update(DT, w.input, w.map, w.enemies, w.events);
+  proj.update(DT, w.input, w.player, w.enemies, w.props, w.map, w.drops, w.events);
+  updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events);
+  updateProps(DT, w.props, w.player, w.map, w.drops, w.events);
+  updateDrops(DT, w.drops, w.player, w.events);
+  totalTicks++;
+}
+
+// --- 22. Items: rollItem mit Fest-rng, createInventory plain JSON ---
+{
+  // rng 0,0: Slot weapon (Index 0), Affix 0 = dmg (AFFIXES-Reihenfolge)
+  const normal = rollItem(seq([0, 0]));
+  check('rollItem normal: 1 Pool-Affix mit festem Wert (weapon/dmg/+1)',
+    normal.slot === 'weapon' && normal.rare === false && normal.name === 'Rostklinge'
+    && normal.affixes.length === 1 && normal.affixes[0].stat === 'dmg' && normal.affixes[0].value === 1);
+  // Selten mit erzwungenem Slot: rng 0,0 → speedMult, dann potionHeal
+  const rare = rollItem(seq([0, 0]), { slot: 'ring', rare: true });
+  check('rollItem selten: 2 VERSCHIEDENE Ring-Affixe mit festen Werten',
+    rare.slot === 'ring' && rare.rare === true && rare.name === 'Seelenring'
+    && rare.affixes.length === 2
+    && rare.affixes[0].stat === 'speedMult' && rare.affixes[0].value === 0.1
+    && rare.affixes[1].stat === 'potionHeal' && rare.affixes[1].value === 2);
+  // rng am oberen Rand: Affixe bleiben poolkonform und verschieden
+  const rare2 = rollItem(seq([0.99, 0.99, 0.99]), { rare: true });
+  check('rollItem selten (rng 0,99): poolkonform, keine Doppel-Affixe',
+    rare2.affixes.length === 2 && rare2.affixes[0].stat !== rare2.affixes[1].stat
+    && rare2.affixes.every((a) => AFFIXES[a.stat] && AFFIXES[a.stat].slot === rare2.slot));
+  const inv = createInventory();
+  check('createInventory: Startzustand laut Spec',
+    inv.items.length === 0 && inv.capacity === 7 && inv.zelda.length === 0
+    && inv.pity === 0 && inv.newFlag === false
+    && inv.equipped.weapon === null && inv.equipped.armor === null && inv.equipped.ring === null);
+  check('createInventory ist plain JSON (stringify/parse deep-equal)',
+    deepEq(inv, JSON.parse(JSON.stringify(inv))));
+}
+
+// --- 23. Inventar-Operationen + Stats numerisch ---
+{
+  const inv = createInventory();
+  let allAdded = true;
+  for (let i = 0; i < 7; i++) allAdded = addItem(inv, testItem('weapon', 'dmg')) && allAdded;
+  check('addItem: 7 Items passen, das 8. wird abgelehnt',
+    allAdded && addItem(inv, testItem('weapon', 'dmg')) === false && inv.items.length === 7);
+  check('addItem setzt newFlag', inv.newFlag === true);
+  const first = inv.items[0];
+  const second = inv.items[1];
+  check('equipItem in leeren Slot: splice, Liste rückt auf',
+    equipItem(inv, 0) === true && inv.equipped.weapon === first
+    && inv.items.length === 6 && inv.items[0] === second);
+  check('equipItem Tausch: altes Item landet am SELBEN Index',
+    equipItem(inv, 0) === true && inv.equipped.weapon === second
+    && inv.items[0] === first && inv.items.length === 6);
+  check('equipItem mit ungültigem Index: false, keine Änderung',
+    equipItem(inv, 99) === false && inv.items.length === 6 && inv.equipped.weapon === second);
+
+  const inv2 = createInventory();
+  addItem(inv2, testItem('weapon', 'dmg'));
+  addItem(inv2, testItem('ring', 'speedMult'));
+  equipItem(inv2, 0);
+  equipItem(inv2, 0);
+  const st = computeStats(inv2);
+  check('computeStats: +1-Waffe und +10%-Ring ergeben EXAKT dmg 2, speed 99',
+    st.dmg === 2 && st.speed === 99, `dmg=${st.dmg} speed=${st.speed}`);
+
+  // Rüstung +2 anlegen heilt nicht; Ersatz ohne maxHp-Affix kappt hp
+  const p = createPlayer(ARENA.playerSpawn);
+  addItem(p.inv, testItem('armor', 'maxHp'));
+  addItem(p.inv, testItem('armor', 'knockTakenMult'));
+  equipItem(p.inv, 0);
+  p.recalcStats();
+  check('Rüstung +2 anlegen: maxHp 8, hp bleibt 6 (Anlegen heilt nicht)',
+    p.maxHp === 8 && p.hp === 6, `maxHp=${p.maxHp} hp=${p.hp}`);
+  p.hp = 8;
+  equipItem(p.inv, 0); // Tausch gegen Rüstung OHNE maxHp-Affix
+  p.recalcStats();
+  check('Rüstung ohne maxHp-Affix ersetzt: hp auf maxHp gekappt (8 → 6)',
+    p.maxHp === 6 && p.hp === 6, `maxHp=${p.maxHp} hp=${p.hp}`);
+}
+
+// --- 24. Statswirkung im Kampf: dmg 2 halbiert die Trefferzahl ---
+{
+  const hitsToKill = (spawner, withWeapon) => {
+    const w = makeWorld({ mapDef: ARENA });
+    const e = spawner({ x: ARENA.playerSpawn.x + 20, y: ARENA.playerSpawn.y });
+    w.enemies.push(e);
+    if (withWeapon) {
+      addItem(w.player.inv, testItem('weapon', 'dmg'));
+      equipItem(w.player.inv, 0);
+      w.player.recalcStats();
+    }
+    w.input.dirX = 1;
+    tick(w); // Blickrichtung rechts
+    w.input.dirX = 0;
+    w.input.attack = true;
+    const hits = [];
+    let prevHp = e.hp;
+    for (let i = 0; i < 900 && w.enemies.length > 0; i++) {
+      w.player.invulnTimer = 5; // Testfokus Gegner-HP, nicht Spieler-Schaden
+      tick(w);
+      if (e.hp < prevHp) { hits.push(i); prevHp = e.hp; }
+    }
+    return hits.length;
+  };
+  check('dmg-2-Stats: Skelett stirbt in genau 1 Treffer', hitsToKill(createSkeleton, true) === 1);
+  check('dmg-2-Stats: Ghul stirbt in genau 2 Treffern', hitsToKill(createGhoul, true) === 2);
+  check('Gegenprobe ohne Items: Skelett 2 Treffer (S1-Regression)', hitsToKill(createSkeleton, false) === 2);
+  check('Gegenprobe ohne Items: Ghul 4 Treffer (S1-Regression)', hitsToKill(createGhoul, false) === 4);
+}
+
+// --- 25. Item-Drop-Fluss: erzwungener Drop, Pickup, volle Tasche, Pity ---
+{
+  const w = makeWorld({ mapDef: ARENA });
+  const rust = createRust({ x: ARENA.playerSpawn.x + 24, y: ARENA.playerSpawn.y });
+  rust.dropTable.itemChance = 1; // erzwungener Gear-Drop
+  rust.state = 'die';
+  rust.dieTimer = 0.01;
+  w.enemies.push(rust);
+  tick(w);
+  const itemDrop = w.drops.find((d) => d.kind === 'item');
+  check("Rostpanzer-Tod mit itemChance 1: Drop kind 'item' mit Item und map-Referenz",
+    !!itemDrop && !!itemDrop.item && !!itemDrop.item.slot && itemDrop.map === w.map);
+
+  // Hinlaufen: Berührung mit Platz → Objekt-Event item_pickup, Item in Tasche
+  let picked = null;
+  for (let i = 0; i < 300 && !picked; i++) {
+    const d = w.drops.find((dd) => dd.kind === 'item');
+    if (!d) break;
+    const dx = d.x + d.w / 2 - (w.player.x + w.player.w / 2);
+    const dy = d.y + d.h / 2 - (w.player.y + w.player.h / 2);
+    const len = Math.hypot(dx, dy) || 1;
+    w.input.dirX = dx / len;
+    w.input.dirY = dy / len;
+    tick(w);
+    picked = getEvent(w.events, 'item_pickup');
+  }
+  w.input.dirX = 0;
+  w.input.dirY = 0;
+  check("Berührung mit Platz: Objekt-Event 'item_pickup', Item im Inventar",
+    !!picked && !!picked.item && w.player.inv.items.includes(picked.item));
+
+  // Volle Tasche: Drop bleibt liegen, Event einmal je retryTimer-Fenster
+  while (w.player.inv.items.length < w.player.inv.capacity) addItem(w.player.inv, rollItem(seq([0.5, 0.5])));
+  w.drops.length = 0;
+  w.drops.push({
+    x: w.player.x, y: w.player.y, w: 8, h: 8, vx: 0, vy: 0, age: 1,
+    kind: 'item', item: rollItem(seq([0.5, 0.5])), map: w.map,
+  });
+  const fullBefore = w.events.filter((e) => e === 'inventory_full').length;
+  ticks(w, 30); // 0,5 s: mitten im 1-s-Fenster
+  const full1 = w.events.filter((e) => e === 'inventory_full').length - fullBefore;
+  check("Volle Tasche: Drop bleibt liegen, 'inventory_full' einmal im Fenster",
+    w.drops.some((d) => d.kind === 'item') && full1 === 1, `events=${full1}`);
+  ticks(w, 45); // Fenster (1 s) läuft ab → genau ein weiterer Versuch
+  const full2 = w.events.filter((e) => e === 'inventory_full').length - fullBefore;
+  check('inventory_full höchstens einmal je retryTimer-Fenster', full2 === 2, `events=${full2}`);
+
+  // Pity: 12 Kills ohne Gear → garantierter Normal-Drop trotz itemChance 0
+  const w2 = makeWorld({ mapDef: ARENA });
+  const sk = createSkeleton({ x: ARENA.playerSpawn.x + 60, y: ARENA.playerSpawn.y });
+  sk.dropTable.itemChance = 0;
+  sk.state = 'die';
+  sk.dieTimer = 0.01;
+  w2.enemies.push(sk);
+  w2.player.inv.pity = 12;
+  tick(w2);
+  check('Pity 12 + itemChance 0: garantierter Normal-Drop, pity zurück auf 0',
+    w2.drops.some((d) => d.kind === 'item' && d.item && d.item.rare === false)
+    && w2.player.inv.pity === 0);
+  const sk2 = createSkeleton({ x: ARENA.playerSpawn.x + 60, y: ARENA.playerSpawn.y });
+  sk2.dropTable.itemChance = 0;
+  sk2.state = 'die';
+  sk2.dieTimer = 0.01;
+  w2.enemies.push(sk2);
+  tick(w2);
+  check('Kill ohne Gear-Drop erhöht pity', w2.player.inv.pity === 1);
+}
+
+// --- 26. Bumerang: Wurfregeln, Reichweite, Stun, Props, Magnet ---
+{
+  const w = makeWorld({ mapDef: ARENA });
+  const proj = createProjectiles();
+  w.input.dirX = 1;
+  tickProj(w, proj); // Blickrichtung rechts
+  w.input.dirX = 0;
+  w.input.secondary = true;
+  tickProj(w, proj);
+  check('Bumerang: ohne zelda-Eintrag wirft die Flanke nicht', proj.list.length === 0);
+  w.input.secondary = false;
+  tickProj(w, proj);
+  w.player.inv.zelda = ['boomerang'];
+  w.input.secondary = true;
+  tickProj(w, proj);
+  check('Bumerang: Flanke mit zelda-Eintrag wirft genau einen', proj.list.length === 1);
+  w.input.secondary = false;
+  tickProj(w, proj);
+  w.input.secondary = true;
+  tickProj(w, proj);
+  check('Bumerang: nur einer gleichzeitig in der Luft', proj.list.length === 1);
+  w.input.secondary = false;
+  let maxD = 0;
+  let caught = false;
+  for (let i = 0; i < 300 && !caught; i++) {
+    tickProj(w, proj);
+    if (proj.list.length === 0) {
+      caught = true;
+    } else {
+      const p = proj.list[0];
+      maxD = Math.max(maxD, Math.hypot(
+        p.x + p.w / 2 - (w.player.x + w.player.w / 2),
+        p.y + p.h / 2 - (w.player.y + w.player.h / 2)));
+    }
+  }
+  check('Bumerang: fliegt maximal 64 px, kehrt zurück, wird gefangen',
+    caught && maxD <= 64 + 1e-6 && maxD >= 56, `maxD=${maxD.toFixed(2)}`);
+
+  // Skelett-Treffer: 0 Schaden, Stun 1,5 s; gestunnt keine Bewegung/Kontakt
+  const sk = createSkeleton({ x: ARENA.playerSpawn.x + 50, y: ARENA.playerSpawn.y });
+  w.enemies.push(sk);
+  for (let i = 0; i < 15; i++) tickProj(w, proj); // Nachwurfsperre abwarten
+  w.input.secondary = true;
+  let stunned = false;
+  for (let i = 0; i < 90 && !stunned; i++) {
+    tickProj(w, proj);
+    stunned = sk.stunTimer > 0;
+  }
+  w.input.secondary = false;
+  check('Bumerang-Treffer: Skelett-hp UNVERÄNDERT, stunTimer 1,5',
+    stunned && sk.hp === 2 && sk.stunTimer > 1.4, `hp=${sk.hp} stun=${sk.stunTimer.toFixed(2)}`);
+  sk.x = w.player.x;
+  sk.y = w.player.y;
+  const sx = sk.x;
+  const sy = sk.y;
+  const php = w.player.hp;
+  for (let i = 0; i < 30; i++) tickProj(w, proj);
+  check('Gestunnter Gegner: keine Bewegung, kein Kontaktschaden',
+    sk.x === sx && sk.y === sy && w.player.hp === php && sk.stunTimer > 0);
+
+  // Vase zerbricht per boomerangHit, Truhe reagiert nicht
+  const w2 = makeWorld({
+    mapDef: ARENA,
+    propSpawns: [
+      { x: ARENA.playerSpawn.x + 40, y: ARENA.playerSpawn.y, kind: 'vase' },
+      { x: ARENA.playerSpawn.x - 40, y: ARENA.playerSpawn.y, kind: 'chest' },
+    ],
+  });
+  const proj2 = createProjectiles();
+  w2.player.inv.zelda = ['boomerang'];
+  const vase = w2.props.find((p) => p.kind === 'vase');
+  const chest = w2.props.find((p) => p.kind === 'chest');
+  w2.input.dirX = 1;
+  tickProj(w2, proj2);
+  w2.input.dirX = 0;
+  w2.input.secondary = true;
+  let broke = false;
+  for (let i = 0; i < 90 && !broke; i++) {
+    tickProj(w2, proj2);
+    broke = !w2.props.includes(vase) || vase.state === 'break';
+  }
+  w2.input.secondary = false;
+  check('Vase mit boomerangHit zerbricht (wie Schwert-Treffer)', broke);
+  for (let i = 0; i < 90 && proj2.list.length > 0; i++) tickProj(w2, proj2);
+  for (let i = 0; i < 15; i++) tickProj(w2, proj2); // Nachwurfsperre
+  w2.input.dirX = -1;
+  tickProj(w2, proj2);
+  w2.input.dirX = 0;
+  w2.input.secondary = true;
+  for (let i = 0; i < 90; i++) tickProj(w2, proj2);
+  w2.input.secondary = false;
+  check('Truhe reagiert NICHT auf den Bumerang (öffnet nur per Schwert)',
+    !chest.opened && chest.boomerangHit === false && !w2.events.includes('chest_opened'));
+
+  // Magnet: berührter Münz-Drop fliegt zum Spieler
+  const w3 = makeWorld({ mapDef: ARENA });
+  const proj3 = createProjectiles();
+  w3.player.inv.zelda = ['boomerang'];
+  w3.drops.push({
+    x: ARENA.playerSpawn.x + 40 - 4, y: ARENA.playerSpawn.y - 4,
+    w: 8, h: 8, vx: 0, vy: 0, age: 1, kind: 'coin', map: w3.map,
+  });
+  w3.input.dirX = 1;
+  tickProj(w3, proj3);
+  w3.input.dirX = 0;
+  const gold0 = w3.player.gold;
+  w3.input.secondary = true;
+  let magnetGot = false;
+  for (let i = 0; i < 180 && !magnetGot; i++) {
+    tickProj(w3, proj3);
+    magnetGot = w3.player.gold === gold0 + 1;
+  }
+  w3.input.secondary = false;
+  check('Magnetisierter Münz-Drop erreicht den Spieler', magnetGot);
+}
+
+// --- 27. Grufthund: Orbit-Median, Telegraph→Leap→Down, Bumerang-Fenster ---
+{
+  const w = makeWorld({ mapDef: ARENA });
+  const hound = createHound({ x: ARENA.playerSpawn.x + 70, y: ARENA.playerSpawn.y });
+  w.enemies.push(hound);
+  const dists = [];
+  let leaps = 0;
+  let downs = 0;
+  let badLeap = false;
+  let badDown = false;
+  let downContactOk = true;
+  let prevState = hound.state;
+  for (let i = 0; i < 1800 && (dists.length < 120 || downs < 1); i++) {
+    w.player.invulnTimer = 5;
+    tick(w);
+    if (hound.state === 'circle') {
+      dists.push(Math.hypot(
+        hound.x + hound.w / 2 - (w.player.x + w.player.w / 2),
+        hound.y + hound.h / 2 - (w.player.y + w.player.h / 2)));
+    }
+    if (hound.state !== prevState) {
+      if (hound.state === 'leap') { leaps++; if (prevState !== 'telegraph') badLeap = true; }
+      if (hound.state === 'down') { downs++; if (prevState !== 'leap') badDown = true; }
+      prevState = hound.state;
+    }
+    if (hound.state === 'down' && hound.contactDamage !== 0) downContactOk = false;
+  }
+  dists.sort((a, b) => a - b);
+  const median = dists.length ? dists[Math.floor(dists.length / 2)] : 0;
+  check('Grufthund: Median des Orbit-Abstands über 2 s im Band 40-75 px',
+    dists.length >= 120 && median >= 40 && median <= 75,
+    `median=${median.toFixed(1)} n=${dists.length}`);
+  check('Grufthund: vor JEDEM Sprung ein Telegraph', leaps >= 1 && !badLeap, `leaps=${leaps}`);
+  check('Grufthund: nach dem Sprung down, Kontaktschaden 0 am Boden',
+    downs >= 1 && !badDown && downContactOk, `downs=${downs}`);
+
+  // Schwert-Treffer zählt im down-Zustand
+  const w2 = makeWorld({ mapDef: ARENA });
+  const h2 = createHound({ x: ARENA.playerSpawn.x + 20, y: ARENA.playerSpawn.y });
+  h2.state = 'down';
+  h2.downTimer = 1.2;
+  h2.contactDamage = 0;
+  w2.enemies.push(h2);
+  w2.input.dirX = 1;
+  tick(w2);
+  w2.input.dirX = 0;
+  w2.input.attack = true;
+  const hp0 = h2.hp;
+  for (let i = 0; i < 30; i++) { w2.player.invulnTimer = 5; tick(w2); }
+  w2.input.attack = false;
+  check('Grufthund: Schwert-Treffer zählt im down-Zustand', h2.hp < hp0, `hp ${hp0} → ${h2.hp}`);
+
+  // Bumerang im Telegraph: sofort down (1,5 s)
+  const w3 = makeWorld({ mapDef: ARENA });
+  const h3 = createHound({ x: ARENA.playerSpawn.x + 40, y: ARENA.playerSpawn.y });
+  h3.state = 'telegraph';
+  h3.telegraphTimer = 0.5;
+  w3.enemies.push(h3);
+  const proj3 = createProjectiles();
+  w3.player.inv.zelda = ['boomerang'];
+  w3.input.dirX = 1;
+  tickProj(w3, proj3);
+  w3.input.dirX = 0;
+  w3.input.secondary = true;
+  let downHit = false;
+  for (let i = 0; i < 60 && !downHit; i++) {
+    tickProj(w3, proj3);
+    downHit = h3.state === 'down';
+  }
+  w3.input.secondary = false;
+  check('Bumerang im Telegraph: Grufthund kippt sofort in down (1,5 s)',
+    downHit && h3.downTimer > 1.4, `state=${h3.state} downTimer=${h3.downTimer.toFixed(2)}`);
+}
+
+// --- 28. Rostpanzer: Frontblock, Seiten-Kill, Blickrichtungs-Rasterung ---
+{
+  const w = makeWorld({ mapDef: ARENA });
+  // Rostpanzer nördlich, Blick nach Süden (Init faceY 1); Stun friert das
+  // Verhalten ein, damit die Blickrichtung für den Test stehen bleibt
+  // (Schwert-Treffer wirken im Stun laut Spec normal weiter).
+  const rust = createRust({ x: ARENA.playerSpawn.x, y: ARENA.playerSpawn.y - 24 });
+  rust.stunTimer = 999;
+  w.enemies.push(rust);
+  w.input.dirY = -1;
+  tick(w); // Blick nach oben (frontal in den Schild)
+  w.input.dirY = 0;
+  w.input.attack = true;
+  const hpFront = rust.hp;
+  const blocked0 = w.events.filter((e) => e === 'attack_blocked').length;
+  for (let i = 0; i < 30; i++) { w.player.invulnTimer = 5; tick(w); }
+  w.input.attack = false;
+  check("Rostpanzer: Schwert frontal → hp unverändert + 'attack_blocked'",
+    rust.hp === hpFront && w.events.filter((e) => e === 'attack_blocked').length > blocked0,
+    `hp=${rust.hp}`);
+
+  // Von der Seite: verwundbar, 5 Seitentreffer töten (hp 5, dmg 1).
+  // Spieler wird pro Tick exakt östlich auf Schwertreichweite geankert,
+  // weil der Treffer-Knockback den Rostpanzer sonst aus der Reichweite
+  // schiebt (Blick bleibt nach Westen, Treffer bleiben seitlich).
+  ticks(w, 25); // letzten Frontal-Schwung austrudeln lassen (0,35 s busy)
+  w.player.x = rust.x + rust.w / 2 + 22 - w.player.w / 2;
+  w.player.y = rust.y + rust.h / 2 - w.player.h / 2;
+  w.input.dirX = -1;
+  tick(w); // Blick nach Westen
+  w.input.dirX = 0;
+  w.input.attack = true;
+  const hits = [];
+  let prevHp = rust.hp;
+  for (let i = 0; i < 900 && w.enemies.length > 0; i++) {
+    w.player.invulnTimer = 5;
+    w.player.x = rust.x + rust.w / 2 + 22 - w.player.w / 2;
+    w.player.y = rust.y + rust.h / 2 - w.player.h / 2;
+    tick(w);
+    if (rust.hp < prevHp) { hits.push(i); prevHp = rust.hp; }
+  }
+  w.input.attack = false;
+  check('Rostpanzer: seitlich verwundbar, 5 Seitentreffer töten',
+    w.enemies.length === 0 && hits.length === 5, `hits=${hits.length}`);
+
+  // Blickrichtung rastet auf 4 Himmelsrichtungen, Wechsel frühestens 0,4 s
+  const w2 = makeWorld({ mapDef: ARENA });
+  const r2 = createRust({ x: ARENA.playerSpawn.x + 50, y: ARENA.playerSpawn.y });
+  w2.enemies.push(r2);
+  let lastFace = `${r2.faceX},${r2.faceY}`;
+  let lastChange = -1;
+  let minGap = Infinity;
+  let changes = 0;
+  let badFace = false;
+  for (let i = 0; i < 600; i++) {
+    w2.player.invulnTimer = 5;
+    // Spieler kreist um den Rostpanzer (Position direkt gesetzt), damit die
+    // Verfolgungsrichtung mehrfach wechselt
+    const ang = (i / 600) * Math.PI * 2;
+    w2.player.x = r2.x + r2.w / 2 + Math.cos(ang) * 50 - w2.player.w / 2;
+    w2.player.y = r2.y + r2.h / 2 + Math.sin(ang) * 50 - w2.player.h / 2;
+    tick(w2);
+    if (!((Math.abs(r2.faceX) === 1 && r2.faceY === 0) || (r2.faceX === 0 && Math.abs(r2.faceY) === 1))) {
+      badFace = true;
+    }
+    const f = `${r2.faceX},${r2.faceY}`;
+    if (f !== lastFace) {
+      if (lastChange >= 0) minGap = Math.min(minGap, i - lastChange);
+      changes++;
+      lastFace = f;
+      lastChange = i;
+    }
+  }
+  check('Rostpanzer: faceDir immer auf Himmelsrichtung gerastet', !badFace);
+  check('Rostpanzer: Blickwechsel frühestens alle 0,4 s (24 Ticks)',
+    changes >= 2 && minGap >= 24, `changes=${changes} minGap=${minGap}`);
+}
+
+// --- 29. Inventar-UI headless: Cursor, ANLEGEN, close ---
+{
+  const ui = createInventoryUI();
+  const p = createPlayer(ARENA.playerSpawn);
+  addItem(p.inv, testItem('armor', 'maxHp'));
+  addItem(p.inv, testItem('weapon', 'dmg'));
+  const inp = { dirX: 0, dirY: 0, attack: false, confirm: false, inventory: true, tap: null };
+  ui.open();
+  check('Inventar-UI: gehaltene Taste schließt das Panel im Öffnungs-Frame NICHT',
+    ui.update(inp, p) === null);
+  inp.inventory = false;
+  ui.update(inp, p); // Loslassen gesehen
+  inp.dirY = 1;
+  ui.update(inp, p);
+  check('Cursor-Flanke runter bewegt die Auswahl (0 → 1)', ui.cursor === 1);
+  ui.update(inp, p);
+  check('Gehaltener Richtungs-Pegel bewegt den Cursor nicht weiter', ui.cursor === 1);
+  inp.dirY = 0;
+  ui.update(inp, p);
+  const dmg0 = p.stats.dmg;
+  inp.confirm = true;
+  ui.update(inp, p);
+  inp.confirm = false;
+  ui.update(inp, p);
+  check('Confirm-Flanke legt das markierte Item an, dmg steigt messbar',
+    !!p.inv.equipped.weapon && p.stats.dmg === dmg0 + 1, `dmg=${p.stats.dmg}`);
+  inp.tap = { x: 100, y: 30 };
+  ui.update(inp, p);
+  inp.tap = null;
+  check('Tap auf Listenzeile setzt den Cursor', ui.cursor === 0);
+  inp.tap = { x: 290, y: 12 };
+  const closedByTap = ui.update(inp, p);
+  inp.tap = null;
+  check("Tap auf den X-Button liefert 'close'", closedByTap === 'close');
+  inp.inventory = true;
+  check("inventory-Flanke liefert 'close'", ui.update(inp, p) === 'close');
+}
+
+console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);
+if (totalTicks < 600) failures.push(`Zu wenige Ticks simuliert: ${totalTicks} < 600`);
+
+if (failures.length > 0) {
+  console.error(`\nSMOKE-TEST ROT — ${failures.length} Fehler:`);
+  for (const f of failures) console.error(`  - ${f}`);
+  process.exit(1);
+}
+console.log('SMOKE-TEST GRÜN');
