@@ -6,6 +6,7 @@
 
 import { moveWithCollision } from './entity.js';
 import { createInventory, computeStats } from '../items/items.js';
+import { createProgress, applyProgress } from '../items/progression.js';
 
 const ATTACK_WINDUP = 0.12;
 const ATTACK_ACTIVE = 0.15;
@@ -25,7 +26,9 @@ export function createPlayer(spawn) {
   let potionHeld = false;
 
   const inv = createInventory();
-  const stats = computeStats(inv);
+  // XP/Level (§2.1): Level = Zaehigkeit. applyProgress addiert nur maxHp.
+  const prog = createProgress();
+  const stats = applyProgress(computeStats(inv), prog);
 
   const player = {
     x: spawn.x - 6,
@@ -35,8 +38,10 @@ export function createPlayer(spawn) {
     hp: stats.maxHp,
     maxHp: stats.maxHp,
     inv,
+    prog,
     stats,
     zeldaState: 'none', // 'none' | 'ready' | 'air', pro Frame von main.js gespiegelt
+    deathToll: null,    // Gold-Zoll bei Tod (§2.6.3); main.js berechnet/liest ihn
     gold: 0,
     potions: 0,
     maxPotions: MAX_POTIONS,
@@ -62,7 +67,9 @@ export function createPlayer(spawn) {
   // Stats nach Inventar-Aenderung neu ableiten. Anlegen heilt NICHT,
   // Ablegen kappt hp auf das neue Maximum.
   function recalcStats() {
-    player.stats = computeStats(player.inv);
+    // §3: applyProgress spiegeln (maxHp aus Level + Herzcontainern). Anlegen
+    // heilt NICHT, Ablegen kappt hp auf das neue Maximum.
+    player.stats = applyProgress(computeStats(player.inv), player.prog);
     player.maxHp = player.stats.maxHp;
     player.hp = Math.min(player.hp, player.maxHp);
   }
@@ -151,12 +158,16 @@ export function createPlayer(spawn) {
     player.hp = Math.min(player.maxHp, player.hp + n);
   }
 
-  function hurt(dmg, fromX, fromY) {
+  // §3: optionaler vierter Parameter knockMult (rueckwaertskompatibel, alle
+  // Alt-Aufrufe bleiben unveraendert). Der Boss-Rundumschlag braucht x1,5.
+  function hurt(dmg, fromX, fromY, knockMult = 1) {
     if (player.invulnTimer > 0 || player.state === 'dead') return false;
     player.hp -= dmg;
     player.invulnTimer = INVULN_TIME;
     player.attackTimer = 0; // Angriff abbrechen
-    player.knockSpeed = KNOCK_SPEED * player.stats.knockTakenMult; // STANDFEST daempft
+    // STANDFEST daempft (knockTakenMult), der treffende Angriff verstaerkt
+    // (knockMult).
+    player.knockSpeed = KNOCK_SPEED * player.stats.knockTakenMult * knockMult;
     const cx = player.x + player.w / 2;
     const cy = player.y + player.h / 2;
     let dx = cx - fromX;

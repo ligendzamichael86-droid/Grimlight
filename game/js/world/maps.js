@@ -15,6 +15,18 @@
 //   Lichter werden NICHT hier gepflegt.
 // - ambient: 0..1 Dunkelheitsgrad (lighting.js), playerLightRadius: Radius
 //   der Spieler-Laterne in px, fog: Nebelschwaden (hud.drawFog) ja/nein.
+//
+// Slice 3: tc()/tileRect() liegen jetzt in world/coords.js (gegen den
+// Zirkelimport maps.js <-> Map-Dateien, §3); maps.js importiert sie von dort
+// und re-exportiert sie fuer Alt-Nutzer. Die neuen Maps FLUESTERGRUFT und
+// BOSS_KAMMER kommen aus eigenen Dateien; MAPS setzt die Portal-Kette
+// GRAVEYARD > CATACOMBS > FLUESTERGRUFT > BOSS_KAMMER zusammen.
+
+import { tc, tileRect } from './coords.js';
+import { FLUESTERGRUFT } from './map_fluestergruft.js';
+import { BOSS_KAMMER } from './map_bosskammer.js';
+
+export { tc, tileRect };
 
 // ---------------------------------------------------------------------------
 // FRIEDHOF — 40×24 Tiles.
@@ -128,7 +140,7 @@ const CATACOMBS_ROWS = [
   '####,.#########W..#########W..##########',
   '####..#W########..W#########..#W####W###',
   '####............,.#########...........##',
-  '###W,.............########W.....SS....##',
+  '###W,.............########W.....SS..D.##',
   '###.........#W#############...P....P,.##',
   '###.....,...W##############..,........W#',
   '###..SS.....###############...........##',
@@ -154,17 +166,11 @@ const CATACOMBS_LEGEND = {
   'S': { art: 'sarcophagus', solid: true },
   'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1'] },
   'U': { art: 'stairs_up', solid: false },
+  // Slice 3: Abgang zur FLUESTERGRUFT in der Schatzkammer (begehbar, Portal).
+  'D': { art: 'crypt_stairs_down', solid: false },
 };
 
-// Tile-Zentrum in Weltpixeln
-function tc(tx, ty) {
-  return { x: tx * 16 + 8, y: ty * 16 + 8 };
-}
-
-// Welt-AABB eines Tile-Rechtecks (für Portale)
-function tileRect(tx, ty, wTiles = 1, hTiles = 1) {
-  return { x: tx * 16, y: ty * 16, w: wTiles * 16, h: hTiles * 16 };
-}
+// tc()/tileRect() siehe world/coords.js (oben importiert und re-exportiert).
 
 export const GRAVEYARD = {
   rows: GRAVEYARD_ROWS,
@@ -245,13 +251,18 @@ export const CATACOMBS = {
     { ...tc(21, 18), kind: 'vase' },
     { ...tc(27, 19), kind: 'urn' },
     { ...tc(36, 19), kind: 'urn' },
-    // Slice-Ziel: Schatztruhe in der hintersten Kammer, von Ghulen bewacht
-    { ...tc(36, 15), kind: 'chest' },
+    // Slice 3 (§2.5 Umwidmung): die fruehere Siegtruhe wird zur Gold-Truhe
+    // (oeffnet per Schwert, streut 8-12 Muenzen, pusht NIEMALS 'chest_opened' —
+    // der Sieg zieht hinter den Boss). Von Ghulen bewacht.
+    { ...tc(36, 15), kind: 'chest', content: 'gold' },
   ],
   // Treppe nach oben (U-Tile) → Friedhof, Spawn südlich vor der Krypta-Lücke
   // (nicht im Friedhofs-Portal, das liegt auf den D-Tiles bei y=2).
+  // Slice 3: D-Tile (36,12) → FLUESTERGRUFT (Abgang in der Schatzkammer),
+  // Ziel-Spawn in der Eingangskammer der Gruft (nicht im Gegenportal).
   portals: [
     { ...tileRect(3, 3), target: 'GRAVEYARD', spawn: tc(33, 5) },
+    { ...tileRect(36, 12), target: 'FLUESTERGRUFT', spawn: tc(4, 4) },
   ],
   ambient: 0.82,
   playerLightRadius: 52,
@@ -259,4 +270,32 @@ export const CATACOMBS = {
   torchChars: ['W'],
 };
 
-export const MAPS = { GRAVEYARD, CATACOMBS };
+export const MAPS = { GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER };
+
+// Portal-Gate (Slice 3 §3). PURE Funktion, KEINE Imports/Seiteneffekte —
+// main.js ruft sie im Portal-Loop, Smoke 33 testet sie headless direkt
+// (main.js ist nicht Node-importierbar, deshalb lebt die Logik hier).
+//
+//   'locked'  Portal verlangt einen Schluessel (portal.requires), den der
+//             Spieler nicht traegt (nicht in player.inv.zelda).
+//   'sealed'  Portal ist bossLocked und ein Grabwaechter lebt, dessen state
+//             NICHT 'idle' ist (Fluchtklausel §2.6.4: solange der Boss idle
+//             steht, blockt die Sperre NICHT — der Spieler darf farmen gehen).
+//   null      frei passierbar.
+export function portalBlocked(portal, player, enemies) {
+  if (portal.requires) {
+    const keys = (player && player.inv && player.inv.zelda) || [];
+    if (!keys.includes(portal.requires)) return 'locked';
+  }
+  if (portal.bossLocked) {
+    // "lebt" = existiert und ist nicht im Sterbe-Zustand; "state NICHT idle"
+    // = bereits aggro. So entsiegelt der Boss-Tod das Portal sofort (state
+    // 'die'), und die Pruefung haengt nicht an einem hp-Feld (robust gegen
+    // die headless Test-Objekte in Smoke 33).
+    const bossAggro = (enemies || []).some(
+      (e) => e.kind === 'graveward' && e.state !== 'idle' && e.state !== 'die'
+    );
+    if (bossAggro) return 'sealed';
+  }
+  return null;
+}

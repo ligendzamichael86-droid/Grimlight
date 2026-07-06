@@ -1,5 +1,7 @@
 // HUD, Vignette und Screens. Browser-Objekte nur innerhalb der Funktionen.
 
+import { XP_THRESHOLDS, LEVEL_CAP } from '../items/progression.js';
+
 const VIEW_W = 320;
 const VIEW_H = 180;
 
@@ -30,6 +32,49 @@ export function drawHUD(ctx, player, input, gfx) {
   ctx.drawImage(gfx.potion, 4, 25);
   ctx.fillStyle = '#d6cbb1';
   ctx.fillText(`x ${player.potions ?? 0}`, 16, 27);
+
+  // Boss-Schluessel-Icon (§3): 8x8 bei (30,25) neben dem Trank-Zaehler,
+  // sichtbar sobald der Boss-Schluessel im zelda-Slot liegt.
+  if (player.inv && player.inv.zelda && player.inv.zelda.includes('boss_key') && gfx.icon_key) {
+    ctx.drawImage(gfx.icon_key, 30, 25);
+  }
+
+  // XP-Leiste (§3): 26x3 bei (4,36), unter der Trank-Zeile. Fuellstand =
+  // Fortschritt zwischen den zwei umgebenden Schwellen (Update sofort); bei
+  // LEVEL_CAP dauerhaft voll; beim Level-Up 2 Frames Weissblink #f1e9d3.
+  // KEINE Levelzahl im HUD (die kommt in die Inventar-Fusszeile).
+  const prog = player.prog;
+  if (prog) {
+    ctx.fillStyle = '#3a3542';
+    ctx.fillRect(4, 36, 26, 3);      // Rahmen
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(5, 37, 24, 1);      // Grund
+    let frac = 1;
+    if (prog.level < LEVEL_CAP) {
+      const lo = XP_THRESHOLDS[prog.level - 1];
+      const hi = XP_THRESHOLDS[prog.level];
+      frac = hi > lo ? Math.max(0, Math.min(1, (prog.xp - lo) / (hi - lo))) : 1;
+    }
+    ctx.fillStyle = (player.xpBlink ?? 0) > 0 ? '#f1e9d3' : '#7d7588';
+    ctx.fillRect(5, 37, Math.round(24 * frac), 1); // Fuellung Stein-Hell
+  }
+
+  // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x5 bei (120,8),
+  // Rahmen #3a3542, Grund #14101a, Fuellung #ae2f2a, zwei 1-px-Kerben bei
+  // 2/3 und 1/3. Kein Namenstext (der Name kommt als Toast).
+  const bb = player.bossBar;
+  if (bb) {
+    ctx.fillStyle = '#3a3542';
+    ctx.fillRect(120, 8, 80, 5);
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(121, 9, 78, 3);
+    const bw = Math.max(0, Math.round((78 * bb.hp) / bb.maxHp));
+    ctx.fillStyle = '#ae2f2a';
+    ctx.fillRect(121, 9, bw, 3);
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(121 + Math.round((78 * 2) / 3), 9, 1, 3);
+    ctx.fillRect(121 + Math.round((78 * 1) / 3), 9, 1, 3);
+  }
 
   // Item-Box oben rechts (Slice 2): erscheint erst, wenn das Inventar etwas
   // enthält (Zweitwaffe, Tasche oder angelegte Slots). Zustand kommt aus
@@ -101,8 +146,10 @@ export function drawHUD(ctx, player, input, gfx) {
 }
 
 // Pickup-Popup (Slice 2): schwebt in 0,9 s um 8 px über dem Spielerkopf
-// nach oben, danach setzt main.js den Toast auf null. Ein Toast
-// gleichzeitig, ein neuer ersetzt den alten. toast = { text, color, t }.
+// nach oben, danach setzt main.js den Toast auf null. Ein Toast gleichzeitig;
+// Slice 3: ein neuer ersetzt den alten NUR bei >= Prioritaet (level_up >
+// key/heart/weapon_found > item_pickup > Rest; main.js/pushToast).
+// toast = { text, color, prio, t }.
 export function drawPickupToast(ctx, camera, player, toast) {
   if (!toast) return;
   const progress = Math.min(toast.t / 0.9, 1);
@@ -191,6 +238,10 @@ export function drawGameOver(ctx, player, timeSec) {
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   centerText(ctx, 'GAME OVER', 60, '#ae2f2a', 'bold 24px monospace');
   centerText(ctx, `GOLD: ${player.gold}`, 94, '#f0bf4e', '8px monospace');
+  // §2.6.3: Gold-Zoll-Zeile (deathToll wird beim Eintritt in gameover gesetzt).
+  if (player.deathToll) {
+    centerText(ctx, `DER TOD FORDERT SEINEN ZOLL: -${player.deathToll} GOLD`, 108, '#ae2f2a', '8px monospace');
+  }
   if (Math.floor(timeSec * 2) % 2 === 0) {
     centerText(ctx, 'WEITER MIT ENTER / TIPPEN', 126, '#d6cbb1', '8px monospace');
   }
@@ -200,8 +251,11 @@ export function drawVictory(ctx, player, timeSec) {
   ctx.fillStyle = 'rgba(6,8,4,0.72)';
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   centerText(ctx, 'SIEG!', 56, '#f0bf4e', 'bold 24px monospace');
-  centerText(ctx, 'Der Schatz der Katakomben ist dein.', 90, '#d6cbb1', '8px monospace');
-  centerText(ctx, `GOLD: ${player.gold}`, 104, '#f0bf4e', '8px monospace');
+  // §3: der Sieg findet nicht mehr in den Katakomben statt, sondern hinter dem
+  // Boss — Text und STUFE-Zeile angepasst.
+  centerText(ctx, 'Der Grabwaechter ist bezwungen.', 84, '#d6cbb1', '8px monospace');
+  centerText(ctx, `STUFE ${player.prog ? player.prog.level : 1}`, 98, '#f0bf4e', '8px monospace');
+  centerText(ctx, `GOLD: ${player.gold}`, 110, '#f0bf4e', '8px monospace');
   if (Math.floor(timeSec * 2) % 2 === 0) {
     centerText(ctx, 'NOCHMAL MIT ENTER / TIPPEN', 130, '#d6cbb1', '8px monospace');
   }

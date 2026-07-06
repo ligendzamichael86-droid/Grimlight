@@ -8,6 +8,7 @@
 
 import { aabbOverlap, moveWithCollision } from './entity.js';
 import { isBlocked } from './enemies.js';
+import { gravewardCooldown } from './boss.js';
 
 const SIZE = 8;
 const SPEED_OUT = 150;
@@ -125,6 +126,26 @@ export function createProjectiles() {
       if (e.state === 'die' || p.hitIds.has(e) || !aabbOverlap(p, e)) continue;
       p.hitIds.add(e);
       hit = true;
+      if (e.kind === 'graveward') {
+        // Bumerang bleibt Utility, nie Toetungsverb (§2.2/§3):
+        if (e.state === 'idle') {
+          // Erster Treffer weckt den Boss (Aggro, §2.2).
+          e.state = 'stalk';
+          e.cooldown = gravewardCooldown(e.phase);
+        } else if (e.state === 'summon') {
+          // Cast-Abbruch: Welle entfaellt, Boss zurueck in stalk mit vollem
+          // Cooldown.
+          e.summonAborted = true;
+          e.state = 'stalk';
+          e.cooldown = gravewardCooldown(e.phase);
+          e.marker = null;
+        } else if (e.state === 'stuck') {
+          // stuck-Fenster einmalig je stuck +1,0 s verlaengern.
+          if (!e.stuckExtended) { e.stateTimer += 1.0; e.stuckExtended = true; }
+        }
+        // sonst: nur Rueckflug (hit=true), kein Stun/Schaden/Event.
+        continue;
+      }
       if (e.kind === 'hound') {
         // circle/telegraph/leap (und wander) → sofort down, 1,5 s
         e.state = 'down';

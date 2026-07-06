@@ -62,6 +62,21 @@ Katakomben > Flüstergruft > Bosskammer > Sieg.
 
 Siehe `design/SPEC_SLICE_3.md` §5. Übergabe in `uebergaben/`.
 
-## Erkenntnisse / Änderungen
+## Erkenntnisse / Änderungen (Build-Lauf 06.07.2026, 8 Agenten, ~96 Min.)
 
-(wird nach dem Build gefüllt)
+- **Erster Lauf komplett auf Opus** (Regel "Fable plant, Opus baut"): 0 Agent-
+  Ausfälle, 0 kritische/mittlere Verify-Findings, Fixer arbeitslos — die
+  gründlich reviewte 637-Zeilen-Spec hat die Qualität getragen. Lehre: Investition
+  in Spec + adversarialen Review VOR dem Build zahlt sich beim Ausführungsmodell
+  doppelt aus.
+- Doppelanlage von progression.js (Builder B brauchte sie für Imports, Builder A
+  besaß sie): B legte sie spec-exakt mit Vermerk an, A übernahm unverändert —
+  gutes Muster für geteilte Leaf-Module: "bei Doppelanlage gewinnt der Besitzer,
+  Inhalt = wörtlich Spec §3".
+- Die drei erlaubten Alt-Test-Änderungen (Spec §4) wurden exakt eingehalten und
+  vom Verify einzeln gegengeprüft — die Regel "GENAU DREI" war als Leitplanke
+  wirksam gegen Test-Aufweichung.
+- Proof-Agent fand Port 8124 durch verwaisten Server einer alten Session belegt
+  und nutzte ihn pragmatisch weiter (korrekt). Verwaisten Prozess danach beendet;
+  Betriebsnotiz in der Übergabe.
+- Übergabe: `uebergaben/2026-07-06_slice3_progression.md`. Commit siehe Git-Log.

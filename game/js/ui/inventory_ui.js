@@ -4,6 +4,7 @@
 // nur drawInventoryUI zeichnet. main.js besitzt den Zustandsautomaten.
 
 import { equipItem, computeStats, AFFIXES, BASE_STATS } from '../items/items.js';
+import { applyProgress } from '../items/progression.js';
 
 // Layout (bindend, UX-Panel): Panel (8,8) bis (312,172), Liste x 48..304
 // mit 7 Zeilen a 16 px ab y 26, ANLEGEN 72x22 bei (232,142), X 20x20 bei
@@ -199,7 +200,12 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
   // Fusszeile: Vergleich + angelegtes Item, ohne Auswahl die Gesamtwerte
   ctx.textAlign = 'left';
   if (selected) {
-    const next = computeStats({ equipped: { ...inv.equipped, [selected.slot]: selected } });
+    // §3: der Anlege-Vergleich MUSS applyProgress spiegeln (maxHp aus Level +
+    // Herzcontainern), sonst zeigt HERZ nach dem ersten Level-Up falsche Werte.
+    const next = applyProgress(
+      computeStats({ equipped: { ...inv.equipped, [selected.slot]: selected } }),
+      player.prog
+    );
     const diffs = statDiffs(player.stats, next);
     if (diffs.length === 0) {
       ctx.fillStyle = COLOR_DIM;
@@ -222,6 +228,16 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
       `HERZ ${s.maxHp / 2}  SCHADEN ${s.dmg}  TEMPO ${Math.round((s.speed / BASE_STATS.speed) * 100)}%`,
       16, 148
     );
+  }
+
+  // §3: STUFE als SEPARATES fillText (rechtsbuendig), damit der Bestands-String
+  // 'HERZ x  SCHADEN y  TEMPO z%' zeichenidentisch zusammenhaengend bleibt
+  // (check_inventory_slice2:331 assertet ihn per includes auf EINEM fillText).
+  if (player.prog) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = COLOR_GOLD;
+    ctx.fillText(`STUFE ${player.prog.level}`, LIST_X1 - 2, 148);
+    ctx.textAlign = 'left';
   }
 
   // ANLEGEN-Button (gedimmt ohne Auswahl; Panel bleibt nach ANLEGEN offen)

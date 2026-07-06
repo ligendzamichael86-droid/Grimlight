@@ -15,7 +15,8 @@ const BREAK_TIME = 0.25; // Scherben-Animation
 
 // propSpawns: [{x, y, kind, content?}], x/y = Weltpixel, ZENTRUM der AABB
 // (Konvention aus maps.js). Vase/Urne 12×12, Truhe 16×14.
-// content gilt nur fuer Truhen: 'treasure' (Default, Siegtruhe) | 'boomerang'.
+// content gilt nur fuer Truhen (§3): 'treasure' (Default, Siegtruhe) |
+// 'boomerang' | 'boss_key' | 'heart' | 'gold' (Gold-Truhe, kein Sieg-Event).
 export function createProps(propSpawns) {
   return propSpawns.map((s) => {
     const w = s.kind === 'chest' ? 16 : 12;
@@ -65,14 +66,35 @@ export function updateProps(dt, props, player, map, drops, events) {
       if (!p.opened && swordHit) {
         p.opened = true;
         if (p.content === 'boomerang') {
-          // Bumerang-Truhe: Waffe direkt ins Inventar, KEINE Muenzen,
-          // KEIN 'chest_opened' (Sieg-Event bleibt exklusiv der Siegtruhe).
+          // Bumerang-Truhe: Waffe in den zelda-Slot, KEINE Muenzen, KEIN
+          // 'chest_opened' (Sieg-Event bleibt exklusiv der Siegtruhe).
+          // SOFTLOCK-FIX (§3): PUSHEN statt hart ueberschreiben — sonst
+          // verloere ein zuvor geholter Boss-Schluessel fuer immer.
           if (player.inv) {
-            player.inv.zelda = ['boomerang'];
+            if (!player.inv.zelda.includes('boomerang')) player.inv.zelda.push('boomerang');
             player.inv.newFlag = true;
           }
           events.push({ type: 'weapon_found' });
+        } else if (p.content === 'boss_key') {
+          // Boss-Schluessel (Zelda-Schiene, Portal-Gate): kein Inventar-Item,
+          // kein newFlag. Toast macht main.js ueber 'key_found'.
+          if (player.inv && !player.inv.zelda.includes('boss_key')) {
+            player.inv.zelda.push('boss_key');
+          }
+          events.push('key_found');
+        } else if (p.content === 'heart') {
+          // Herzcontainer: +2 maxHp permanent fuer den Run, heilt +2.
+          player.prog.hearts += 1;
+          player.recalcStats();
+          player.hp = Math.min(player.hp + 2, player.maxHp);
+          events.push('heart_found');
+        } else if (p.content === 'gold') {
+          // Gold-Truhe (umgewidmete Katakomben-Siegtruhe): 8-12 Muenzen,
+          // pusht NIEMALS 'chest_opened'.
+          const n = 8 + Math.floor(Math.random() * 5);
+          for (let k = 0; k < n; k++) dropAt(p, map, drops, 'coin');
         } else {
+          // 'treasure' (Siegtruhe): 8-12 Muenzen + Sieg-Event.
           const n = 8 + Math.floor(Math.random() * 5); // 8-12 Münzen
           for (let k = 0; k < n; k++) dropAt(p, map, drops, 'coin');
           events.push('chest_opened');

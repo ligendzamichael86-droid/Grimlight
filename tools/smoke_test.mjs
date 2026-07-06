@@ -5,13 +5,18 @@
 import { PALETTE } from '../game/js/art/palette.js';
 import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
 import { createTilemap } from '../game/js/world/tilemap.js';
-import { GRAVEYARD, CATACOMBS, MAPS } from '../game/js/world/maps.js';
+// Slice 3: boss.js EINMAL zentral importieren — registriert kind 'graveward'
+// im Verhaltens-Dispatch (import-reihenfolgeabhaengig, §4).
+import { createGraveward } from '../game/js/entities/boss.js';
+import { GRAVEYARD, CATACOMBS, MAPS, portalBlocked } from '../game/js/world/maps.js';
+const { FLUESTERGRUFT, BOSS_KAMMER } = MAPS;
 import { aabbOverlap, moveWithCollision, getEvent } from '../game/js/entities/entity.js';
 import { createPlayer } from '../game/js/entities/player.js';
 import { createSkeleton, createGhoul, createHound, createRust, createEnemy, updateEnemies, updateDrops } from '../game/js/entities/enemies.js';
 import { createProps, updateProps } from '../game/js/entities/props.js';
 import { createProjectiles } from '../game/js/entities/projectiles.js';
 import { rollItem, createInventory, addItem, equipItem, computeStats, AFFIXES } from '../game/js/items/items.js';
+import { createProgress, grantXp, applyProgress, XP_THRESHOLDS, LEVEL_CAP } from '../game/js/items/progression.js';
 import { createInventoryUI } from '../game/js/ui/inventory_ui.js';
 import { createLighting } from '../game/js/core/lighting.js';
 import { drawFog } from '../game/js/ui/hud.js';
@@ -143,11 +148,14 @@ for (const [name, def] of Object.entries(MAPS)) {
 
 // GRAVEYARD-Erwartungen aus der Spec bleiben fixiert (Slice-0-Regression)
 check('GRAVEYARD hat weiterhin 6 Skelette', GRAVEYARD.skeletonSpawns.length === 6);
-// Slice 2 ersetzt den alten "genau 1 Truhe"-Check: Siegtruhe ('treasure',
-// Default zählt mit) und Bumerang-Truhe existieren je genau einmal.
-check("CATACOMBS: genau 1 Siegtruhe ('treasure'/Default) und genau 1 Bumerang-Truhe",
-  CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && (p.content ?? 'treasure') === 'treasure').length === 1
-  && CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && p.content === 'boomerang').length === 1);
+// Slice 3 (erlaubte Alt-Test-Aenderung #1): die Katakomben-Siegtruhe wurde zur
+// Gold-Truhe umgewidmet (der Sieg zieht hinter den Boss). Jetzt genau 1 'gold'
+// + 1 'boomerang', KEINE 'treasure' mehr (die existiert nur noch dynamisch/
+// bossDead-statisch in der BOSS_KAMMER).
+check("CATACOMBS: genau 1 'gold' + 1 'boomerang', KEINE 'treasure'",
+  CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && p.content === 'gold').length === 1
+  && CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && p.content === 'boomerang').length === 1
+  && CATACOMBS.propSpawns.filter((p) => p.kind === 'chest' && (p.content ?? 'treasure') === 'treasure').length === 0);
 
 // --- 3. Spieler bewegt sich ---
 {
@@ -1126,6 +1134,334 @@ function tickProj(w, proj) {
   check("Tap auf den X-Button liefert 'close'", closedByTap === 'close');
   inp.inventory = true;
   check("inventory-Flanke liefert 'close'", ui.update(inp, p) === 'close');
+}
+
+// ===========================================================================
+// Slice 3 (Abschnitte 30-34): Boss-Maschine, Progression, Eliten, Portal-
+// Guards, Truhen-Inhalte + Map-Geometrie.
+// ===========================================================================
+
+const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
+
+// --- 30. Boss-Maschine (Grabwaechter) -----------------------------------------
+{
+  const bmap = createTilemap(BOSS_KAMMER.rows, BOSS_KAMMER.legend);
+  const bossW = (px, py) => {
+    const player = createPlayer({ x: px, y: py });
+    const boss = createGraveward({ x: 168, y: 72 }); // tc(10,4)
+    return { map: bmap, player, enemies: [boss], boss, drops: [], events: [], input: makeInput() };
+  };
+  const bstep = (w) => {
+    w.events.length = 0;
+    w.player.update(DT, w.input, w.map, w.enemies, w.events);
+    updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events);
+    totalTicks++;
+  };
+
+  // Idle vs. Aggro
+  {
+    const w = bossW(168, 152); // dist 80 zum Boss (168,72)
+    bstep(w);
+    check('Boss startet idle (Spieler 80 px entfernt)', w.boss.state === 'idle');
+  }
+  {
+    const w = bossW(168, 120); // dist 48 <= 64
+    bstep(w);
+    check('Boss aggro bei Distanz <= 64 px (idle → stalk)', w.boss.state === 'stalk');
+  }
+  {
+    const w = bossW(168, 152);
+    w.boss.hp = 25; // erster Treffer (hp < maxHp), auch aus der Ferne
+    bstep(w);
+    check('Boss aggro bei erstem Treffer (hp<maxHp → stalk)', w.boss.state === 'stalk');
+  }
+
+  // Telegraph-Pflicht: kein sweep ohne windupA (Muster A, Nahdistanz),
+  // kein dash ohne windupB (Muster B, mittlere Distanz).
+  {
+    // Muster A: Spieler nah (dist ~20) → nur Rundumschlaege.
+    const wa = bossW(168, 92);
+    let prev = wa.boss.state; let sweeps = 0; let badSweep = false;
+    for (let i = 0; i < 1500; i++) {
+      wa.player.invulnTimer = 5; wa.player.hp = wa.player.maxHp;
+      wa.player.x = 168 - 6; wa.player.y = 92 - 7; // an Nahdistanz festhalten (dist 20)
+      bstep(wa);
+      if (wa.boss.state !== prev) {
+        if (wa.boss.state === 'sweep') { sweeps++; if (prev !== 'windupA') badSweep = true; }
+        prev = wa.boss.state;
+      }
+    }
+    check('Boss: vor JEDEM Rundumschlag ein windupA-Telegraph', sweeps >= 1 && !badSweep, `sweeps=${sweeps}`);
+
+    // Muster B: Spieler auf mittlerer Distanz halten (dist 60, >32 und <=88) →
+    // nur Sturmschlaege. Spieler jeden Frame relativ zum Boss neu ankern.
+    const wb = bossW(168, 132);
+    prev = wb.boss.state; let dashes = 0; let badDash = false;
+    for (let i = 0; i < 1500; i++) {
+      wb.player.invulnTimer = 5; wb.player.hp = wb.player.maxHp;
+      const bcx = wb.boss.x + wb.boss.w / 2; const bcy = wb.boss.y + wb.boss.h / 2;
+      wb.player.x = bcx - wb.player.w / 2; wb.player.y = bcy + 60 - wb.player.h / 2; // dist 60
+      bstep(wb);
+      if (wb.boss.state !== prev) {
+        if (wb.boss.state === 'dash') { dashes++; if (prev !== 'windupB') badDash = true; }
+        prev = wb.boss.state;
+      }
+    }
+    check('Boss: vor JEDEM Sturmschlag ein windupB-Telegraph', dashes >= 1 && !badDash, `dashes=${dashes}`);
+  }
+
+  // Aktive Trefferphase trifft fuer EXAKT 2 (ein Treffer je Phase).
+  {
+    const w = bossW(168, 72); // Spieler im Boss-Zentrum (im Sweep-Radius)
+    w.boss.state = 'sweep';
+    w.boss.stateTimer = 0.25;
+    w.boss.hitApplied = false;
+    w.player.hp = 10; w.player.invulnTimer = 0;
+    for (let i = 0; i < 20; i++) { updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events); totalTicks++; }
+    check('Boss-Sweep trifft fuer EXAKT 2 (ein Treffer je aktiver Phase)', w.player.hp === 8, `hp=${w.player.hp}`);
+  }
+
+  // stuck: kein Kontaktschaden; Schwert-Treffer zaehlt, setzt KEINEN knockTimer,
+  // Position bleibt unveraendert (knockFactor-0-Regel §3).
+  {
+    const w = bossW(168, 92); // Spieler direkt unter dem Boss
+    w.boss.state = 'stuck';
+    w.boss.stateTimer = 5;
+    w.player.x = 162; w.player.y = 65; // ueberlappt den Boss (Zentrum 168,72)
+    w.player.hp = 6; w.player.invulnTimer = 0;
+    const bx0 = w.boss.x; const by0 = w.boss.y; const bhp0 = w.boss.hp;
+    // 3 Schwuenge
+    let contactDmg = false;
+    for (let s = 0; s < 3; s++) {
+      w.input.attack = true; w.input.dirX = 0; w.input.dirY = -1;
+      for (let i = 0; i < 22; i++) {
+        const hpBefore = w.player.hp;
+        w.player.update(DT, w.input, w.map, w.enemies, w.events);
+        updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events);
+        totalTicks++;
+        w.player.x = 162; w.player.y = 65; // festhalten
+        w.player.invulnTimer = 0;
+        if (w.player.hp < hpBefore) contactDmg = true;
+      }
+    }
+    w.input.attack = false;
+    check('Boss-stuck: KEIN Kontaktschaden am Spieler', !contactDmg, `hp=${w.player.hp}`);
+    check('Boss-stuck: Schwert-Treffer zaehlen (hp sinkt)', w.boss.hp < bhp0, `hp ${bhp0}→${w.boss.hp}`);
+    check('Boss: Schwert-Treffer setzt KEINEN knockTimer (knockFactor 0)', w.boss.knockTimer === 0);
+    check('Boss: Position nach Schwert-Treffer unveraendert (kein Knockback)',
+      w.boss.x === bx0 && w.boss.y === by0, `(${w.boss.x},${w.boss.y}) vs (${bx0},${by0})`);
+  }
+
+  // Phasenwechsel + Beschwoerung: hp auf 16 → summon, +2 Adds (summoned).
+  {
+    const w = bossW(168, 152);
+    w.boss.hp = 25; bstep(w); // Aggro → stalk
+    w.boss.hp = 16;           // < 17 → Phase 2
+    // bis Ende summon simulieren (1,2 s) + Folgeframe
+    let sawSummon = false;
+    for (let i = 0; i < 90; i++) {
+      w.player.invulnTimer = 5; w.player.hp = w.player.maxHp;
+      bstep(w);
+      if (w.boss.state === 'summon') sawSummon = true;
+    }
+    const adds = w.enemies.filter((e) => e.summoned === true);
+    check('Boss: hp<17 → Phase 2, Zustand summon', sawSummon);
+    check('Boss: Beschwoerung spawnt genau 2 Adds (summoned, ans Array-Ende)',
+      adds.length === 2 && adds.every((a) => a.kind === 'skeleton'), `adds=${adds.length}`);
+    check('Boss: nie mehr als 2 Adds gleichzeitig', w.enemies.filter((e) => e.summoned).length <= 2);
+  }
+
+  // Bumerang-Abbruch (summonAborted) → Welle entfaellt.
+  {
+    const w = bossW(168, 152);
+    w.boss.hp = 25; bstep(w);
+    w.boss.hp = 16; bstep(w); // → summon
+    w.boss.summonAborted = true; // simuliert Bumerang-Treffer im summon
+    for (let i = 0; i < 90; i++) { w.player.invulnTimer = 5; w.player.hp = w.player.maxHp; bstep(w); }
+    check('Boss: Bumerang im summon → Welle entfaellt (keine Adds)',
+      w.enemies.filter((e) => e.summoned).length === 0);
+  }
+
+  // Sterbepfad: dieTime 1,0 s, danach 'boss_died'; keine Drops, xp 0, kein Gear.
+  {
+    const w = bossW(168, 152);
+    w.boss.state = 'die';
+    w.boss.dieTimer = w.boss.dieTime; // 1,0 s
+    let diedAt = -1;
+    for (let i = 0; i < 90 && diedAt < 0; i++) {
+      bstep(w);
+      if (w.events.includes('boss_died')) diedAt = i;
+    }
+    check('Boss-Sterbephase dauert ~1,0 s, dann boss_died', diedAt >= 55 && diedAt <= 62, `tick=${diedAt}`);
+    check('Boss hinterlaesst keine Drops (noDrops)', w.drops.length === 0);
+    check('Boss: xp 0, kein dropTable (kein Gear/Muenzen/Pity)',
+      createGraveward({ x: 0, y: 0 }).xp === 0 && createGraveward({ x: 0, y: 0 }).dropTable === undefined);
+  }
+
+  // Zerbroeselte Adds (state die + noDrops) hinterlassen nichts, aendern Pity nicht.
+  {
+    const map2 = createTilemap(BOSS_KAMMER.rows, BOSS_KAMMER.legend);
+    const player = createPlayer({ x: 168, y: 152 });
+    player.inv.pity = 5;
+    const add = createSkeleton({ x: 200, y: 100 });
+    add.summoned = true; add.state = 'die'; add.dieTimer = 0.4; add.noDrops = true;
+    const w = { map: map2, player, enemies: [add], drops: [], events: [], input: makeInput() };
+    for (let i = 0; i < 30; i++) { updateEnemies(DT, w.enemies, w.player, w.map, w.drops, w.events); totalTicks++; }
+    check('Zerbroeselte Adds: keine Drops, Pity unveraendert',
+      w.drops.length === 0 && player.inv.pity === 5 && w.enemies.length === 0);
+  }
+}
+
+// --- 31. Progression ----------------------------------------------------------
+{
+  const p19 = createProgress(); grantXp(p19, 19);
+  const p20 = createProgress(); grantXp(p20, 20);
+  const p140 = createProgress(); grantXp(p140, 140);
+  check('grantXp: 19 XP → Level 1 (Schwelle 20 nicht erreicht)', p19.level === 1, `level=${p19.level}`);
+  check('grantXp: 20 XP → Level 2', p20.level === 2, `level=${p20.level}`);
+  check('grantXp: 140 XP → Level 5 (Cap)', p140.level === 5, `level=${p140.level}`);
+  const upsAtCap = grantXp(p140, 1000);
+  check('grantXp am Cap: keine weiteren Level-Ups, xp sammelt weiter',
+    upsAtCap === 0 && p140.level === 5 && p140.xp === 1140, `xp=${p140.xp}`);
+  const ups = grantXp(createProgress(), 20);
+  check('grantXp Rueckgabe = Anzahl Level-Ups (0→2 = 1)', ups === 1, `ups=${ups}`);
+
+  const prog = { xp: 0, level: 4, hearts: 1 };
+  const base = { maxHp: 6, dmg: 1, speed: 90 };
+  const out = applyProgress(base, prog);
+  check('applyProgress: L4 + 1 Herz → maxHp 14 (Basis 6)', out.maxHp === 14, `maxHp=${out.maxHp}`);
+  check('applyProgress fasst NUR maxHp an, Eingabe unveraendert',
+    out.dmg === 1 && out.speed === 90 && base.maxHp === 6);
+
+  const cp = createProgress();
+  check('createProgress ist Plain-JSON (stringify/parse deep-equal)',
+    deepEq(cp, JSON.parse(JSON.stringify(cp))) && cp.xp === 0 && cp.level === 1 && cp.hearts === 0);
+
+  // computeStats OHNE prog bleibt Slice-2-Stand (items.js-Regression)
+  check('computeStats ohne prog: maxHp 6 (items.js unveraendert)',
+    computeStats(createInventory()).maxHp === 6);
+}
+
+// --- 32. Eliten ---------------------------------------------------------------
+{
+  const norm = createSkeleton(tcc(5, 5));
+  const elite = createSkeleton({ ...tcc(5, 5), elite: true });
+  check('Normales Skelett: hp 2, xp 2, contactDamage 1 (Slice-2-Werte + neues xp-Feld)',
+    norm.hp === 2 && norm.xp === 2 && norm.contactDamage === 1
+    && norm.wanderSpeed === 25 && norm.chaseSpeed === 55 && norm.knockFactor === 1
+    && norm.elite === undefined);
+  check('Elite-Skelett: hp 4 (x2), xp 4 (x2), Tempo x1,25',
+    elite.hp === 4 && elite.xp === 4
+    && Math.abs(elite.wanderSpeed - 25 * 1.25) < 1e-9
+    && Math.abs(elite.chaseSpeed - 55 * 1.25) < 1e-9 && elite.elite === true);
+  check('Elite: Kontaktschaden/AABB unveraendert',
+    elite.contactDamage === norm.contactDamage && elite.w === norm.w && elite.h === norm.h);
+  // hp 4 bei dmg 2 → 2 Median-Hiebe statt 1
+  check('Elite stirbt in 2 Median-Hieben (hp 4 / dmg 2), normal in 1',
+    elite.hp / 2 === 2 && norm.hp / 2 === 1);
+  const eliteGhoul = createGhoul({ ...tcc(5, 5), elite: true });
+  check('Elite-Ghul: hp 8 (4 x2 aufgerundet), xp 8', eliteGhoul.hp === 8 && eliteGhoul.xp === 8);
+}
+
+// --- 33. Portal-Guards (pure Funktion portalBlocked) --------------------------
+{
+  const lockP = { requires: 'boss_key', target: 'BOSS_KAMMER' };
+  const sealP = { bossLocked: true, target: 'FLUESTERGRUFT' };
+  const noKey = { inv: { zelda: [] } };
+  const withKey = { inv: { zelda: ['boss_key'] } };
+  check("portalBlocked: requires ohne Schluessel → 'locked'",
+    portalBlocked(lockP, noKey, []) === 'locked');
+  check('portalBlocked: requires mit Schluessel → null',
+    portalBlocked(lockP, withKey, []) === null);
+  check("portalBlocked: bossLocked + lebender graveward (stalk) → 'sealed'",
+    portalBlocked(sealP, withKey, [{ kind: 'graveward', state: 'stalk' }]) === 'sealed');
+  check('portalBlocked: bossLocked + graveward idle → null (Fluchtklausel)',
+    portalBlocked(sealP, withKey, [{ kind: 'graveward', state: 'idle' }]) === null);
+  check('portalBlocked: bossLocked + graveward die → null (Boss besiegt)',
+    portalBlocked(sealP, withKey, [{ kind: 'graveward', state: 'die' }]) === null);
+  check('portalBlocked: bossLocked ohne graveward → null',
+    portalBlocked(sealP, withKey, []) === null);
+}
+
+// --- 34. Truhen-Inhalte + Map-Geometrie ---------------------------------------
+{
+  // Schwert-Truhe oeffnen: Helfer, der einen Schwung ausfuehrt bis opened.
+  const openChest = (content, extraProps = []) => {
+    const s = ARENA.playerSpawn;
+    const w = makeWorld({
+      mapDef: ARENA,
+      propSpawns: [{ x: s.x + 22, y: s.y, kind: 'chest', content }, ...extraProps],
+    });
+    w.input.dirX = 1; tick(w); w.input.dirX = 0;
+    w.input.attack = true;
+    for (let i = 0; i < 200 && !w.props.find((p) => p.content === content && p.opened); i++) tick(w);
+    w.input.attack = false;
+    ticks(w, 30);
+    return w;
+  };
+
+  // boss_key
+  {
+    const w = openChest('boss_key');
+    check("Truhe 'boss_key': pusht in inv.zelda + Event 'key_found', KEIN chest_opened",
+      w.player.inv.zelda.includes('boss_key') && w.events.includes('key_found')
+      && !w.events.includes('chest_opened'));
+  }
+
+  // Softlock-Reihenfolge: boss_key ZUERST (im zelda-Slot), dann Bumerang-Truhe
+  // → der Bumerang-Zweig PUSHT (statt hart zu ueberschreiben), beide bleiben.
+  {
+    const s = ARENA.playerSpawn;
+    const w = makeWorld({
+      mapDef: ARENA,
+      propSpawns: [{ x: s.x + 22, y: s.y, kind: 'chest', content: 'boomerang' }],
+    });
+    w.player.inv.zelda = ['boss_key']; // Schluessel bereits geholt
+    w.input.dirX = 1; tick(w); w.input.dirX = 0;
+    w.input.attack = true; ticks(w, 60); w.input.attack = false;
+    check('Softlock-Fix: Bumerang-Truhe nach boss_key → zelda enthaelt BEIDE',
+      w.player.inv.zelda.includes('boss_key') && w.player.inv.zelda.includes('boomerang'),
+      `zelda=[${w.player.inv.zelda}]`);
+  }
+
+  // heart
+  {
+    const w = openChest('heart');
+    check("Truhe 'heart': hearts +1, maxHp +2, heilt +2, kein chest_opened",
+      w.player.prog.hearts === 1 && w.player.maxHp === 8 && w.player.hp === 8
+      && !w.events.includes('chest_opened'));
+  }
+
+  // gold
+  {
+    const w = openChest('gold');
+    const coins = w.drops.filter((d) => d.kind === 'coin').length + w.player.gold;
+    check("Truhe 'gold': 8-12 Muenzen, KEIN chest_opened",
+      coins >= 8 && coins <= 12 && !w.events.includes('chest_opened'), `muenzen=${coins}`);
+  }
+
+  // Neue Maps: elite-Flags nur FLUESTERGRUFT; Portal-Ketten-Ziele existieren.
+  {
+    const fluEl = (FLUESTERGRUFT.enemySpawns || []).filter((e) => e.elite).length;
+    const otherEl = ['GRAVEYARD', 'CATACOMBS', 'BOSS_KAMMER']
+      .reduce((n, k) => n + (MAPS[k].enemySpawns || []).filter((e) => e.elite).length, 0);
+    check('elite-Flags NUR in der FLUESTERGRUFT', fluEl === 4 && otherEl === 0, `flu=${fluEl} andere=${otherEl}`);
+    check('Portal-Kette FLUESTERGRUFT→BOSS_KAMMER (requires boss_key) existiert',
+      FLUESTERGRUFT.portals.some((p) => p.target === 'BOSS_KAMMER' && p.requires === 'boss_key'));
+    check('Portal BOSS_KAMMER→FLUESTERGRUFT (bossLocked) existiert',
+      BOSS_KAMMER.portals.some((p) => p.target === 'FLUESTERGRUFT' && p.bossLocked));
+    check('BOSS_KAMMER traegt genau einen graveward-Spawn',
+      (BOSS_KAMMER.enemySpawns || []).filter((e) => e.kind === 'graveward').length === 1);
+  }
+
+  // Die vier Add-Anker der BOSS_KAMMER sind begehbar (Skelett-AABB 12x14).
+  {
+    const bm = createTilemap(BOSS_KAMMER.rows, BOSS_KAMMER.legend);
+    const anchors = [tcc(4, 3), tcc(15, 3), tcc(4, 8), tcc(15, 8)];
+    const bad = anchors.findIndex((a) => bm.rectCollides({ x: a.x - 6, y: a.y - 7, w: 12, h: 14 }));
+    check('BOSS_KAMMER: alle 4 Add-Anker begehbar (Skelett-AABB kollisionsfrei)', bad === -1,
+      bad >= 0 ? `Anker ${bad} solide` : '');
+  }
 }
 
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);

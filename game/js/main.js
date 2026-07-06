@@ -8,10 +8,14 @@ import { createInput } from './core/input.js';
 import { createCamera } from './core/camera.js';
 import { createLighting } from './core/lighting.js';
 import { createTilemap } from './world/tilemap.js';
-import { MAPS } from './world/maps.js';
+// Slice 3: boss.js EINMAL explizit importieren — das Modulende registriert
+// kind 'graveward' im Verhaltens-Dispatch (registrierungs-/importreihenfolge-
+// abhaengig, dokumentiertes Risiko §3).
+import './entities/boss.js';
+import { MAPS, portalBlocked, tc } from './world/maps.js';
 import { aabbOverlap, hasEvent, getEvent } from './entities/entity.js';
 import { createPlayer } from './entities/player.js';
-import { createSkeleton, createGhoul, createEnemy, updateEnemies, updateDrops, drawEnemy, drawDrop } from './entities/enemies.js';
+import { createSkeleton, createGhoul, createEnemy, updateEnemies, updateDrops, drawEnemy, drawDrop, scatterDrop, eliteLights } from './entities/enemies.js';
 import { createProps, updateProps, drawProp } from './entities/props.js';
 import { createProjectiles, drawProjectile } from './entities/projectiles.js';
 import { drawHUD, drawVignette, drawFog, drawTitle, drawGameOver, drawVictory, drawPickupToast } from './ui/hud.js';
@@ -54,6 +58,12 @@ for (const key of [
   'ghoul_0', 'ghoul_1', 'ghoul_die',
   'hound_0', 'hound_1', 'hound_telegraph', 'hound_leap', 'hound_down', 'hound_die',
   'rust_0', 'rust_1', 'rust_die', 'shield_side',
+  // Slice 3: Grabwaechter-Flips AUSSCHLIESSLICH ans ENDE angehaengt (nach
+  // shield_side). Die Bestandsreihenfolge ist EINGEFROREN — check_main_slice1
+  // und check_inventory_slice2 mappen Canvas→Sprite ueber die
+  // Erzeugungsreihenfolge; ein Einschub davor macht beide Alt-Tests rot.
+  'warden_idle', 'warden_walk_0', 'warden_walk_1', 'warden_windup_a',
+  'warden_windup_b', 'warden_dash', 'warden_stuck', 'warden_summon', 'warden_die',
 ]) {
   gfx[`${key}_flip`] = buildSprite(SPRITES[key], PALETTE, { flipX: true });
 }
@@ -100,9 +110,23 @@ let projectiles = null;
 const inventoryUI = createInventoryUI();
 let inventoryHeld = false; // Flanke fürs Öffnen (Muster potionHeld)
 let attackSwallow = false; // schluckt den Angriffs-Pegel nach dem Inventar-Schliessen
-let toast = null;          // höchstens ein Toast, ein neuer ersetzt den alten
+// Slice 3: Toast traegt jetzt eine Prioritaet (level_up > key/heart/weapon_found
+// > item_pickup > Rest). Ein Slot; ein neuer ersetzt den alten NUR bei >=
+// Prioritaet (dokumentierte Abweichung von Slice 2 "ein neuer ersetzt den
+// alten"; betrifft nur gleichzeitige Events im selben Frame, kein Alt-Test).
+let toast = null;
 let zeldaWasAir = false;
 let zeldaBlink = 0;
+// Slice 3: Progression/Boss-Run-Zustand.
+let runFlags = { bossDead: false };   // Reset in resetRun
+let lastSpawn = null;                 // fuer den Respawn (§2.6): letzter Eintritts-Spawn
+let currentMapKey = null;             // aktuelle Map (Respawn zielt hierauf)
+let levelupTimer = 0;                 // Ring-Effekt levelup_0/1, 0,5 s ueber dem Spieler
+let portalToastTimer = 0;             // Drossel fuer den VERSCHLOSSEN/VERSIEGELT-Toast (1x/s)
+
+function pushToast(text, color, prio) {
+  if (!toast || prio >= toast.prio) toast = { text, color, prio, t: 0 };
+}
 
 function followPlayer() {
   camera.follow(player.x + player.w / 2, player.y + player.h / 2, map.wPx, map.hPx);
@@ -119,14 +143,18 @@ function syncPlayerLight() {
 // createPlayer(spawn); bei carry=true werden hp/gold/potions übernommen,
 // alle Timer/attackId/Knockback/State starten frisch.
 function buildWorld(mapKey, spawn, carry) {
+  currentMapKey = mapKey;
+  lastSpawn = spawn;         // §2.6: fuer den Respawn merken
   mapDef = MAPS[mapKey];
   map = createTilemap(mapDef.rows, mapDef.legend, mapDef.overRows || null);
   const prev = player;
   player = createPlayer(spawn);
   if (carry && prev) {
-    // carry-Reihenfolge FEST (Spec Slice 2): erst Inventar-Referenz, dann
-    // Stats ableiten, dann hp/gold/potions (hp gegen neues maxHp gekappt).
+    // carry-Reihenfolge FEST (Spec Slice 2/3): erst Inventar- UND Progression-
+    // Referenz, dann Stats ableiten (maxHp aus Level/Herzen), dann hp/gold/
+    // potions (hp gegen neues maxHp gekappt).
     player.inv = prev.inv;
+    player.prog = prev.prog; // §3: Referenz — XP/Level/Herzcontainer tragen
     player.recalcStats();
     player.hp = Math.min(prev.hp, player.maxHp);
     player.gold = prev.gold;
@@ -135,9 +163,19 @@ function buildWorld(mapKey, spawn, carry) {
   enemies = [
     ...mapDef.skeletonSpawns.map(createSkeleton),
     ...mapDef.ghoulSpawns.map(createGhoul),
-    ...(mapDef.enemySpawns || []).map(createEnemy),
+    // §3: in der BOSS_KAMMER den Grabwaechter NUR BEIM ERZEUGEN filtern, wenn
+    // er schon besiegt ist (MAPS/mapDef werden NIE mutiert, sonst fehlt der
+    // Boss nach resetRun dauerhaft).
+    ...(mapDef.enemySpawns || [])
+      .filter((s) => !(runFlags.bossDead && s.kind === 'graveward'))
+      .map(createEnemy),
   ];
   props = createProps(mapDef.propSpawns);
+  // §3: nach besiegtem Boss die Siegtruhe statisch bei tc(10,4) hinlegen —
+  // der Sieg bleibt nach Verlassen/Rueckkehr erreichbar.
+  if (mapKey === 'BOSS_KAMMER' && runFlags.bossDead) {
+    props.push(...createProps([{ ...tc(10, 4), kind: 'chest', content: 'treasure' }]));
+  }
   projectiles = createProjectiles();
   drops = [];
   events.length = 0;
@@ -150,8 +188,15 @@ function buildWorld(mapKey, spawn, carry) {
     .map((t) => ({ x: t.x, y: t.y, radius: TORCH_RADIUS, flicker: 1 }));
   lights.push(playerLight);
   portalsArmed = mapDef.portals.map(() => false);
+  levelupTimer = 0;
+  portalToastTimer = 0;
   syncPlayerLight();
   followPlayer(); // Kamera VOR dem ersten Frame der neuen Map setzen
+  // §3: beim (Wieder-)Betreten der BOSS_KAMMER mit lebendem Boss einmalig der
+  // Namens-Toast GRABWAECHTER in Rot (der Name kommt nur als Toast, nicht ins HUD).
+  if (mapKey === 'BOSS_KAMMER' && enemies.some((e) => e.kind === 'graveward')) {
+    toast = { text: 'GRABWAECHTER', color: '#ae2f2a', prio: 3, t: 0 };
+  }
 }
 
 // Kompletter Neustart (Titel / nach Game Over / nach Sieg): frischer Spieler
@@ -162,6 +207,7 @@ function resetRun() {
   fadePhase = 'none';
   fadeT = 0;
   pendingPortal = null;
+  runFlags.bossDead = false; // §2.6.6: frischer Run, der Boss lebt wieder
   buildWorld(startMapKey, MAPS[startMapKey].playerSpawn, false);
 }
 
@@ -233,35 +279,80 @@ function update(dt) {
       syncPlayerLight();
       followPlayer();
 
-      // Pickup-Toasts (Spec Slice 2): item_pickup zeigt Name in
-      // Seltenheitsfarbe, weapon_found den Bumerang-Erhalt, inventory_full
-      // die volle Tasche (durch den retryTimer der Drops gedrosselt).
+      // Toasts nach Prioritaet (§3): level_up (4) > weapon/key/heart_found (3)
+      // > item_pickup (2) > Rest (1). Ein Slot, pushToast ersetzt nur bei >=
+      // Prioritaet.
       const picked = getEvent(events, 'item_pickup');
-      if (picked) {
-        toast = { text: picked.item.name, color: picked.item.rare ? '#92aec0' : '#d6cbb1', t: 0 };
+      if (picked) pushToast(picked.item.name, picked.item.rare ? '#92aec0' : '#d6cbb1', 2);
+      if (hasEvent(events, 'weapon_found')) pushToast('KNOCHEN-BUMERANG!', '#f0bf4e', 3);
+      if (hasEvent(events, 'key_found')) pushToast('BOSS-SCHLUESSEL!', '#f0bf4e', 3);
+      if (hasEvent(events, 'heart_found')) pushToast('HERZCONTAINER!', '#f0bf4e', 3);
+      if (hasEvent(events, 'inventory_full')) pushToast('TASCHE VOLL', '#ae2f2a', 1);
+      if (hasEvent(events, 'level_up')) {
+        pushToast(`STUFE ${player.prog.level}!`, '#f0bf4e', 4);
+        levelupTimer = 0.5;      // Ring-Effekt ueber dem Spieler
+        player.xpBlink = 2;      // 2-Frame-Weissblink der XP-Leiste (hud.js)
       }
-      if (hasEvent(events, 'weapon_found')) toast = { text: 'KNOCHEN-BUMERANG!', color: '#f0bf4e', t: 0 };
-      if (hasEvent(events, 'inventory_full')) toast = { text: 'TASCHE VOLL', color: '#ae2f2a', t: 0 };
       if (toast) {
         toast.t += dt;
         if (toast.t >= 0.9) toast = null;
       }
+      if (levelupTimer > 0) levelupTimer -= dt;
+      if (portalToastTimer > 0) portalToastTimer -= dt;
+      if (player.xpBlink > 0) player.xpBlink -= 1;
+
+      // §2.2/§3: Boss-Tod. Der generische die-Zweig pusht 'boss_died' nach der
+      // 1,0-s-Sterbephase. main.js zerbroeselt dann alle Adds (KEIN XP/Geld/
+      // Gear/Pity), streut 6-10 Muenzen und legt die Siegtruhe bei tc(10,4).
+      if (hasEvent(events, 'boss_died')) {
+        for (const e of enemies) {
+          if (e.summoned === true && e.state !== 'die') {
+            e.state = 'die';
+            e.dieTimer = 0.4;
+            e.noDrops = true;
+          }
+        }
+        const anchor = tc(10, 4);
+        const coins = 6 + Math.floor(Math.random() * 5); // 6-10
+        for (let k = 0; k < coins; k++) scatterDrop(drops, map, anchor.x, anchor.y, 'coin');
+        props.push(...createProps([{ ...anchor, kind: 'chest', content: 'treasure' }]));
+        runFlags.bossDead = true;
+      }
+
+      // Boss-HP-Balken pro Frame spiegeln (Muster zeldaState): lebt ein
+      // Grabwaechter, traegt player.bossBar seine HP, sonst null.
+      const boss = enemies.find((e) => e.kind === 'graveward' && e.state !== 'die');
+      player.bossBar = boss ? { hp: boss.hp, maxHp: boss.maxHp } : null;
 
       // Prüfreihenfolge (Spec-Review-Klärung): 1. Tod hat IMMER Vorrang
       // (verwirft laufenden Victory-Countdown) → 2. Portal → 3. Truhe/Sieg
       // → 4. Inventar-Öffnen (nur ohne Fade, NACH der Event-Auswertung).
       if (hasEvent(events, 'player_died')) {
         victoryTimer = 0;
+        // §2.6.3: beim EINTRITT in gameover den Gold-Zoll berechnen und
+        // spiegeln (drawGameOver liest player.deathToll). Abgezogen wird erst
+        // bei der Bestaetigung VOR buildWorld.
+        player.deathToll = player.gold - Math.floor(player.gold / 2);
         enterState('gameover');
       } else {
         for (let i = 0; i < mapDef.portals.length; i++) {
           const portal = mapDef.portals[i];
           if (aabbOverlap(player, portal)) {
             if (portalsArmed[i]) {
-              pendingPortal = portal;
-              fadePhase = 'out';
-              fadeT = 0;
-              break;
+              // §3: Portal-Gate. 'locked' (Schluessel fehlt) / 'sealed' (Boss
+              // aktiv) blocken den Uebergang mit gedrosseltem Toast (1x/s).
+              const block = portalBlocked(portal, player, enemies);
+              if (block) {
+                if (portalToastTimer <= 0) {
+                  pushToast(block === 'locked' ? 'VERSCHLOSSEN' : 'VERSIEGELT', '#d6cbb1', 1);
+                  portalToastTimer = 1.0;
+                }
+              } else {
+                pendingPortal = portal;
+                fadePhase = 'out';
+                fadeT = 0;
+                break;
+              }
             }
           } else {
             portalsArmed[i] = true; // einmal verlassen → scharf
@@ -290,10 +381,24 @@ function update(dt) {
       attackSwallow = true; // Schliess-Tap nicht als Hieb werten
       enterState('playing'); // consumeConfirm an beiden Übergängen (enterState)
     }
-  } else if (state === 'gameover' || state === 'victory') {
-    if (state === 'gameover' && player.state === 'dead') player.animTimer += dt; // Sterbe-Frames
+  } else if (state === 'gameover') {
+    if (player.state === 'dead') player.animTimer += dt; // Sterbe-Frames
     if (stateTime >= END_SCREEN_MIN_TIME && input.confirm) {
-      resetRun();
+      // §2.6: KEIN resetRun mehr. Respawn am letzten Eintritts-Spawn der
+      // AKTUELLEN Map; Gold halbieren VOR buildWorld (carry kopiert es),
+      // hp = maxHp EXPLIZIT NACH dem carry-Block (der kopiert prev.hp = 0),
+      // deathToll zuruecksetzen. Level/XP/Inventar/Ausruestung/Traenke/
+      // Schluessel/Herzcontainer bleiben. Boss frisch (buildWorld), Tor
+      // bleibt entriegelt (Schluessel bleibt im Inventar).
+      player.gold = Math.floor(player.gold / 2);
+      buildWorld(currentMapKey, lastSpawn, true);
+      player.hp = player.maxHp;
+      player.deathToll = null;
+      enterState('playing');
+    }
+  } else if (state === 'victory') {
+    if (stateTime >= END_SCREEN_MIN_TIME && input.confirm) {
+      resetRun(); // Victory-Neustart bleibt ein frischer Run (§2.6.6)
       enterState('playing');
     }
   }
@@ -306,8 +411,54 @@ function update(dt) {
 // nach Fußkante (Drops/Props/Gegner/Spieler gemeinsam; wer weiter unten steht,
 // ist davor) → Over-Layer (Baumkronen ÜBER den Entities) → Fog → Lighting →
 // Vignette → HUD (HUD wird NICHT abgedunkelt).
+// §3: prozedurale Boden-Telegraph-Marker (KEINE Sprites). Umriss #ae2f2a
+// Alpha 0,6; in den letzten 0,25 s des Telegraphs Flaeche Alpha 0,35 + Umriss-
+// Blitz #f1e9d3. Max. 1 Marker (eine Boss-Maschine). Gezeichnet NACH dem
+// Ground-Layer, VOR den y-sortierten Entities (Render-Reihenfolge aus 1.5
+// sonst unangetastet).
+function drawMarkers() {
+  for (const e of enemies) {
+    const m = e.marker;
+    if (!m) continue;
+    const danger = m.remaining <= 0.25;
+    ctx.save();
+    ctx.lineWidth = 1;
+    if (m.kind === 'ring') {
+      const mx = Math.round(m.x - camera.x);
+      const my = Math.round(m.y - camera.y);
+      if (danger) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ae2f2a';
+        ctx.beginPath();
+        ctx.arc(mx, my, m.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = danger ? '#f1e9d3' : '#ae2f2a';
+      ctx.beginPath();
+      ctx.arc(mx, my, m.r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (m.kind === 'rect') {
+      // Korridor entlang der Sturm-Richtung: Rechteck length x width vor dem Boss.
+      ctx.translate(m.x - camera.x, m.y - camera.y);
+      ctx.rotate(Math.atan2(m.dirY, m.dirX));
+      if (danger) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#ae2f2a';
+        ctx.fillRect(0, -m.width / 2, m.length, m.width);
+      }
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = danger ? '#f1e9d3' : '#ae2f2a';
+      ctx.strokeRect(0, -m.width / 2, m.length, m.width);
+    }
+    ctx.restore();
+    break; // Max. 1 Marker
+  }
+}
+
 function drawWorld() {
   map.draw(ctx, camera, tiles, timeSec, 'ground');
+  drawMarkers();
 
   // Gemeinsame Y-Sortierung aller Welt-Entities nach Fußkante (y + h).
   // Array.sort ist stabil → bei Gleichstand bleibt Einfügereihenfolge
@@ -321,6 +472,18 @@ function drawWorld() {
   renderables.sort((a, b) => a.fy - b.fy);
   for (const r of renderables) r.draw();
 
+  // §3: Level-Up-Ring (levelup_0/1, 0,5 s) UEBER der Spieler-Fußkante.
+  if (levelupTimer > 0) {
+    const rimg = gfx[levelupTimer > 0.25 ? 'levelup_0' : 'levelup_1'];
+    if (rimg) {
+      ctx.drawImage(
+        rimg,
+        Math.round(player.x + player.w / 2 - rimg.width / 2 - camera.x),
+        Math.round(player.y + player.h - rimg.height / 2 - 8 - camera.y)
+      );
+    }
+  }
+
   map.draw(ctx, camera, tiles, timeSec, 'over');
   if (mapDef.fog) drawFog(ctx, camera, gfx, timeSec);
   // Lights pro Frame: Fackeln + Spieler-Laterne (lights) plus je ein Licht
@@ -332,6 +495,9 @@ function drawWorld() {
       frameLights.push({ x: d.x + d.w / 2, y: d.y + d.h / 2, radius: 18, flicker: 0.3 });
     }
   }
+  // §2.4: Mini-Lichter der LEBENDEN Eliten PRO FRAME (Muster Selten-Drop-
+  // Lichter; NICHT ins statische lights-Array, das klebt am Spawn).
+  for (const l of eliteLights(enemies)) frameLights.push(l);
   lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec);
   drawVignette(ctx);
   drawHUD(ctx, player, input, gfx);

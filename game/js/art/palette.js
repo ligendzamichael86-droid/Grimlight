@@ -74,4 +74,8 @@ export const PALETTE = {
   4: '#5e2c1c', // Rost dunkel, Plattenschatten
   5: '#8f4a24', // Rost mittel, Plattenflaeche
   6: '#c06a33', // Rost hell, Kanten und Nieten (Licht oben links)
+  // Seelenglut (NEU Slice 3, Grabwaechter-Signatur): 7 -> 8
+  // Spektral-Gruen, klar abgesetzt von Elite-Rot und Fackel-Orange.
+  7: '#2f7d5c', // Seelenglut dunkel (Augenhoehlen-Tiefe, Klingenrunen-Grund)
+  8: '#7ff0b8', // Seelenglut hell (gluehende Augen, heisse Runen, Telegraph)
 };

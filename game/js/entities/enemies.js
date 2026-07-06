@@ -13,6 +13,7 @@
 
 import { aabbOverlap, moveWithCollision } from './entity.js';
 import { rollItem, addItem } from '../items/items.js';
+import { grantXp } from '../items/progression.js';
 
 const CONTACT_COOLDOWN = 0.5;
 const HURT_FLASH = 0.2;
@@ -51,43 +52,61 @@ function baseEnemy(spawn, w, h) {
   };
 }
 
+// Eliten (§2.4): NUR Zahlenfaktoren, keine neuen Verhalten. hp x2
+// (aufgerundet), wander/chase/orbit-Tempi x1,25, xp x2, e.elite = true.
+// Kontaktschaden, Drop-Tabelle, Verhalten, AABB bleiben unveraendert.
+function elitize(e, spawn) {
+  if (!spawn || !spawn.elite) return e;
+  e.hp = Math.ceil(e.hp * 2);
+  if (e.wanderSpeed) e.wanderSpeed *= 1.25;
+  if (e.chaseSpeed) e.chaseSpeed *= 1.25;
+  if (e.approachSpeed) e.approachSpeed *= 1.25;
+  if (e.orbitSpeed) e.orbitSpeed *= 1.25;
+  e.xp *= 2;
+  e.elite = true;
+  return e;
+}
+
 export function createSkeleton(spawn) {
-  return {
+  return elitize({
     ...baseEnemy(spawn, 12, 14),
     kind: 'skeleton',
     hp: 2,
+    xp: 2,
     wanderSpeed: 25,
     chaseSpeed: 55,
     sight: 96,
     contactDamage: 1,
     knockFactor: 1,
     dropTable: { itemChance: 0.04, rareChance: 0.1 },
-  };
+  }, spawn);
 }
 
 // Ghul: langsamer, zäher Brocken für die Katakomben (SPEC_SLICE_1 §2).
 export function createGhoul(spawn) {
-  return {
+  return elitize({
     ...baseEnemy(spawn, 14, 14),
     kind: 'ghoul',
     hp: 4,
+    xp: 4,
     wanderSpeed: 18,
     chaseSpeed: 30,
     sight: 80,
     contactDamage: 2,
     knockFactor: 0.5, // Knockback wirkt nur 50 %
     dropTable: { itemChance: 0.08, rareChance: 0.2 },
-  };
+  }, spawn);
 }
 
 // Grufthund (SPEC_SLICE_2 §2.3): umkreist den Spieler, springt nach
 // telegraphiertem Ansatz, liegt danach verwundbar am Boden.
 // Zustände: wander | circle | telegraph | leap | down | die.
 export function createHound(spawn) {
-  return {
+  return elitize({
     ...baseEnemy(spawn, 14, 12),
     kind: 'hound',
     hp: 4,
+    xp: 5,
     wanderSpeed: 30,
     approachSpeed: 75,  // Annäherung bis zum Orbit
     orbitSpeed: 70,     // Tangentialtempo
@@ -106,16 +125,17 @@ export function createHound(spawn) {
     downTimer: 0,
     leapBlock: 0,      // Sprungsperre nach dem Aufstehen
     dropTable: { itemChance: 0.1, rareChance: 0.2 },
-  };
+  }, spawn);
 }
 
 // Rostpanzer-Skelett (SPEC_SLICE_2 §2.3): langsam, blockt frontal
 // (Kegel ±60° um die gerastete Blickrichtung), seitlich/hinten verwundbar.
 export function createRust(spawn) {
-  return {
+  return elitize({
     ...baseEnemy(spawn, 14, 16),
     kind: 'rust',
     hp: 5,
+    xp: 6,
     wanderSpeed: 12,
     chaseSpeed: 20,
     sight: 70,
@@ -132,9 +152,12 @@ export function createRust(spawn) {
       rareChance: 0.25,
       slotWeights: { armor: 0.5, weapon: 0.25, ring: 0.25 },
     },
-  };
+  }, spawn);
 }
 
+// Registry: Creator/Behavior/Drawer je kind. Bestandskinds direkt, neue
+// Kinds (Boss) via registerEnemyKind (import-reihenfolgeabhaengig, boss.js
+// wird von main.js und smoke_test.mjs einmal explizit oben importiert).
 const CREATORS = {
   skeleton: createSkeleton,
   ghoul: createGhoul,
@@ -142,8 +165,18 @@ const CREATORS = {
   rust: createRust,
 };
 
-// Dispatch für mapDef.enemySpawns ({x, y, kind}). Unbekannter kind wirft
-// bewusst (Map-Datenfehler sollen im Smoke-Test auffallen).
+// Registriert einen neuen Gegner-kind (SPEC_SLICE_3 §3). drawer optional:
+// existiert DRAWERS[kind], uebernimmt dieser Zeichner KOMPLETT (sonst baut
+// der generische Pfad Sprite-Keys aus e.kind und faende keine graveward_*-
+// Sprites -> drawImage(undefined)).
+export function registerEnemyKind(kind, creator, behavior, drawer = null) {
+  CREATORS[kind] = creator;
+  if (behavior) BEHAVIORS[kind] = behavior;
+  if (drawer) DRAWERS[kind] = drawer;
+}
+
+// Dispatch für mapDef.enemySpawns ({x, y, kind, elite?}). Unbekannter kind
+// wirft bewusst (Map-Datenfehler sollen im Smoke-Test auffallen).
 export function createEnemy(spawn) {
   return CREATORS[spawn.kind](spawn);
 }
@@ -184,6 +217,9 @@ function pickSlot(weights) {
 // der nächste Kill ein garantierter Normal-Drop (Slot uniform); jeder
 // Gear-Drop setzt pity auf 0 zurück.
 function spawnDeathDrops(e, map, drops, player) {
+  // Boss / zerbroeselte Adds (§2.2): noDrops bricht SOFORT ab — kein Geld,
+  // kein Gear, KEIN Pity-Einfluss.
+  if (e.noDrops) return;
   const cx = e.x + e.w / 2;
   const cy = e.y + e.h / 2;
   const cMin = e.coinMin ?? 1;
@@ -392,6 +428,10 @@ const BEHAVIORS = {
   rust: updateRust,
 };
 
+// Zeichner-Dispatch (§3): kinds mit eigenem Zeichner (Boss) uebernehmen den
+// Rendervorgang komplett. Bestandskinds haben keinen Eintrag -> generisch.
+const DRAWERS = {};
+
 export function updateEnemies(dt, enemies, player, map, drops, events) {
   const swordHb = player.getSwordHitbox ? player.getSwordHitbox() : null;
   for (let i = enemies.length - 1; i >= 0; i--) {
@@ -401,6 +441,9 @@ export function updateEnemies(dt, enemies, player, map, drops, events) {
     if (e.state === 'die') {
       e.dieTimer -= dt;
       if (e.dieTimer <= 0) {
+        // §3-Erweiterung 2: Sterbe-Event (Boss: 'boss_died') nach Ablauf
+        // des Timers, VOR dem splice.
+        if (e.deathEvent) events.push(e.deathEvent);
         spawnDeathDrops(e, map, drops, player);
         enemies.splice(i, 1);
       }
@@ -422,18 +465,35 @@ export function updateEnemies(dt, enemies, player, map, drops, events) {
       } else {
         e.hp -= player.stats?.dmg ?? 1;
         e.hurtTimer = HURT_FLASH;
-        let kx = e.x + e.w / 2 - pcx;
-        let ky = e.y + e.h / 2 - pcy;
-        const klen = Math.hypot(kx, ky);
-        if (klen < 0.001) { kx = 0; ky = 1; } else { kx /= klen; ky /= klen; }
-        e.knockX = kx;
-        e.knockY = ky;
-        e.knockTimer = KNOCK_DURATION;
-        e.knockMult = player.stats?.knockMult ?? 1;
+        // KNOCKBACK-REGEL (§3): knockX/knockY/knockTimer NUR bei
+        // knockFactor > 0. Sonst friert das continue im Knockback-Zweig die
+        // Boss-Zustandsmaschine je Treffer 0,15 s ein (de facto stunbar).
+        // Kein Bestandsgegner hat knockFactor 0 -> keine Regression.
+        if ((e.knockFactor ?? 1) > 0) {
+          let kx = e.x + e.w / 2 - pcx;
+          let ky = e.y + e.h / 2 - pcy;
+          const klen = Math.hypot(kx, ky);
+          if (klen < 0.001) { kx = 0; ky = 1; } else { kx /= klen; ky /= klen; }
+          e.knockX = kx;
+          e.knockY = ky;
+          e.knockTimer = KNOCK_DURATION;
+          e.knockMult = player.stats?.knockMult ?? 1;
+        }
         if (e.hp <= 0) {
           e.state = 'die';
-          e.dieTimer = DIE_TIME;
+          // §3-Erweiterung 1: Boss stirbt ueber dieTime (1,0 s), Rest DIE_TIME.
+          e.dieTimer = e.dieTime ?? DIE_TIME;
           events.push('enemy_died');
+          // XP-Vergabe (§3): nur wenn ein prog-Objekt haengt; Level-Up heilt
+          // voll. Boss traegt xp 0 -> keine Level.
+          if (player.prog) {
+            const ups = grantXp(player.prog, e.xp ?? 0);
+            if (ups > 0) {
+              player.recalcStats();
+              player.hp = player.maxHp;
+              events.push('level_up');
+            }
+          }
           continue;
         }
       }
@@ -460,7 +520,7 @@ export function updateEnemies(dt, enemies, player, map, drops, events) {
     const ecx = e.x + e.w / 2;
     const ecy = e.y + e.h / 2;
 
-    (BEHAVIORS[e.kind] || updateWanderChase)(dt, e, player, map);
+    (BEHAVIORS[e.kind] || updateWanderChase)(dt, e, player, map, enemies, events);
 
     if (
       e.contactDamage !== 0 &&
@@ -548,6 +608,10 @@ const ANIM_RATE = { skeleton: 5, ghoul: 3.5, hound: 6, rust: 2.5 };
 // Gibt false zurück, wenn dieser Frame übersprungen wird (Hurt-Blitzen,
 // Aufsteh-Blinken des Grufthunds).
 export function drawEnemy(ctx, cam, e, gfx, timeSec) {
+  // §3: existiert ein eigener Zeichner (Boss), uebernimmt er komplett.
+  const drawer = DRAWERS[e.kind];
+  if (drawer) return drawer(ctx, cam, e, gfx, timeSec);
+
   const prefix = e.kind;
   let key;
   if (e.state === 'die') {
@@ -595,7 +659,34 @@ export function drawEnemy(ctx, cam, e, gfx, timeSec) {
       );
     }
   }
+  // Elite-Glut-Overlay (§2.4): elite_glow 8x8 ueber der Kopfposition,
+  // blinkt 0,3 s alle 1,2 s (Sparkle-Rhythmus). Die Mini-Lichter der Eliten
+  // liefert eliteLights() fuer die frameLights-Liste in drawWorld.
+  if (e.elite && e.state !== 'die' && timeSec % 1.2 < 0.3) {
+    const gimg = gfx.elite_glow;
+    if (gimg) {
+      ctx.drawImage(
+        gimg,
+        Math.round(e.x + e.w / 2 - gimg.width / 2 - cam.x),
+        Math.round(e.y - cam.y) - gimg.height + 2
+      );
+    }
+  }
   return true;
+}
+
+// Mini-Lichter der LEBENDEN Eliten (§2.4) fuer die frameLights-Liste in
+// drawWorld (Muster Selten-Drop-Lichter; NICHT ins statische lights-Array
+// aus buildWorld — das klebt am Spawn und ueberlebt den Tod). Integrator C
+// spreizt das Ergebnis pro Frame in frameLights.
+export function eliteLights(enemies) {
+  const out = [];
+  for (const e of enemies) {
+    if (e.elite && e.state !== 'die') {
+      out.push({ x: e.x + e.w / 2, y: e.y + e.h / 2, radius: 10, flicker: 0.3 });
+    }
+  }
+  return out;
 }
 
 export function drawEnemies(ctx, cam, enemies, gfx, timeSec) {
