@@ -396,7 +396,11 @@ machen").
 ### 6.3 Schleife
 
 Runde = Screenshots → 3 Juroren parallel → Median der Gesamtnoten.
-- Median >= 8: Schleife endet, Abnahme.
+- **Abnahmeziel des PROJEKTS ist 10 (Vorgabe Michael, 07.07.2026):** die
+  Schleife stoppt NICHT mehr früh bei Median 8. Eine 8 ist Meilenstein
+  dieses Passes, keine Endabnahme; alle 3 Runden werden genutzt, außer der
+  Median erreicht 10. Die grafische Endabnahme des Projekts erfolgt über
+  weitere Pässe (nach Slice 4/5), bis Median 10 steht.
 - Median < 8 und Runde < 3: Art-Fixer setzt die Juror-Anweisungen um (nur
   `game/js/art/`-Dateien), danach Selbstcheck + Smoke, nächste Runde.
 - **Struktur-Eskalation INNERHALB der Runde (Review-Major):** Anweisungen,
@@ -425,6 +429,109 @@ Der Engine-Builder darf für seine Dev-Checks Platzhalter-Grids in .tmp/
 verwenden, niemals in sprites.js schreiben. Bei versehentlicher Doppelanlage
 gewinnt der Besitzer; Inhalt = wörtlich diese Spec (Muster aus Slice 3).
 
+## 8a. Runde-2-Entscheidungen des Hauptloops (Struktur-Eskalation nach §6.3)
+
+Jury-Runde 1: 6 / 6 / 6,5, Median 6. Die strukturellen Juror-Befunde wurden
+im Hauptloop geprüft (inkl. eigenem Live-Screenshot-Vergleich gegen die
+Baseline). Ergebnis: die "Licht-Regression" ist KEINE Regression dieses
+Passes (lighting.js/Werte seit f620c2a unverändert; die Slice-1-Baseline
+stammt aus einer helleren Balancing-Ära), aber der Befund ist in der Sache
+richtig und notenrelevant. Für Runde 2 gelten folgende DOKUMENTIERTE
+Ausnahmen und Erweiterungen (eng begrenzt, gameplay-neutral):
+
+1. **Licht-Feintuning:** main.js AUSSCHLIESSLICH die Konstante
+   TORCH_RADIUS (56 → 72). lighting.js AUSSCHLIESSLICH ein zusätzlicher
+   additiver Warm-Glow-Pass für stark flackernde Lichter (flicker >= 0.8,
+   also nur Fackeln): radialer Gradient in Fackel-Orange, Alpha <= 0.15,
+   composite 'lighter'. KEINE Logik-/Strukturänderung. Ambient-Werte der
+   Maps bleiben unverändert (Diablo-Identität).
+2. **Palette:** Die Bestandstöne a, m, V, P dürfen um maximal 12 %
+   aufgehellt werden (Farbton bleibt); zusätzlich sind 'K' (warmes
+   Mittelgrün) und 'M' (Sandbraun/Tan für den Weg) freigegeben.
+   Gesamtbudget neuer Töne bleibt 4 (0, 9, K, M).
+3. **Ufer-Kacheln (Teich):** Neue TILE_ART-Keys `shore_n/e/s/w/ne/nw/se/sw`
+   (16×16). Engine: das GRAVEYARD-'~' bekommt ein Legenden-Feld, das den
+   Fringe-Präfix für diesen TARGET auf 'shore' umlenkt (nur bei
+   Quelle-Set 'grass'; die Moos-Ufer der FLUESTERGRUFT bleiben unverändert,
+   die Juroren haben sie gelobt). Ergebnis: Schaumsaum + dunkle Wasserlinie
+   statt harter Rechteckkante; Ecken-Tiles runden die Teichform optisch.
+4. **Kronen-Schlagschatten:** Neuer TILE_ART-Key `canopy_shadow` (16×16,
+   50%-Dither aus dunklen Tönen, KEIN Alpha nötig). tilemap.js zeichnet ihn
+   im GROUND-Pass (unter den Entities) auf die Zellen direkt UNTER jeder
+   2×2-Anker-Fläche (ax..ax+1, ay+2; außerhalb der Map: überspringen).
+   Deterministisch aus overCells abgeleitet.
+5. **Kronen-Stagger:** gen_overrows2.mjs staffelt vertikale Anker-Läufe
+   (Ost-/West-Baumreihen) per Parität zwischen Spalte trunkX-1 und trunkX
+   (±16 px Versatz) — gegen den "gerade Wand"-Befund.
+6. **Weg-Varianten:** `path_v2`, `path_v3` (16×16) neu; GRAVEYARD-'='
+   erhält alle vier in variants. Optional `grass_dark_v3` als vierte
+   Gras-Variante.
+7. Smoke-Test: Abschnitte 16/35 werden für die neuen Keys/Features additiv
+   erweitert (Shore-Präfix-Logik, Schatten-Zellen, 4 Weg-Varianten).
+8. **Unverändert TABU:** warden_*, torch_*, fringe_*/moss_fringe_*,
+   entities/, items/, ui/, Flusstests. Die Juror-Anweisungen zum Boss-
+   Umriss und zur Fackel-Flamme werden bewusst NICHT umgesetzt (Warm-Glow
+   aus Punkt 1 übernimmt die Fackel-Wirkung); Priorität liegt auf den
+   Median-Treibern.
+
+## 8b. Runde-3-Entscheidungen des Hauptloops (Struktur-Eskalation nach §6.3)
+
+Jury-Runde 2: 6 / 6,5 / 6,5, Median 6,5 (Runde 1: 6). Eigenbefund des
+Hauptloops an den Bildern: der Teich rendert als "Bilderrahmen-Gitter",
+weil die Tiefen-Rampe PRO KACHEL statt über den WASSERKÖRPER umgesetzt
+wurde — Ursache war eine fehlerhafte Konsolidierung der Juror-Anweisung
+durch den Hauptloop selbst (dokumentiert, Lehre für die Übergabe).
+Für Runde 3 (letzte Runde dieses Passes) gilt zusätzlich:
+
+1. **Wasser-Tiefen-Autotiling (Engine):** createTilemap berechnet einmalig
+   je Wasser-Tile die Chebyshev-Distanz zum nächsten Nicht-Wasser-Tile.
+   Legenden-Feld `depthOverlays: ['water_shallow', 'water_mid']` am '~'
+   (GRAVEYARD + FLUESTERGRUFT): Distanz 0 → 'water_shallow'-Overlay,
+   Distanz 1 → 'water_mid', tiefer → nichts. Zeichnung im Ground-Pass NACH
+   Tile und Shore/Fringe. Deterministisch, keine Anim-Interaktion (die
+   Overlays sind statisch über dem animierten Wasser).
+2. **Art-Wasser-Neubau:** Die Pro-Kachel-Randaufhellung wird ENTFERNT
+   (Basis flächig dunkel); Tiefe kommt ausschließlich aus den neuen
+   Overlays water_shallow/water_mid (lichte Dither-Schleier, 16×16, viel
+   '.'). Kräusel: längere horizontale Striche (4-6 px, 2-3 Zeilen pro
+   Kachel), Drift 2-3 px pro Frame (muss in der g2_04-Serie SICHTBAR
+   sein; der Proof-Agent belegt das per Pixel-Diff der Frames a/b/c).
+   Shore-Band entschärfen (Schaum statt Neon-Rahmen), Ecken-Shores mit
+   2-3 px Gras-Biss (optische Teich-Rundung). Der Ton '9' darf als
+   Runde-2-Neuton frei nachjustiert werden.
+3. **Katakomben-Paket:** brick_wall_v3 (Diagonalriss, versetzte
+   Highlight-Reihen) und stone_floor_v3 (gebrochene Platte) NEU; die
+   Bestandsvarianten v1/v2 werden DEUTLICH unterscheidbar nachgeschärft
+   (fehlender Ziegel = dunkles Loch, Moosfleck satter). Die kalten
+   Katakomben-Steintöne t/T/L/D dürfen um bis zu 10 % aufgehellt werden
+   (Mobile-Lesbarkeit; Ausweitung von §8a.2).
+4. **Ambient: VERWORFEN (Eskalations-Entscheid des Hauptloops im Lauf):**
+   Die geplante Anhebung (CATACOMBS 0.78, BOSS_KAMMER 0.66) kollidiert mit
+   den unantastbaren Flusstests (asserten ambient 0.82 bzw. 0.70). Die
+   Eiserne Regel §0.3 schlägt die Runden-Entscheidung — alle Ambient-Werte
+   bleiben unverändert. Die Mobile-Lesbarkeit trägt stattdessen §8b.3
+   (Steinton-Aufhellung). Ambient-Rebalancing wandert ins Backlog für
+   Grafikpass 3, wo die Flusstest-Anpassung sauber per Spec eingeplant
+   wird (mit erlaubten Alt-Test-Änderungen wie in Slice 3 §4).
+5. **Kronen-Licht:** Licht-Kappe oben-links je Laub-Lappen (2 Stufen bis
+   'A'), 1-px-Glanzcluster auf Hauptlappen, Zwischenräume der Lappen auf
+   '0' vertieft; die zwei freistehenden Einzel-Füller bekommen dieselbe
+   3-Ton-Rundung plus Kerben; Hecken (gestapelte tree_canopy) oben 2 px
+   Lichtkante, unten 3 px Schattensaum. Eine positionsabhängige
+   Hinterreihen-Abdunklung wird NICHT gebaut (bräuchte Tiefen-Wissen im
+   Renderer; als Kandidat für Pass 3 notiert).
+6. **Sprite-Erdung:** Kontaktschatten werden als 1-px-Dither-Reihe UNTER
+   die Füße/Basis DIREKT IN die Sprites gebacken (vase, urn, chest_*,
+   skeleton, ghoul, hound, rust) — kein entities/-Eingriff. Ghul: Brust/
+   Gesicht heller, Flanke dunkler; Skelett-Silhouette aufräumen (dickere
+   Knochen, klarer Schädel); globale Lichtrichtung oben-links.
+7. Smoke additiv (16/35): neue Keys (water_shallow, water_mid,
+   brick_wall_v3, stone_floor_v3), Depth-Overlay-Determinismus-Test
+   (Distanz-0/1/2-Zellen liefern shallow/mid/nichts).
+8. Danach ist der Pass ABGESCHLOSSEN (3 Runden voll): Abnahme mit dem
+   Notenverlauf, Rest-Anweisungen wandern als Backlog in die Übergabe für
+   Grafikpass 3 (neue Skala: 10 = moderne Handy-Pixel-Art, SoM ≈ 8,5-9).
+
 ## 8. Abnahme
 
 1. `bash tools/check_syntax.sh` grün; `node tools/smoke_test.mjs` 3× grün.
@@ -432,7 +539,9 @@ gewinnt der Besitzer; Inhalt = wörtlich diese Spec (Muster aus Slice 3).
    an `.tmp/check_*.mjs`, `game/js/entities/`, `game/js/items/`,
    `game/js/ui/`, `game/js/core/`, `game/js/main.js` (oder dokumentierte
    Integrator-Ausnahme), Ground-rows byte-identisch.
-3. Juror-Median >= 8 ODER 3 dokumentierte Runden mit Notenverlauf.
+3. Drei dokumentierte Runden mit Notenverlauf (Ziel dieses Passes:
+   Median >= 8 als Meilenstein; PROJEKT-Abnahmeziel bleibt 10 und wird
+   über Folgepässe verfolgt — Vorgabe Michael 07.07.2026).
 4. Null Konsolen-Fehler in allen finalen Screenshots.
 5. Finale g2_*-Screenshots liegen in `.tmp/screenshots/`.
 6. Übergabe in `uebergaben/`, Erkenntnisse in `workflows/GRAFIKPASS_2.md`,

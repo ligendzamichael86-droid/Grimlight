@@ -10,18 +10,23 @@ export const PALETTE = {
   s: '#575061', // Stein mittel
   S: '#7d7588', // Stein hell
   F: '#a39cb2', // Stein Spitzlicht (Kanten oben, NEU 1.5)
-  // Gras (entsättigt, Friedhof): e -> E -> a -> m -> A
+  // Laub-Tiefe (NEU Gfx2): tiefster Kronen-Schatten, grün-schwarz. Sitzt UNTER
+  // 'e' und trägt die Unterseite/Kern-Pockets der Großkronen (Volumen).
+  0: '#0f1a12', // Laub sehr dunkel (Kronen-Tiefenton, Gfx2)
+  // Gras (entsättigt, Friedhof): e -> E -> a -> K -> m -> A
   e: '#17211a', // Gras sehr dunkel (Basiston)
   E: '#253522', // Gras dunkel (Slice 1.5 R1: angehoben, überlebt das Licht)
-  a: '#33452b', // Gras mittel (Zwischenton E->m, R1 angehoben)
-  m: '#48593a', // Moos / Grasbüschel hell (R2: Rampe entzerrt, überlebt das Licht)
+  a: '#394d30', // Gras mittel (Gfx2-R2 §8a.2: +12% aufgehellt, Farbton gehalten)
+  m: '#506341', // Moos / Grasbüschel hell (Gfx2-R2 §8a.2: +11% aufgehellt)
+  K: '#586c38', // Warmes Mittelgrün (NEU Gfx2-R2 §8a.2): Büschel-Akzent, sitzt a<K<A
   A: '#66804a', // Gras/Moos Spitzlicht (R2: angehoben, trägt unterm Lichtsystem)
-  // Erde (Wege, Fackelpfosten): z -> p -> v -> P -> V
+  // Erde (Wege, Fackelpfosten): z -> p -> v -> M -> P -> V
   z: '#332a23', // Erde dunkelst, Furchen (NEU 1.5)
   p: '#453a34', // Erde dunkel
-  v: '#584a3b', // Erde mittel (NEU 1.5, Zwischenton p->P)
-  P: '#6b5a44', // Erde hell
-  V: '#8a755a', // Erde/Steinchen Spitzlicht (NEU 1.5)
+  v: '#584a3b', // Erde mittel (NEU 1.5, Zwischenton p->P) — Weg-Furchen (+1 Stufe)
+  M: '#6a5942', // Sandbraun/Tan (NEU Gfx2-R2 §8a.2): Weg-Mittelton, warm, v<M<P
+  P: '#77644b', // Erde hell (Gfx2-R2 §8a.2: +11% aufgehellt, Farbton gehalten)
+  V: '#9a8264', // Erde/Steinchen Spitzlicht (Gfx2-R2 §8a.2: +11% aufgehellt)
   // Knochen: O -> B -> b -> N
   O: '#6e6655', // Knochen dunkel (NEU 1.5, Höhlen, Beckenschatten)
   B: '#948b76', // Knochen Schatten
@@ -48,14 +53,17 @@ export const PALETTE = {
   // Held — Haut: 2 -> h
   h: '#c29267', // Haut
   2: '#8f6647', // Haut-Schatten (NEU 1.5, Kapuzenschatten im Gesicht)
-  // Wasser: w -> W -> c -> C (+ i als Glanzkante)
+  // Wasser: w -> W -> 9 -> C (+ i als Glanzkante)
   w: '#0d141b', // Wasser sehr dunkel (R1: kein Reinschwarz mehr)
   W: '#1a2e3e', // Wasser mittel (R2: kälter und deutlich heller als w)
+  9: '#2e5568', // Wasser-Zwischenblau (Gfx2-R3 §8b.2: heller+gesättigter für
+  //             Kräusel UND Tiefen-Overlays; bleibt klar unter Sprite-Helligkeit)
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
-  t: '#23262d', // Katakomben-Stein dunkel (Bodenbasis)
-  T: '#3d434d', // Katakomben-Stein mittel
-  L: '#5f6774', // Katakomben-Stein hell (Kanten, Licht)
-  D: '#87909e', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
+  // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
+  t: '#262a31', // Katakomben-Stein dunkel (Bodenbasis)
+  T: '#434a55', // Katakomben-Stein mittel
+  L: '#687180', // Katakomben-Stein hell (Kanten, Licht)
+  D: '#949eae', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
   // Ghul-Fleisch (grünlich-fahl, aufgedunsen): d -> G -> H -> 3
   d: '#4c5a3a', // Ghul-Fleisch dunkel
   G: '#75855a', // Ghul-Fleisch mittel

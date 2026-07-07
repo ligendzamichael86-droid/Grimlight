@@ -30,8 +30,12 @@ const BOSS_KAMMER_ROWS = [
 ];
 
 const BOSS_KAMMER_LEGEND = {
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' },
-  '.': { art: 'stone_floor', solid: false, fringeTarget: true },
+  // Grafikpass 2: Ziegel-/Steinboden-Varianten (der Arena-Boden ist die grösste
+  // gleichzeitig sichtbare Wiederholungsfläche im Spiel).
+  // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten
+  // (der Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche).
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
+  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
   'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1'] },
   'U': { art: 'stairs_up', solid: false }, // Rueck-Portal FLUESTERGRUFT
 };
@@ -57,7 +61,7 @@ export const BOSS_KAMMER = {
   portals: [
     { ...tileRect(9, 10, 2, 1), target: 'FLUESTERGRUFT', spawn: tc(20, 20), bossLocked: true },
   ],
-  ambient: 0.7,           // Telegraphen muessen lesbar sein (§2.5)
+  ambient: 0.7,           // §8b.4 wollte 0.66, ZURUECKGENOMMEN: Flusstest check_boss_slice3.mjs asserted 0.7 (Eiserne Regel §0.3 > §8b.4)
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],

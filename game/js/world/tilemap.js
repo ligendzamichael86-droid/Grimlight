@@ -10,9 +10,33 @@
 //   auf einen solid-Legendeneintrag zeigt (Datenfehler laut sichtbar machen).
 // - findTiles bleibt GROUND-only (Fackel-Extraktion); Fackel-Zeichen dürfen
 //   nie in overRows auftauchen (Smoke-Test prüft das).
+//
+// Grafikpass 2: optionale Legenden-Felder (alle rein deterministisch, ohne
+// Zufall und ohne Zeitstempel — Auswahl ist reine Funktion von tx, ty, timeSec):
+// - span: [w, h]   NUR Over-Layer, 1<=w,h<=4 ganzzahlig. Die overRows-Zelle ist
+//                  der ANKER (obere linke Ecke); das Art-Canvas ist w*16 x h*16.
+// - variants: [...]  Array von TILE_ART-Keys, variants[0] === def.art (Pflicht).
+//                  Deterministische Wahl pro Tile-Koordinate (variantIndex).
+// - animRate: n    Frames/Sekunde für def.anim (Default 6).
+// - animSync: true Kein Positions-Offset im Frame-Index (synchrone Wellen).
+// - depthOverlays: [flach, mittel]  NUR Wasser-Legenden (§8b.1). createTilemap
+//                  bestimmt einmalig je Tile mit diesem Feld die Chebyshev-Distanz
+//                  zum naechsten Tile OHNE depthOverlays; der Ground-Pass legt
+//                  NACH Tile+Shore/Fringe den passenden statischen Overlay drueber
+//                  (Ufer-Ring flach, naechster Ring mittel, tiefer nichts).
+// createTilemap validiert die Kombinationen laut Spec §2.1 (throw bei Datenfehler).
 
 const TILE = 16;
 const EPS = 0.0001;
+
+// Deterministische Variantenwahl (reine Funktion, Smoke-Test prüft sie direkt).
+// Gleichverteilt über 0..n-1, stabil pro (tx, ty) — kein RNG, kein Zeitbezug.
+export function variantIndex(tx, ty, n) {
+  let h = (tx * 374761393 + ty * 668265263) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 1274126177) >>> 0;
+  return h % n;
+}
 
 // Fringe-Nachbarlogik als REINE Funktion (Node-testbar, Smoke-Test).
 // getDef(tx, ty) → Legendeneintrag oder null/undefined (außerhalb der Map).
@@ -32,7 +56,14 @@ export function fringeOverlays(getDef, tx, ty) {
     const d = getDef(tx + dx, ty + dy);
     return d && d.fringeSource ? (d.fringeSet || 'grass') : null;
   };
-  const prefix = (set) => (set === 'moss' ? 'moss_fringe' : 'fringe');
+  // Grafikpass 2 §8a.3: Trägt das TARGET-Tile shorePrefix UND stammt der
+  // Source-Nachbar aus dem 'grass'-Set, werden shore_*-Ufer-Keys statt fringe_*
+  // emittiert (Schaumsaum/dunkle Wasserlinie am Teich). Nur GRAVEYARD-'~' trägt
+  // shorePrefix; Moos-Ufer (set 'moss') bleiben unverändert moss_fringe_*.
+  const prefix = (set) => {
+    if (def.shorePrefix && set === 'grass') return def.shorePrefix;
+    return set === 'moss' ? 'moss_fringe' : 'fringe';
+  };
   const out = [];
   const n = srcSet(0, -1);
   const e = srcSet(1, 0);
@@ -57,6 +88,27 @@ export function createTilemap(rows, legend, overRows = null) {
   const hTiles = rows.length;
   const wTiles = rows[0].length;
 
+  // Grafikpass 2 §2.1: Legenden-Kombinationen validieren (Datenfehler laut
+  // sichtbar machen, wie der bisherige Stil).
+  for (const [ch, def] of Object.entries(legend)) {
+    if (def.variants) {
+      if (def.anim) throw new Error(`createTilemap: Zeichen '${ch}' hat variants UND anim`);
+      if (def.variants[0] !== def.art) throw new Error(`createTilemap: variants[0] von '${ch}' (${def.variants[0]}) != def.art (${def.art})`);
+    }
+    if (def.span) {
+      const [sw, sh] = def.span;
+      if (!Number.isInteger(sw) || !Number.isInteger(sh) || sw < 1 || sw > 4 || sh < 1 || sh > 4) {
+        throw new Error(`createTilemap: span von '${ch}' = [${sw},${sh}] ausserhalb 1..4 oder nicht ganzzahlig`);
+      }
+      if (sw > 1 || sh > 1) {
+        if (def.variants || def.anim) throw new Error(`createTilemap: span (>1) mit variants/anim an '${ch}' kombiniert`);
+        for (let ty = 0; ty < hTiles; ty++) {
+          if (rows[ty].indexOf(ch) !== -1) throw new Error(`createTilemap: span-Zeichen '${ch}' (w>1/h>1) kommt in den GROUND-rows vor (Ground bleibt 1x1)`);
+        }
+      }
+    }
+  }
+
   const solid = [];
   const cells = [];
   for (let ty = 0; ty < hTiles; ty++) {
@@ -74,6 +126,52 @@ export function createTilemap(rows, legend, overRows = null) {
     }
     solid.push(solidRow);
     cells.push(cellRow);
+  }
+
+  // Grafikpass 2 §8b.1: Wasser-Tiefen-Autotiling. Fuer jedes Tile mit
+  // depthOverlays wird EINMALIG (deterministisch, kein Zufall/Zeitbezug) die
+  // Chebyshev-Distanz zum naechsten Tile OHNE depthOverlays bestimmt — via
+  // Multi-Source-BFS von allen Nicht-Overlay-Tiles aus (8er-Nachbarschaft, die
+  // Wellen-Distanz IST die Chebyshev-Distanz). Ring = Distanz - 1: der Ufer-Ring
+  // (Distanz 1) -> depthOverlays[0] (flach), der naechste Ring -> depthOverlays[1]
+  // (mittel), tiefer -> nichts. depthArt[ty][tx] haelt den fertigen Art-Key oder
+  // null; der Ground-Pass zeichnet ihn NACH Tile+Shore/Fringe statisch drueber.
+  const depthArt = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
+  {
+    const dist = Array.from({ length: hTiles }, () => new Array(wTiles).fill(Infinity));
+    let frontier = [];
+    for (let ty = 0; ty < hTiles; ty++) {
+      for (let tx = 0; tx < wTiles; tx++) {
+        if (!cells[ty][tx].depthOverlays) { dist[ty][tx] = 0; frontier.push([tx, ty]); }
+      }
+    }
+    let d = 0;
+    while (frontier.length) {
+      const next = [];
+      for (const [tx, ty] of frontier) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = tx + dx;
+            const ny = ty + dy;
+            if (nx < 0 || ny < 0 || nx >= wTiles || ny >= hTiles) continue;
+            if (dist[ny][nx] !== Infinity) continue;
+            dist[ny][nx] = d + 1;
+            next.push([nx, ny]);
+          }
+        }
+      }
+      frontier = next;
+      d++;
+    }
+    for (let ty = 0; ty < hTiles; ty++) {
+      for (let tx = 0; tx < wTiles; tx++) {
+        const def = cells[ty][tx];
+        if (!def.depthOverlays) continue;
+        const ring = dist[ty][tx] - 1; // Ufer-Ring (Distanz 1) = Index 0
+        if (ring >= 0 && ring < def.depthOverlays.length) depthArt[ty][tx] = def.depthOverlays[ring];
+      }
+    }
   }
 
   // Over-Layer: '.' = leer (VOR dem Legend-Lookup), nie solide.
@@ -96,6 +194,41 @@ export function createTilemap(rows, legend, overRows = null) {
         row.push(def);
       }
       overCells.push(row);
+    }
+  }
+
+  // Grafikpass 2 §2.3: Culling-Fenster für Span-Anker. maxSpanW/maxSpanH über
+  // alle TATSÄCHLICH in overCells vorkommenden Defs — Anker knapp links/oberhalb
+  // des Viewports müssen ihre hineinragenden Kronenteile trotzdem zeichnen.
+  let maxSpanW = 1;
+  let maxSpanH = 1;
+  for (const row of overCells) {
+    for (const def of row) {
+      if (def && def.span) {
+        if (def.span[0] > maxSpanW) maxSpanW = def.span[0];
+        if (def.span[1] > maxSpanH) maxSpanH = def.span[1];
+      }
+    }
+  }
+
+  // Grafikpass 2 §8a.4: Kronen-Schlagschatten. Deterministisch aus overCells
+  // abgeleitet: die Zellen direkt UNTER jeder Span-Anker-Fläche (Spalten
+  // ax..ax+sw-1, Zeile ay+sh; bei 2×2-Kronen also ax/ax+1 in ay+2). Außerhalb
+  // der Map: überspringen. Gezeichnet wird der Key 'canopy_shadow' im GROUND-
+  // Pass (unter den Entities), NACH Tile+Fringes.
+  const shadowCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(false));
+  for (let ty = 0; ty < overCells.length; ty++) {
+    for (let tx = 0; tx < wTiles; tx++) {
+      const def = overCells[ty][tx];
+      if (!def || !def.span) continue;
+      const [sw, sh] = def.span;
+      const shy = ty + sh;
+      if (shy < 0 || shy >= hTiles) continue;
+      for (let dx = 0; dx < sw; dx++) {
+        const shx = tx + dx;
+        if (shx < 0 || shx >= wTiles) continue;
+        shadowCells[shy][shx] = true;
+      }
     }
   }
 
@@ -143,9 +276,17 @@ export function createTilemap(rows, legend, overRows = null) {
 
   function artFor(def, tx, ty, timeSec) {
     if (def.anim) {
-      // Positions-Offset entsynchronisiert Fackeln (lebendigeres Flackern)
-      const frame = (Math.floor(timeSec * 6) + tx * 13 + ty * 7) % def.anim.length;
+      // animRate Frames/s (Default 6). Positions-Offset entsynchronisiert
+      // Fackeln (lebendigeres Flackern); animSync schaltet ihn ab (Wasserwellen
+      // laufen synchron).
+      const rate = def.animRate || 6;
+      const offset = def.animSync ? 0 : tx * 13 + ty * 7;
+      const frame = (Math.floor(timeSec * rate) + offset) % def.anim.length;
       return def.anim[frame];
+    }
+    if (def.variants) {
+      // Deterministische Variante aus der Tile-Koordinate (gleichverteilt).
+      return def.variants[variantIndex(tx, ty, def.variants.length)];
     }
     return def.art;
   }
@@ -166,8 +307,13 @@ export function createTilemap(rows, legend, overRows = null) {
     const ty1 = Math.min(hTiles - 1, Math.floor((camY + viewH) / TILE));
     const over = layer === 'over';
     if (over && overCells.length === 0) return;
-    for (let ty = ty0; ty <= ty1; ty++) {
-      for (let tx = tx0; tx <= tx1; tx++) {
+    // Über-Layer: Startfenster nach links/oben um (maxSpan-1) erweitern, damit
+    // Anker knapp außerhalb ihre in den Viewport ragenden Kronen zeichnen
+    // (§2.3). Der Ground-Layer bleibt strikt 1x1.
+    const tyStart = over ? Math.max(0, ty0 - (maxSpanH - 1)) : ty0;
+    const txStart = over ? Math.max(0, tx0 - (maxSpanW - 1)) : tx0;
+    for (let ty = tyStart; ty <= ty1; ty++) {
+      for (let tx = txStart; tx <= tx1; tx++) {
         const def = over ? overCells[ty][tx] : cells[ty][tx];
         if (!def) continue;
         const sx = Math.round(tx * TILE - camX);
@@ -179,6 +325,20 @@ export function createTilemap(rows, legend, overRows = null) {
             const fimg = tileCanvases[key];
             if (fimg) ctx.drawImage(fimg, sx, sy);
           }
+        }
+        // Grafikpass 2 §8b.1: Wasser-Tiefen-Overlay im GROUND-Pass NACH
+        // Tile+Shore/Fringe (statisch ueber dem animierten Wasser). Fehlt der
+        // Art-Key noch, wird still nichts gezeichnet.
+        if (!over && depthArt[ty][tx]) {
+          const dimg = tileCanvases[depthArt[ty][tx]];
+          if (dimg) ctx.drawImage(dimg, sx, sy);
+        }
+        // Grafikpass 2 §8a.4: Kronen-Schlagschatten im GROUND-Pass NACH
+        // Tile+Fringes (unter den Entities), auf den aus overCells abgeleiteten
+        // Zellen. Fehlt der Art-Key noch, wird still nichts gezeichnet.
+        if (!over && shadowCells[ty][tx]) {
+          const shimg = tileCanvases['canopy_shadow'];
+          if (shimg) ctx.drawImage(shimg, sx, sy);
         }
       }
     }

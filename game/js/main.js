@@ -26,7 +26,7 @@ const VIEW_H = 180;
 const END_SCREEN_MIN_TIME = 0.7; // Mindest-Anzeigezeit Game-Over/Victory
 const FADE_TIME = 0.3;           // je Richtung (zu / auf)
 const VICTORY_DELAY = 1.2;       // Truhe offen → Sieg-Banner
-const TORCH_RADIUS = 56;
+const TORCH_RADIUS = 72;
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');

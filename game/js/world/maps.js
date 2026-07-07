@@ -74,9 +74,18 @@ const GRAVEYARD_LEGEND = {
   'B': { art: 'tree_canopy_bottom', solid: false },
   'K': { art: 'tree_canopy_top', solid: false },
   'C': { art: 'tree_canopy', solid: false },
-  '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // Grafikpass 2: 2x2-Grosskronen im Over-Layer (Anker = obere linke Ecke,
+  // Art-Canvas 32x32). Drei Silhouetten gegen sichtbare Alternation der nicht
+  // spiegelbaren Ost-Baumreihe. Nie solid (Over-Layer), Setzung siehe
+  // GRAVEYARD_OVER_ROWS / .tmp/gen_overrows2.mjs.
+  'M': { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+  'N': { art: 'tree_canopy_2x2_b', span: [2, 2], solid: false },
+  'O': { art: 'tree_canopy_2x2_c', span: [2, 2], solid: false },
+  // Grafikpass 2: Boden-/Weg-/Mauer-Varianten gegen Flächen-Wiederholung
+  // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
+  '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3'] },
   ',': { art: 'grass_detail', solid: false, fringeSource: true, fringeSet: 'grass' },
-  '=': { art: 'path', solid: false, fringeTarget: true },
+  '=': { art: 'path', solid: false, fringeTarget: true, variants: ['path', 'path_v1', 'path_v2', 'path_v3'] },
   'G': { art: 'gravestone', solid: true },
   'g': { art: 'gravestone_2', solid: true },
   'h': { art: 'gravestone_3', solid: true },
@@ -84,39 +93,48 @@ const GRAVEYARD_LEGEND = {
   'o': { art: 'bones', solid: false },
   's': { art: 'skull', solid: false },
   'f': { art: 'fence', solid: true },
-  '~': { art: 'water', solid: true, fringeTarget: true },
+  // Grafikpass 2: Wasser wird 3-Frame-Ping-Pong (synchron, langsam). art:'water'
+  // bleibt Frame 0/Fallback (Muster Fackeln: art + anim), solid + fringeTarget
+  // unberührt. §8a.3: shorePrefix lenkt die Gras-Fringes dieses TARGETs auf
+  // shore_*-Ufer-Keys um (nur hier, nur bei Quelle-Set 'grass').
+  // §8b.1: depthOverlays legt statische Tiefen-Schleier ueber das animierte
+  // Wasser (Ufer flach, naechster Ring mittel) — die Engine leitet die Distanz
+  // ueber den Wasserkoerper ab (kein Bilderrahmen-Gitter mehr).
+  '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_1'], animRate: 2, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
   'F': { art: 'torch_0', solid: true, anim: ['torch_0', 'torch_1'] },
   'D': { art: 'crypt_stairs_down', solid: false },
 };
 
-// Over-Layer Friedhof: Zweiteiler-Kronen über jedem Stamm — 'B' (canopy_
-// bottom) auf der Stamm-Zelle, 'K' (canopy_top) ein Tile darüber; man läuft
-// unter den Kronen durch. Deterministisch erzeugt (.tmp/gen_overrows.mjs,
-// Komposition siehe .tmp/sheet_tree.png); '.' = leere Zelle.
+// Over-Layer Friedhof (Grafikpass 2): 2x2-Grosskronen (M/N/O-Anker = obere
+// linke Ecke, decken je einen Stamm in der Unterzeile — Wurzeln bleiben
+// sichtbar) für die Baumreihen/Cluster, 16x16-Fueller ('B' canopy_bottom auf
+// dem Stamm, 'K' canopy_top darüber) für isolierte Einzelstaemme. Man läuft
+// unter allen Kronen durch. Deterministisch erzeugt (.tmp/gen_overrows2.mjs,
+// §4.2 Regeln 1-6 dort verifiziert); '.' = leere Zelle.
 const GRAVEYARD_OVER_ROWS = [
-  '.KK......K............................K.',
-  '.BB......B............................B.',
-  '.B....................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '.K..............................K.....B.',
-  '.B.............................KB.....B.',
-  '.B.............................B......B.',
-  '.B....................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '......................................B.',
-  '.K....................................B.',
-  '.B...................................KB.',
-  '.BK..................................BB.',
-  '.BBK.........K............K.........KBB.',
-  '.BBB.........B............B.........BBB.',
+  '.O.......K...........................N..',
+  '.N.......B............................M.',
+  '.....................................O..',
+  '......................................M.',
+  '.....................................O..',
+  '......................................N.',
+  '.....................................M..',
+  '......................................O.',
+  'M...............................K....N..',
+  '.O.............................KB.....M.',
+  'M..............................B.....O..',
+  '......................................N.',
+  '.....................................M..',
+  '......................................O.',
+  '.....................................N..',
+  '......................................O.',
+  '.....................................M..',
+  '......................................N.',
+  'N....................................M..',
+  '.M...................................N..',
+  '.N...................................O..',
+  '.OO..........K............K.........MM..',
+  '.............B............B.............',
   '........................................',
 ];
 
@@ -158,8 +176,10 @@ const CATACOMBS_ROWS = [
 // wächst über die Steinboden-Ränder (fringeTarget). Weicht die harten Wand-
 // Boden-Kanten auf (SoM-Look), ohne Begehbarkeit zu ändern.
 const CATACOMBS_LEGEND = {
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' },
-  '.': { art: 'stone_floor', solid: false, fringeTarget: true },
+  // Grafikpass 2: Ziegel-/Steinboden-Varianten gegen Flächen-Wiederholung.
+  // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten.
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
+  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
   ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
@@ -264,6 +284,10 @@ export const CATACOMBS = {
     { ...tileRect(3, 3), target: 'GRAVEYARD', spawn: tc(33, 5) },
     { ...tileRect(36, 12), target: 'FLUESTERGRUFT', spawn: tc(4, 4) },
   ],
+  // §8b.4 wollte 0.82 -> 0.78, ist aber ZURUECKGENOMMEN: der unantastbare
+  // Flusstest .tmp/check_main_slice1.mjs asserted ambient 0.82 hart und muss
+  // gruen bleiben (Eiserne Regel §0.3 schlaegt die Runde-3-Ausnahme §8b.4).
+  // Konflikt an den Hauptloop dokumentiert (Uebergabe/offene Punkte).
   ambient: 0.82,
   playerLightRadius: 52,
   fog: false,

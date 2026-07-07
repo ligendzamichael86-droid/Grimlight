@@ -2,9 +2,10 @@
 // Bezug auf Modulebene (world/entities/art/core/ui/items). Aufrufbar aus
 // jedem CWD via node tools/smoke_test.mjs, Exit 0 = grün.
 
+import { readFileSync, readdirSync } from 'node:fs';
 import { PALETTE } from '../game/js/art/palette.js';
 import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
-import { createTilemap } from '../game/js/world/tilemap.js';
+import { createTilemap, variantIndex } from '../game/js/world/tilemap.js';
 // Slice 3: boss.js EINMAL zentral importieren — registriert kind 'graveward'
 // im Verhaltens-Dispatch (import-reihenfolgeabhaengig, §4).
 import { createGraveward } from '../game/js/entities/boss.js';
@@ -467,6 +468,24 @@ let fightWorld = null;
   ];
   const missingT = newTiles.filter((k) => !TILE_ART[k]);
   check('Alle neuen TILE_ART-Schlüssel existieren', missingT.length === 0, missingT.join(','));
+  // Grafikpass 2 (§3.1): neue Pflicht-Keys (2x2-Kronen, Boden-/Wand-Varianten,
+  // Wasser-Frames). Werden vom Art-Builder parallel geliefert.
+  const gfx2Tiles = [
+    'tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c',
+    'grass_dark_v1', 'grass_dark_v2', 'path_v1', 'wall_v1',
+    'stone_floor_v1', 'stone_floor_v2', 'brick_wall_v1', 'brick_wall_v2',
+    'water_1', 'water_2',
+    // Grafikpass 2 Runde 2 (§8a.3/4/6): Ufer-Kacheln, Kronen-Schlagschatten,
+    // zwei weitere Weg-Varianten, vierte Gras-Variante.
+    'shore_n', 'shore_e', 'shore_s', 'shore_w',
+    'shore_ne', 'shore_nw', 'shore_se', 'shore_sw',
+    'canopy_shadow', 'path_v2', 'path_v3', 'grass_dark_v3',
+    // Grafikpass 2 Runde 3 (§8b.1/3/7): Wasser-Tiefen-Overlays + vierte
+    // Katakomben-Varianten. Werden vom Art-Fixer parallel geliefert.
+    'water_shallow', 'water_mid', 'brick_wall_v3', 'stone_floor_v3',
+  ];
+  const missingG2 = gfx2Tiles.filter((k) => !TILE_ART[k]);
+  check('Alle Grafikpass-2-TILE_ART-Schlüssel existieren', missingG2.length === 0, missingG2.join(','));
   let cyc = null;
   for (const dir of ['down', 'up', 'side']) {
     for (let f = 0; f < 4; f++) if (!SPRITES[`player_${dir}_${f}`]) cyc = `player_${dir}_${f}`;
@@ -558,10 +577,20 @@ let fightWorld = null;
   check('Keine Fackel-Zeichen im Over-Layer (findTiles bleibt ground-only)',
     overChars.every((ch) => !GRAVEYARD.torchChars.includes(ch)));
 
-  // Jeder Stamm trägt eine Krone (canopy_bottom auf der Stamm-Zelle)
+  // Jeder Stamm trägt eine Krone: 'B' (canopy_bottom) auf der Stamm-Zelle ODER
+  // die Zelle liegt in der 2x2-Span-Fläche eines M/N/O-Ankers (Grafikpass 2).
+  const trunkCovered = (x, y) => {
+    if (over[y][x] === 'B') return true;
+    for (let ay = Math.max(0, y - 1); ay <= y; ay++) {
+      for (let ax = Math.max(0, x - 1); ax <= x; ax++) {
+        if ('MNO'.includes(over[ay][ax])) return true; // Anker deckt 2x2
+      }
+    }
+    return false;
+  };
   let trunksCovered = true;
   GRAVEYARD.rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === 'T' && over[y][x] === '.') trunksCovered = false;
+    if (ch === 'T' && !trunkCovered(x, y)) trunksCovered = false;
   }));
   check('Jeder Baumstamm trägt eine Krone im Over-Layer', trunksCovered);
 
@@ -1461,6 +1490,259 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     const bad = anchors.findIndex((a) => bm.rectCollides({ x: a.x - 6, y: a.y - 7, w: 12, h: 14 }));
     check('BOSS_KAMMER: alle 4 Add-Anker begehbar (Skelett-AABB kollisionsfrei)', bad === -1,
       bad >= 0 ? `Anker ${bad} solide` : '');
+  }
+}
+
+// ===========================================================================
+// Abschnitt 35 "Grafikpass 2" (additiv): Varianten, Span-Anker, Wasser-Anim,
+// Grid-Maße, Quelltext-Wächter, Ground-Freeze. Die neuen TILE_ART-Keys liefert
+// der Art-Builder parallel; die Existenz-Checks (variants-/anim-Frame-Keys)
+// dürfen bis dahin ROT sein. Die MECHANIK ist hier art-unabhängig geprüft:
+// eine Proxy-Kachelquelle liefert jeden angefragten Key als "Bild" zurück, so
+// zeichnet der Stub jede von artFor gewählte Kachel unabhängig von TILE_ART.
+// ===========================================================================
+{
+  const anyTiles = new Proxy({}, { get: (_, k) => k });
+  const drawKeys = (tm, cam, timeSec, layer, cw = 320, ch = 180) => {
+    const out = [];
+    const ctx = { canvas: { width: cw, height: ch }, drawImage: (img) => out.push(img) };
+    tm.draw(ctx, cam, anyTiles, timeSec, layer);
+    return out;
+  };
+
+  // --- variantIndex: deterministisch, Wertebereich, synthetische Streuung ---
+  let detOk = true;
+  for (const [x, y, n] of [[3, 7, 3], [40, 12, 2], [0, 0, 3], [31, 31, 2]]) {
+    const a = variantIndex(x, y, n);
+    for (let r = 0; r < 5; r++) if (variantIndex(x, y, n) !== a) detOk = false;
+    if (!(a >= 0 && a < n)) detOk = false;
+  }
+  check('variantIndex: deterministisch + Wertebereich 0..n-1', detOk);
+  for (const n of [2, 3]) {
+    const seen = new Set();
+    for (let x = 0; x < 32; x++) for (let y = 0; y < 32; y++) seen.add(variantIndex(x, y, n));
+    check(`variantIndex: Streuung über 0..31×0..31 zeigt alle ${n} Indizes`, seen.size === n,
+      `gesehen ${[...seen].sort().join(',')}`);
+  }
+
+  // --- Render-Determinismus: dieselbe Kamera zweimal → identische Key-Folge ---
+  {
+    const tm = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, GRAVEYARD.overRows);
+    const cam = { x: 512, y: 128 }; // erfasst Gras-Varianten + die Ost-Baumreihe (Anker)
+    const g1 = drawKeys(tm, cam, 0.5, 'ground');
+    const g2 = drawKeys(tm, cam, 0.5, 'ground');
+    const o1 = drawKeys(tm, cam, 0.5, 'over');
+    const o2 = drawKeys(tm, cam, 0.5, 'over');
+    check('Render-Determinismus: gleiche Kamera → gleiche Key-Folge (ground+over)',
+      g1.length > 0 && o1.length > 0 && g1.join('|') === g2.join('|') && o1.join('|') === o2.join('|'));
+  }
+
+  // --- Varianten-Integrität: variants[0] === art (mechanisch); Existenz der
+  //     variants-Keys separat (art-abhängig, darf ROT sein) ---
+  {
+    let headOk = true;
+    let missKey = null;
+    for (const def of Object.values(MAPS)) {
+      for (const cell of Object.values(def.legend)) {
+        if (!cell.variants) continue;
+        if (cell.variants[0] !== cell.art) headOk = false;
+        for (const k of cell.variants) if (!TILE_ART[k]) missKey = missKey || k;
+      }
+    }
+    check('Varianten-Integrität: variants[0] === art in allen Map-Legenden', headOk);
+    check('Varianten-Keys existieren in TILE_ART (Art-Builder parallel)', missKey === null, missKey || '');
+  }
+
+  // --- createTilemap wirft bei ungültigen Legenden-Kombinationen (§2.1) ---
+  {
+    const mkThrows = (rows, legend, over = null) => {
+      try { createTilemap(rows, legend, over); return false; } catch { return true; }
+    };
+    check('createTilemap wirft: variants + anim am selben Eintrag',
+      mkThrows(['##', '##'], { '#': { art: 'w', variants: ['w', 'x'], anim: ['w', 'x'] } }));
+    check('createTilemap wirft: span (>1) + variants kombiniert',
+      mkThrows(['..', '..'], { '.': { art: 'dot' }, x: { art: 'x', span: [2, 2], variants: ['x', 'y'] } }));
+    check('createTilemap wirft: span-Zeichen (>1) in den GROUND-rows',
+      mkThrows(['xx', 'xx'], { x: { art: 'x', span: [2, 2] } }));
+    check('createTilemap wirft: variants[0] !== art',
+      mkThrows(['..', '..'], { '.': { art: 'dot', variants: ['other', 'dot'] } }));
+    check('createTilemap wirft: span [0,2] (ausserhalb 1..4)',
+      mkThrows(['..', '..'], { '.': { art: 'dot' }, z: { art: 'z', span: [0, 2] } }));
+  }
+
+  // --- Span-Culling: Anker links-oberhalb des Viewports ragt hinein ---
+  {
+    const N = 10;
+    const gRows = Array.from({ length: N }, () => '.'.repeat(N));
+    const oGrid = Array.from({ length: N }, () => Array(N).fill('.'));
+    oGrid[2][2] = 'M'; // ragt in den Viewport (Tiles 3..5)
+    oGrid[0][0] = 'N'; // vollständig ausserhalb → gecullt
+    const oRows = oGrid.map((r) => r.join(''));
+    const legend = {
+      '.': { art: 'grass' },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+      N: { art: 'tree_canopy_2x2_b', span: [2, 2], solid: false },
+    };
+    const tmC = createTilemap(gRows, legend, oRows);
+    // Kamera (48,48), Viewport 32×32 → Tiles x3..5,y3..5; Culling erweitert auf 2..5.
+    const drawnC = drawKeys(tmC, { x: 48, y: 48 }, 0, 'over', 32, 32);
+    check('Span-Culling: Anker knapp links-oberhalb ragt in den Viewport (wird gezeichnet)',
+      drawnC.includes('tree_canopy_2x2_a'));
+    check('Span-Culling: Anker vollständig ausserhalb bleibt gecullt',
+      !drawnC.includes('tree_canopy_2x2_b'));
+  }
+
+  // --- Wasser-Anim (Ping-Pong, §3.2): FRAME-MITTEN + animSync ---
+  {
+    const wRows = ['####', '#~~#', '#~~#', '####'];
+    const wLeg = {
+      '#': { art: 'brick', solid: true },
+      '~': { art: 'water', solid: false, anim: ['water', 'water_1', 'water_2', 'water_1'], animRate: 2, animSync: true },
+    };
+    const wm = createTilemap(wRows, wLeg);
+    const frames = [0.25, 0.75, 1.25, 1.75].map((t) => {
+      const ks = drawKeys(wm, { x: 0, y: 0 }, t, 'ground').filter((k) => String(k).startsWith('water'));
+      return { key: ks[0], uniform: ks.length === 4 && ks.every((k) => k === ks[0]) };
+    });
+    check('Wasser-Anim Ping-Pong: water→water_1→water_2→water_1 an den Frame-Mitten',
+      frames.map((f) => f.key).join(',') === 'water,water_1,water_2,water_1');
+    check('Wasser animSync: alle Wasser-Zellen zeigen zum selben t denselben Frame',
+      frames.every((f) => f.uniform));
+  }
+
+  // --- Grid-Maße: 16×16 (Span-Kronen 32×32), alle Zeilen gleich lang ---
+  {
+    const spanKeys = ['tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c'];
+    let dimBad = null;
+    for (const [name, grid] of Object.entries(TILE_ART)) {
+      const size = spanKeys.includes(name) ? 32 : 16;
+      if (grid.length !== size) { dimBad = `${name}: ${grid.length} Zeilen (erwartet ${size})`; break; }
+      for (const row of grid) if (row.length !== size) { dimBad = `${name}: Zeilenbreite ${row.length} (erwartet ${size})`; break; }
+      if (dimBad) break;
+    }
+    check('TILE_ART-Grids 16×16 (Span-Kronen 32×32), Zeilen gleich lang', dimBad === null, dimBad || '');
+  }
+
+  // --- Quelltext-Wächter: kein Zufall/Zeitstempel in world/*.js und art/*.js ---
+  {
+    let guardBad = null;
+    for (const dir of ['../game/js/world/', '../game/js/art/']) {
+      const dirUrl = new URL(dir, import.meta.url);
+      for (const f of readdirSync(dirUrl)) {
+        if (!f.endsWith('.js')) continue;
+        const src = readFileSync(new URL(f, dirUrl), 'utf8');
+        if (src.includes('Math.random') || src.includes('Date.now')) guardBad = `${dir}${f}`;
+      }
+    }
+    check("Quelltext-Wächter: kein 'Math.random'/'Date.now' in world/*.js + art/*.js", guardBad === null, guardBad || '');
+  }
+
+  // --- Ground-rows-Freeze: keine M/N/O in den vier ROWS-Arrays ---
+  {
+    let freezeBad = null;
+    for (const def of [GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER]) {
+      for (const row of def.rows) for (const ch of ['M', 'N', 'O']) if (row.includes(ch)) freezeBad = ch;
+    }
+    check('Ground-rows-Freeze: keine M/N/O-Zeichen in den vier ROWS-Arrays', freezeBad === null, freezeBad || '');
+  }
+
+  // --- Ufer-Umlenkung (§8a.3): Wasser-Target mit shorePrefix + Gras-Nachbar
+  //     emittiert shore_*-Keys statt fringe_*; Moos-Ufer bleiben moss_fringe_*.
+  //     Rein über den Render-Pfad (Proxy-Kachelquelle liefert jeden Key). ---
+  {
+    // Gras-Ufer: '~' trägt shorePrefix, ringsum '.' (Gras-Source, Set 'grass').
+    const shoreLeg = {
+      '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass' },
+      '~': { art: 'water', solid: false, fringeTarget: true, shorePrefix: 'shore' },
+    };
+    const sm = createTilemap(['....', '.~~.', '.~~.', '....'], shoreLeg);
+    const sk = drawKeys(sm, { x: 0, y: 0 }, 0, 'ground');
+    check('Ufer-Umlenkung: Wasser-Target (shorePrefix) mit Gras-Nachbar liefert shore_*-Keys',
+      sk.some((k) => String(k).startsWith('shore_')));
+    check('Ufer-Umlenkung: am Gras-Ufer KEINE fringe_*-Keys mehr (Umlenkung greift)',
+      !sk.some((k) => String(k).startsWith('fringe_')));
+    // Moos-Ufer: Wasser-Target OHNE shorePrefix, '#' als Moos-Source ringsum.
+    const mossLeg = {
+      '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' },
+      '~': { art: 'water', solid: false, fringeTarget: true },
+    };
+    const mm = createTilemap(['####', '#~~#', '#~~#', '####'], mossLeg);
+    const mk = drawKeys(mm, { x: 0, y: 0 }, 0, 'ground');
+    check('Ufer-Umlenkung: Moos-Ufer bleibt moss_fringe_* (keine Umlenkung, kein shore_*)',
+      mk.some((k) => String(k).startsWith('moss_fringe_')) && !mk.some((k) => String(k).startsWith('shore_')));
+  }
+
+  // --- Kronen-Schlagschatten (§8a.4): 2×2-Anker bei (ax,ay) → canopy_shadow im
+  //     GROUND-Pass auf ax..ax+1 / Zeile ay+2; der Over-Pass zeichnet keinen. ---
+  {
+    const N = 8;
+    const gRows = Array.from({ length: N }, () => '.'.repeat(N));
+    const oGrid = Array.from({ length: N }, () => Array(N).fill('.'));
+    oGrid[2][2] = 'M'; // Anker (2,2) → Schatten auf (2,4) und (3,4)
+    const legend = {
+      '.': { art: 'grass' },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+    };
+    const tmS = createTilemap(gRows, legend, oGrid.map((r) => r.join('')));
+    const shadowAt = [];
+    const ctxS = {
+      canvas: { width: N * 16, height: N * 16 },
+      drawImage: (img, sx, sy) => { if (img === 'canopy_shadow') shadowAt.push([sx / 16, sy / 16]); },
+    };
+    tmS.draw(ctxS, { x: 0, y: 0 }, anyTiles, 0, 'ground');
+    const hit = (x, y) => shadowAt.some(([sx, sy]) => sx === x && sy === y);
+    check('Kronen-Schatten: canopy_shadow im GROUND-Pass unter der 2×2-Anker-Fläche (ay+2)',
+      shadowAt.length === 2 && hit(2, 4) && hit(3, 4), `zellen=${JSON.stringify(shadowAt)}`);
+    const overShadow = drawKeys(tmS, { x: 0, y: 0 }, 0, 'over').filter((k) => k === 'canopy_shadow');
+    check('Kronen-Schatten: der Over-Pass zeichnet keinen canopy_shadow', overShadow.length === 0);
+  }
+
+  // --- Wasser-Tiefen-Overlay (§8b.1): synthetisches Wasserbecken. createTilemap
+  //     leitet je Wasser-Tile die Chebyshev-Distanz zum naechsten Nicht-Wasser-
+  //     Tile ab; der Ground-Pass legt water_shallow (Ufer-Ring, Distanz 1) und
+  //     water_mid (naechster Ring, Distanz 2) drueber, tiefer (Distanz >=3) nichts.
+  //     Rein ueber den Render-Pfad (Proxy-Kachelquelle) — art-unabhaengig. ---
+  {
+    // 7×7: Rand '#' (Land), inneres 5×5 '~' (Wasser). Ergibt einen Ufer-Ring
+    // (16 Tiles, shallow), einen Mittel-Ring (8 Tiles, mid) und GENAU ein
+    // Kern-Tile (Distanz 3, kein Overlay).
+    const dRows = ['#######', '#~~~~~#', '#~~~~~#', '#~~~~~#', '#~~~~~#', '#~~~~~#', '#######'];
+    const dLeg = {
+      '#': { art: 'land', solid: true },
+      '~': { art: 'water', solid: false, depthOverlays: ['water_shallow', 'water_mid'] },
+    };
+    const dm = createTilemap(dRows, dLeg);
+    // Stub-Kontext, der NUR die beiden Tiefen-Overlay-Keys mit ihrer Ziel-Zelle
+    // (sx/16, sy/16) protokolliert (das animierte Basis-Wasser wird ignoriert).
+    const overlayCtx = (store) => ({
+      canvas: { width: 7 * 16, height: 7 * 16 },
+      drawImage: (img, sx, sy) => {
+        if (img === 'water_shallow' || img === 'water_mid') store.set(`${sx / 16},${sy / 16}`, img);
+      },
+    });
+    const at1 = new Map();
+    dm.draw(overlayCtx(at1), { x: 0, y: 0 }, anyTiles, 0, 'ground');
+    const ov = (x, y) => at1.get(`${x},${y}`);
+    let nShallow = 0;
+    let nMid = 0;
+    for (const v of at1.values()) { if (v === 'water_shallow') nShallow++; else if (v === 'water_mid') nMid++; }
+    check('Wasser-Tiefe: Ufer-Ring (Distanz 1) → water_shallow (16 Zellen)',
+      ov(1, 1) === 'water_shallow' && ov(1, 3) === 'water_shallow' && ov(3, 5) === 'water_shallow' && nShallow === 16,
+      `shallow=${nShallow}`);
+    check('Wasser-Tiefe: naechster Ring (Distanz 2) → water_mid (8 Zellen)',
+      ov(2, 2) === 'water_mid' && ov(2, 3) === 'water_mid' && ov(3, 2) === 'water_mid' && nMid === 8,
+      `mid=${nMid}`);
+    check('Wasser-Tiefe: Kern (Distanz >=3) → kein Tiefen-Overlay',
+      ov(3, 3) === undefined && nShallow + nMid === 24, `mitte=${ov(3, 3)}`);
+    check('Wasser-Tiefe: Land-Tiles tragen nie ein depthOverlay',
+      ov(0, 0) === undefined && ov(6, 6) === undefined);
+    // Determinismus: zweiter Draw zu ANDEREM timeSec → identische Overlay-Platzierung
+    // (die Overlays sind statisch, keine Anim-Interaktion).
+    const at2 = new Map();
+    dm.draw(overlayCtx(at2), { x: 0, y: 0 }, anyTiles, 1.0, 'ground');
+    const ser = (m) => [...m.entries()].sort().map(([k, v]) => `${k}:${v}`).join('|');
+    check('Wasser-Tiefe: statisch + deterministisch (zwei Draws, verschiedene Zeit, identisch)',
+      at2.size === 24 && ser(at1) === ser(at2));
   }
 }
 

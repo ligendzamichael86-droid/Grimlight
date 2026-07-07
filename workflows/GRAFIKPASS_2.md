@@ -58,6 +58,40 @@ Gameplay-Änderungen. Ziel: Juror-Median >= 8.
 
 Siehe `design/SPEC_GRAFIKPASS_2.md` §8. Übergabe in `uebergaben/`.
 
-## Erkenntnisse / Änderungen
+## Erkenntnisse / Änderungen (Lauf 07.07.2026, 3 Runden, ~24 Agenten)
 
-(wird nach dem Lauf ergänzt)
+Abgeschlossen, Übergabe: `uebergaben/2026-07-07_grafikpass2.md`.
+Notenverlauf Median 6 → 6,5 → 6,5 (Meilenstein 8 nicht erreicht; Backlog
+für Pass 3 in der Übergabe; Projektziel während des Passes auf "SoM
+übertreffen" verschärft, neue Juror-Skala ab Pass 3).
+
+1. **Runden-Ergebnisse an Bildern selbst verifizieren:** Zwei
+   Juror-Befunde ("Licht-Regression", "Bilderrahmen-Teich") hat der
+   Hauptloop an den PNGs + Live-Screenshot nachgeprüft — einer war ein
+   Alt-Balancing-Thema (keine Regression), einer ein ECHTER Fehler aus
+   einer fehlerhaften Anweisungs-Konsolidierung des Hauptloops selbst
+   ("pro Kachel" statt "pro Fläche"). Lehre: Juror-Anweisungen wörtlich
+   weiterreichen; Flächen-Anweisungen explizit auf Kachel- vs.
+   Flächen-Ebene klären.
+2. **Eiserne Regeln schlagen Runden-Entscheidungen:** Die §8b.4-Ambient-
+   Änderung kollidierte mit den unantastbaren Flusstests; der
+   Engine-Fixer hat korrekt zurückgerollt und eskaliert. Werte, die in
+   Flusstests asserted sind, sind faktisch eingefroren — Änderungen
+   brauchen eine Spec mit sanktionierten Alt-Test-Änderungen (Slice-3-
+   Muster).
+3. **Session-Limit-Resume erneut bewährt** (Art-Fixer + Verify starben in
+   Runde 3): resumeFromRunId + Schadensbild-Erstauftrag; der tote Agent
+   hatte ~90 % im Baum, der Nachfolger füllte nur Lücken. Vorher
+   Dateizustand prüfen bleibt Pflicht.
+4. **Null-Urteile abfangen:** Ein Juror bekam keinen PNG-Lesezugriff und
+   lieferte Gesamtnote 0 — solche Urteile sind ungültig, zählen nicht in
+   den Median, Ersatz-Juror einzeln nachfahren. Künftig im Juror-Schema
+   eine Pflicht-Selbstauskunft "bilder_gelesen: true/false" ergänzen und
+   im Skript filtern.
+5. **Beweis statt Behauptung für Animationen:** Die Wasser-Drift war in
+   Runde 2 "umgesetzt", aber unsichtbar; ab Runde 3 musste der
+   Proof-Agent sie per Pixel-Diff belegen (~18 % Wasserpixel/Frame).
+   Muster übernehmen: bewegte Features immer mit messbarem Diff abnehmen.
+6. **Konsistenz durch geteilte Generatoren:** Großkronen UND Füller aus
+   demselben .tmp-Generator (gen_crowns) erzeugt = kein Stilbruch;
+   dasselbe Muster beim Wasser (ein Look für Teich und Kanal).

@@ -74,6 +74,38 @@ export function createLighting(viewW, viewH) {
     octx.globalCompositeOperation = 'source-over';
 
     ctx.drawImage(off, 0, 0);
+
+    // Grafikpass 2 §8a.1: additiver Warm-Glow-Pass, AUSSCHLIESSLICH für stark
+    // flackernde Lichter (flicker >= 0.8 = nur Fackeln; Spieler/Drops/Eliten
+    // liegen bei 0.3). Radialer Gradient in Fackel-Orange (#d8722a), Alpha-
+    // Spitze 0.15, composite 'lighter'. Rein additiv auf den Haupt-ctx — die
+    // Dunkelheits-Logik oben (Offscreen-Stanzen) bleibt unangetastet.
+    // save/restore, damit weder Composite-Modus noch fillStyle nach außen lecken.
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const light of lights) {
+      if ((light.flicker || 0) < 0.8) continue;
+      const flicker = light.flicker || 0;
+      const wob =
+        Math.sin(timeSec * 13 + light.x * 7) * 0.6 +
+        Math.sin(timeSec * 8.3 + light.y * 5 + light.x * 3) * 0.4;
+      const r = light.radius * (1 + flicker * 0.1 * wob);
+      if (
+        light.x + r < camera.x || light.x - r > camera.x + viewW ||
+        light.y + r < camera.y || light.y - r > camera.y + viewH
+      ) continue;
+      const cx = Math.round(light.x - camera.x);
+      const cy = Math.round(light.y - camera.y);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, 'rgba(216,114,42,0.15)');
+      grad.addColorStop(0.5, 'rgba(216,114,42,0.06)');
+      grad.addColorStop(1, 'rgba(216,114,42,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   return { draw };

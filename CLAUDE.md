@@ -22,15 +22,23 @@ im Browser sofort spielen kann.
    In dieser Umgebung gibt es Node 20, aber kein npm. Das Spiel läuft als statische
    Website direkt im Browser. Für die Handy-Apps wird das Web-Spiel in einem
    späteren Slice per Capacitor verpackt (npm dann via corepack beschaffen).
-2. **SNES-Look:** interne Auflösung **320×180**, ganzzahlig hochskaliert,
-   `image-rendering: pixelated`, 16×16-Pixel-Tiles.
-   **Qualitäts-Messlatte (Vorgabe des Auftraggebers): Secret of Mana.**
-   Das heißt konkret: weiche Farbrampen statt 3-Ton-Flächen, Übergangs-Tiles
-   zwischen Bodenarten (keine harten Kanten), Layering (Baumkronen/Überhänge
-   über dem Spieler), Charaktersprites bis 16×24 mit reichen Animationen.
-   Grafik wird iterativ entwickelt: zeichnen → Screenshot rendern → gegen die
-   Messlatte vergleichen → nachbessern. Jeder Slice enthält Grafikarbeit;
-   zusätzlich gibt es dedizierte Grafik-Qualitätspässe.
+2. **SNES-Look als STIL, das Handy als PLATTFORM:** interne Auflösung
+   **320×180**, ganzzahlig hochskaliert, `image-rendering: pixelated`,
+   16×16-Pixel-Tiles.
+   **Qualitäts-Messlatte (Vorgabe des Auftraggebers, verschärft am
+   07.07.2026): Secret of Mana ÜBERTREFFEN ("12 auf der 10er-Skala").**
+   Grundlage ist ein modernes Handy, kein SNES — die SNES-Ästhetik ist
+   gewollt, die SNES-HARDWARE-Grenzen sind es nicht. Erlaubt und erwünscht
+   ist alles, was echte SNES-Titel nicht konnten, solange der Pixel-Look
+   steht: unbegrenzte Palette, dynamisches Per-Pixel-Licht, Partikel,
+   weiche Alpha-Schatten, mehr Animationsphasen, Parallaxe. Konkret weiter
+   Pflicht: weiche Farbrampen, Übergangs-Tiles, Layering (Kronen über dem
+   Spieler), Charaktersprites bis 16×24 mit reichen Animationen.
+   Grafik wird iterativ entwickelt: zeichnen → Screenshot rendern → gegen
+   die Messlatte vergleichen → nachbessern. Jeder Slice enthält
+   Grafikarbeit; dedizierte Qualitätspässe laufen, bis die Juroren-Skala
+   (10 = herausragende MODERNE Handy-Pixel-Art, SoM selbst ≈ 8,5-9) den
+   Median 10 zeigt. Eine 8 ist ein Meilenstein, nie die Endabnahme.
 3. **Grafik als Code:** Sprites und Tiles werden als Text-Pixel-Grids in
    `game/js/art/` gepflegt (jedes Zeichen = Palettenfarbe, `.` = transparent) und
    zur Laufzeit in Canvas-Sprites umgewandelt. Keine Binär-Assets im Repo nötig,
