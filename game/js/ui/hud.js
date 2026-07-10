@@ -6,6 +6,30 @@ const VIEW_W = 320;
 const VIEW_H = 180;
 
 export function drawHUD(ctx, player, input, gfx) {
+  // Grafikpass 3 §2.6: dezentes Panel HINTER dem bestehenden HUD-Block oben links
+  // (Herzen, GOLD, Trank, XP-Balken). AUSSCHLIESSLICH aus fillRect (kein
+  // roundRect/strokeRect/Pfad — die Flusstest-Stubs kennen sie nicht). "Rundung"
+  // per Eckabzug: die Grundflaeche aus 3 fillRects (die vier 1-px-Eckpixel bleiben
+  // frei); 1-px-Rand aus vier duennen fillRect-Streifen. Panel-Fuellung bewusst
+  // NICHT '#000' (der fadeAlpha-Detektor filtert '#000'-Vollbild-Rects). KEINE
+  // Layout-/Logik-Aenderung: alle folgenden Zeichnungen bleiben identisch platziert.
+  {
+    const px = 2, py = 2, pw = 54, ph = 40;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(px, py + 1, pw, ph - 2);        // Mittelband (volle Breite)
+    ctx.fillRect(px + 1, py, pw - 2, 1);          // obere Zeile (Ecken frei)
+    ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // untere Zeile (Ecken frei)
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#3a3542';
+    ctx.fillRect(px + 1, py, pw - 2, 1);          // Rand oben
+    ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // Rand unten
+    ctx.fillRect(px, py + 1, 1, ph - 2);          // Rand links
+    ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Rand rechts
+    ctx.restore();
+  }
+
   // Pro Herz 2 HP: 2 = voll, 1 = halb (linke Hälfte von heart_full über
   // heart_empty geclippt), 0 = leer. So ist jeder einzelne Treffer sichtbar.
   const hearts = player.maxHp / 2;

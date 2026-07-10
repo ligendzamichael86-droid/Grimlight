@@ -35,30 +35,35 @@ export { tc, tileRect };
 // F Fackel (animiert, solide), D Krypta-Treppe abwärts (begehbar, Portal).
 // Krypta-Eingang im Nordosten (x30-35, y1-4), Zugang über die Lücke bei
 // (32-33, y4).
+// Grafikpass 3 §4.3: Ground-ROWS mit deterministisch gestreuter Gras-Deko
+// (u=grass_tuft, p=pebble_small, d=dirt_patch; ~1/20 der reinen '.'-Zellen,
+// nie an Portale/Spawns/Truhen angrenzend, nie zwei Deko orthogonal benachbart).
+// Erzeugt/verifiziert via .tmp/gen_deco3.mjs (Gameplay-Neutralitaet bewiesen:
+// Soliditaets-Raster, Spawns, Portale, Fackel-Positionen byte-identisch zu 204e28f).
 const GRAVEYARD_ROWS = [
   '########################################',
-  '#TT.,..b.T' + '.....,....' + '..,..s.o..' + '######..T#',
-  '#T....o...' + ',...,...b.' + '......,...' + '#.DD.#..T#',
-  '#..G.g.h..' + ',......G.g' + '.h.G......' + '#....#,.T#',
-  '#...o.....' + '..........' + '..s.....b.' + '##..##..T#',
-  '#..g.G.h..' + '.....F....' + '.G.h.g....' + '..o.....T#',
-  '#.,....b..' + '.....==...' + '.ff...ff..' + '........T#',
-  '#..G.g.G..' + '..,..==...' + '.g.h.G....' + '..G.g...T#',
-  '#....o....' + '.....==...' + '..........' + '.......,T#',
-  '#T...,....' + '.....==...' + '.....,....' + '..T..b..T#',
-  '#T.,..s...' + '.....==..,' + '..,.......' + '.T......T#',
-  '#T........' + '.....==...' + '.......o..' + ',.......T#',
-  '#=========' + '==========' + '==========' + '====,...T#',
-  '#=========' + '==========' + '==========' + '====,...T#',
-  '#.,..b...F' + '..f..f....' + '....,..s..' + '........T#',
-  '#....G.g..' + '...G.h....' + '..........' + '.~~~~~..T#',
-  '#..o......' + '..........' + '....,....~' + '~~~~~~~.T#',
-  '#..,.G.h..' + '...g.G....' + '.........~' + '~~~~~~~.T#',
-  '#.........' + '....b..,..' + '........F.' + '.~~~~~..T#',
-  '#T....,...' + '.......o..' + '...G.g....' + '........T#',
-  '#T..,..s..' + '..g.G.....' + '..........' + '...,..bTT#',
-  '#TT.....b.' + '..........' + '.,....o...' + '..,....TT#',
-  '#TTT...,..' + '...T..s...' + '......T...' + '......TTT#',
+  '#TT.,..b.T.....,..p...,..s.o..######..T#',
+  '#T....o...,...,...b....p..,...#.DD.#..T#',
+  '#..G.g.h..,......G.g.h.G......#....#,.T#',
+  '#...o.........d.......s.....b.##..##..T#',
+  '#..g.G.h..d....F.....G.h.g......o.....T#',
+  '#.,....b.......==....ff...ff.........uT#',
+  '#..G.g.G..d.,..==....g.h.Gu.....G.g...T#',
+  '#....ou........==....................,T#',
+  '#T...,.........==........,...p..T..b..T#',
+  '#T.,..s........==..,..,........T......T#',
+  '#T.............==...p......o..,.......T#',
+  '#=================================,...T#',
+  '#=================================,...T#',
+  '#.,..b.p.F..f..f........,..s..........T#',
+  '#....G.g.....G.h...............~~~~~..T#',
+  '#..o....................,....~~~~~~~~.T#',
+  '#..,.G.h.....g.G.....u.......~~~~~~~~.T#',
+  '#u............b..,........d.F..~~~~~..T#',
+  '#T....,..........o.....Gdg............T#',
+  '#T..,..su...gdG..................,..bTT#',
+  '#TT.....b............,....o.....,....TT#',
+  '#TTT...,.....T..s...d.u...T.........TTT#',
   '########################################',
 ];
 
@@ -81,10 +86,23 @@ const GRAVEYARD_LEGEND = {
   'M': { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
   'N': { art: 'tree_canopy_2x2_b', span: [2, 2], solid: false },
   'O': { art: 'tree_canopy_2x2_c', span: [2, 2], solid: false },
+  // Grafikpass 3 §3.2/§4.1: drei GESPIEGELTE Grosskronen (6 Silhouetten gesamt).
+  // Text-Spiegelung im Generator (.tmp/gen_overrows2.mjs), zur Laufzeit KEIN Flip.
+  // gen_overrows2 rotiert jetzt ueber alle sechs Zeichen M/N/O/Q/V/X.
+  'Q': { art: 'tree_canopy_2x2_am', span: [2, 2], solid: false },
+  'V': { art: 'tree_canopy_2x2_bm', span: [2, 2], solid: false },
+  'X': { art: 'tree_canopy_2x2_cm', span: [2, 2], solid: false },
   // Grafikpass 2: Boden-/Weg-/Mauer-Varianten gegen Flächen-Wiederholung
   // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
   '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3'] },
   ',': { art: 'grass_detail', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // Grafikpass 3 §3.3/§4.1/§4.3: begehbare Gras-Deko (deterministisch gestreut,
+  // .tmp/gen_deco3.mjs, ~1/20 der reinen '.'-Zellen). WIE '.'-Gras behandelt:
+  // solid:false UND fringeSource/fringeSet 'grass' — ohne fringeSource entstuenden
+  // 1-Tile-Fringe-Loecher an Weg-/Wasserkanten neben der Deko (Review-Major).
+  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
   '=': { art: 'path', solid: false, fringeTarget: true, variants: ['path', 'path_v1', 'path_v2', 'path_v3'] },
   'G': { art: 'gravestone', solid: true },
   'g': { art: 'gravestone_2', solid: true },
@@ -93,47 +111,49 @@ const GRAVEYARD_LEGEND = {
   'o': { art: 'bones', solid: false },
   's': { art: 'skull', solid: false },
   'f': { art: 'fence', solid: true },
-  // Grafikpass 2: Wasser wird 3-Frame-Ping-Pong (synchron, langsam). art:'water'
-  // bleibt Frame 0/Fallback (Muster Fackeln: art + anim), solid + fringeTarget
-  // unberührt. §8a.3: shorePrefix lenkt die Gras-Fringes dieses TARGETs auf
-  // shore_*-Ufer-Keys um (nur hier, nur bei Quelle-Set 'grass').
-  // §8b.1: depthOverlays legt statische Tiefen-Schleier ueber das animierte
-  // Wasser (Ufer flach, naechster Ring mittel) — die Engine leitet die Distanz
-  // ueber den Wasserkoerper ab (kein Bilderrahmen-Gitter mehr).
-  '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_1'], animRate: 2, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
+  // Grafikpass 3 §2.2: Wasser wird ein nahtloser 4-Frame-ZYKLUS (kein Ping-Pong
+  // mehr): Baender wandern pro Frame 4 px nach unten, 4×4 = 16 px = Kachelhoehe →
+  // Frame 3 → Frame 0 uebergangsfrei. art:'water' bleibt Frame 0/Fallback, solid +
+  // fringeTarget unberuehrt. §8a.3: shorePrefix lenkt die Gras-Fringes dieses
+  // TARGETs auf shore_*-Ufer-Keys um (nur hier, nur bei Quelle-Set 'grass').
+  // §8b.1: depthOverlays legt statische Tiefen-Schleier ueber das animierte Wasser.
+  '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
   'F': { art: 'torch_0', solid: true, anim: ['torch_0', 'torch_1'] },
   'D': { art: 'crypt_stairs_down', solid: false },
 };
 
-// Over-Layer Friedhof (Grafikpass 2): 2x2-Grosskronen (M/N/O-Anker = obere
-// linke Ecke, decken je einen Stamm in der Unterzeile — Wurzeln bleiben
-// sichtbar) für die Baumreihen/Cluster, 16x16-Fueller ('B' canopy_bottom auf
-// dem Stamm, 'K' canopy_top darüber) für isolierte Einzelstaemme. Man läuft
-// unter allen Kronen durch. Deterministisch erzeugt (.tmp/gen_overrows2.mjs,
-// §4.2 Regeln 1-6 dort verifiziert); '.' = leere Zelle.
+// Over-Layer Friedhof (Grafikpass 3): 2x2-Grosskronen (Anker = obere linke Ecke,
+// decken je einen Stamm in der Unterzeile — Wurzeln bleiben sichtbar) fuer die
+// Baumreihen/Cluster, 16x16-Fueller ('B' canopy_bottom auf dem Stamm, 'K'
+// canopy_top darueber) fuer isolierte Einzelstaemme. Man laeuft unter allen
+// Kronen durch. Deterministisch erzeugt (.tmp/gen_overrows2.mjs, Regeln 1-6 dort
+// verifiziert); '.' = leere Zelle. §3.2/§4.1: die Rotation nutzt jetzt SECHS
+// Silhouetten — M/N/O plus die gespiegelten Q/V/X (nie gleiche Silhouette
+// benachbart, nicht strikt alternierend). Anker-Jitter (-2..+2 px) kommt zur
+// Laufzeit aus tilemap.js (§2.1).
 const GRAVEYARD_OVER_ROWS = [
-  '.O.......K...........................N..',
-  '.N.......B............................M.',
-  '.....................................O..',
+  '.O.......K...........................V..',
+  '.V.......B............................N.',
+  '.....................................Q..',
   '......................................M.',
   '.....................................O..',
-  '......................................N.',
+  '......................................V.',
   '.....................................M..',
-  '......................................O.',
-  'M...............................K....N..',
-  '.O.............................KB.....M.',
-  'M..............................B.....O..',
-  '......................................N.',
+  '......................................Q.',
+  'M...............................K....X..',
+  '.X.............................KB.....V.',
+  'Q..............................B.....O..',
+  '......................................M.',
+  '.....................................N..',
+  '......................................X.',
   '.....................................M..',
   '......................................O.',
   '.....................................N..',
-  '......................................O.',
-  '.....................................M..',
-  '......................................N.',
-  'N....................................M..',
-  '.M...................................N..',
-  '.N...................................O..',
-  '.OO..........K............K.........MM..',
+  '......................................M.',
+  'V....................................Q..',
+  '.M...................................M..',
+  '.Q...................................N..',
+  '.XX..........K............K.........QO..',
   '.............B............B.............',
   '........................................',
 ];
@@ -145,27 +165,31 @@ const GRAVEYARD_OVER_ROWS = [
 // Legende: # Ziegelwand, . Steinboden, , rissiger Steinboden, P Pfeiler,
 // R Schutt, S Sarkophag, W Wandfackel (animiert, solide),
 // U Treppe aufwärts (begehbar, Portal zurück zum Friedhof).
+// Grafikpass 3 §4.3: Riss-Kacheln (',') ausgeduennt auf den 1/7-Hash-Schnitt der
+// Bodenflaeche (variantIndex(x,y,7)===0): 20 -> 3 Risse, ','->'.'-Tausch, entklumpt.
+// Erzeugt/verifiziert via .tmp/gen_deco3.mjs (Soliditaet/Spawns/Portale/Fackeln
+// byte-identisch zu 204e28f — '.' und ',' sind beide begehbar).
 const CATACOMBS_ROWS = [
   '########################################',
   '#####W########W######W##################',
-  '##.....,.#W##....,.....#################',
+  '##.......#W##..........#################',
   '##.U...........P....P..##W##############',
-  '#W...,.....,..................##########',
-  '##.......####.,......,........##########',
+  '#W............................##########',
+  '##.......####.,...............##########',
   '##R......####..P....P..#####..##########',
   '####..#######R.........#####..W#########',
-  '###W..##########..##########,.##########',
-  '####,.#########W..#########W..##########',
+  '###W..##########..##########..##########',
+  '####..#########W..#########W..##########',
   '####..#W########..W#########..#W####W###',
-  '####............,.#########...........##',
+  '####..............#########...........##',
   '###W,.............########W.....SS..D.##',
-  '###.........#W#############...P....P,.##',
-  '###.....,...W##############..,........W#',
+  '###.........#W#############...P....P..##',
+  '###.........W##############..,........W#',
   '###..SS.....###############...........##',
-  '###.........##W#########W##....,......##',
-  '###.................,.......,.........##',
-  '###....,.....,..........,.....P....P..##',
-  '###.........#######W#######.......,...W#',
+  '###.........##W#########W##...........##',
+  '###...................................##',
+  '###...........................P....P..##',
+  '###.........#######W#######...........W#',
   '#####W#####################R.........R##',
   '#################################W######',
   '########################################',
@@ -180,7 +204,11 @@ const CATACOMBS_LEGEND = {
   // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten.
   '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
-  ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true },
+  // Grafikpass 3 §3.3/§4.1: drei Riss-Motive statt eines "7"-Stempels
+  // (variants[0] === art). Die ','-Dichte wurde zugleich ausgeduennt (§4.3,
+  // .tmp/gen_deco3.mjs) — Soliditaet/Begehbarkeit bleiben byte-identisch ('.'
+  // und ',' sind beide solid:false, fringeTarget:true).
+  ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true, variants: ['stone_floor_cracked', 'stone_floor_cracked_v1', 'stone_floor_cracked_v2'] },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },
@@ -223,6 +251,8 @@ export const GRAVEYARD = {
     { ...tileRect(32, 2, 2, 1), target: 'CATACOMBS', spawn: tc(6, 4) },
   ],
   ambient: 0.45,
+  // Grafikpass 3 §2.3/§4.2: Farbtemperatur des Dunkel-Overlays (blauviolette Nacht).
+  ambientTint: '#0a0a18',
   playerLightRadius: 40,
   fog: true,
   torchChars: ['F'],
@@ -284,11 +314,13 @@ export const CATACOMBS = {
     { ...tileRect(3, 3), target: 'GRAVEYARD', spawn: tc(33, 5) },
     { ...tileRect(36, 12), target: 'FLUESTERGRUFT', spawn: tc(4, 4) },
   ],
-  // §8b.4 wollte 0.82 -> 0.78, ist aber ZURUECKGENOMMEN: der unantastbare
-  // Flusstest .tmp/check_main_slice1.mjs asserted ambient 0.82 hart und muss
-  // gruen bleiben (Eiserne Regel §0.3 schlaegt die Runde-3-Ausnahme §8b.4).
-  // Konflikt an den Hauptloop dokumentiert (Uebergabe/offene Punkte).
-  ambient: 0.82,
+  // Grafikpass 3 §4.2: 0.82 -> 0.78 (jetzt UMGESETZT — die zwei sanktionierten
+  // Flusstest-Zeilen in .tmp/check_main_slice1.mjs sind laut §5.1 mitgezogen,
+  // sodass der Test gruen bleibt). Der GP2-"ZURUECKGENOMMEN"-Vermerk ist damit
+  // erledigt.
+  ambient: 0.78,
+  // Grafikpass 3 §2.3/§4.2: kaltes Blau (Katakomben-Steinkaelte).
+  ambientTint: '#06080f',
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],

@@ -3,6 +3,7 @@
 // jedem CWD via node tools/smoke_test.mjs, Exit 0 = grün.
 
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { PALETTE } from '../game/js/art/palette.js';
 import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
 import { createTilemap, variantIndex } from '../game/js/world/tilemap.js';
@@ -20,6 +21,7 @@ import { rollItem, createInventory, addItem, equipItem, computeStats, AFFIXES } 
 import { createProgress, grantXp, applyProgress, XP_THRESHOLDS, LEVEL_CAP } from '../game/js/items/progression.js';
 import { createInventoryUI } from '../game/js/ui/inventory_ui.js';
 import { createLighting } from '../game/js/core/lighting.js';
+import { createParticles } from '../game/js/core/particles.js';
 import { drawFog } from '../game/js/ui/hud.js';
 
 const DT = 1 / 60;
@@ -486,6 +488,17 @@ let fightWorld = null;
   ];
   const missingG2 = gfx2Tiles.filter((k) => !TILE_ART[k]);
   check('Alle Grafikpass-2-TILE_ART-Schlüssel existieren', missingG2.length === 0, missingG2.join(','));
+  // Grafikpass 3 §5.2.1 (additiv): neue Pflicht-Keys. Werden vom Art-Builder
+  // parallel geliefert; bis dahin dürfen diese Existenz-Checks ROT sein.
+  const gfx3Tiles = [
+    'water_3',                                         // 4. Wasser-Frame (§2.2)
+    'wet_n', 'wet_e', 'wet_s', 'wet_w',                // Nassrand am Gruft-Kanal (§2.1/§3.1)
+    'tree_canopy_2x2_am', 'tree_canopy_2x2_bm', 'tree_canopy_2x2_cm', // gespiegelte Kronen (§3.2)
+    'grass_tuft', 'pebble_small', 'dirt_patch',        // Gras-Deko (§3.3)
+    'stone_floor_cracked_v1', 'stone_floor_cracked_v2', // Riss-Varianten (§3.3)
+  ];
+  const missingG3 = gfx3Tiles.filter((k) => !TILE_ART[k]);
+  check('Alle Grafikpass-3-TILE_ART-Schlüssel existieren', missingG3.length === 0, missingG3.join(','));
   let cyc = null;
   for (const dir of ['down', 'up', 'side']) {
     for (let f = 0; f < 4; f++) if (!SPRITES[`player_${dir}_${f}`]) cyc = `player_${dir}_${f}`;
@@ -578,12 +591,13 @@ let fightWorld = null;
     overChars.every((ch) => !GRAVEYARD.torchChars.includes(ch)));
 
   // Jeder Stamm trägt eine Krone: 'B' (canopy_bottom) auf der Stamm-Zelle ODER
-  // die Zelle liegt in der 2x2-Span-Fläche eines M/N/O-Ankers (Grafikpass 2).
+  // die Zelle liegt in der 2x2-Span-Fläche eines Anker-Zeichens. Grafikpass 3
+  // §5.2.2b: die gespiegelten Kronen Q/V/X decken Stämme gleichwertig.
   const trunkCovered = (x, y) => {
     if (over[y][x] === 'B') return true;
     for (let ay = Math.max(0, y - 1); ay <= y; ay++) {
       for (let ax = Math.max(0, x - 1); ax <= x; ax++) {
-        if ('MNO'.includes(over[ay][ax])) return true; // Anker deckt 2x2
+        if ('MNOQVX'.includes(over[ay][ax])) return true; // Anker deckt 2x2
       }
     }
     return false;
@@ -1592,27 +1606,33 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       !drawnC.includes('tree_canopy_2x2_b'));
   }
 
-  // --- Wasser-Anim (Ping-Pong, §3.2): FRAME-MITTEN + animSync ---
+  // --- Wasser-Anim (Grafikpass 3 §2.2: 4-Frame-ZYKLUS statt Ping-Pong):
+  //     FRAME-MITTEN + animSync ---
   {
     const wRows = ['####', '#~~#', '#~~#', '####'];
     const wLeg = {
       '#': { art: 'brick', solid: true },
-      '~': { art: 'water', solid: false, anim: ['water', 'water_1', 'water_2', 'water_1'], animRate: 2, animSync: true },
+      '~': { art: 'water', solid: false, anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 2, animSync: true },
     };
     const wm = createTilemap(wRows, wLeg);
     const frames = [0.25, 0.75, 1.25, 1.75].map((t) => {
       const ks = drawKeys(wm, { x: 0, y: 0 }, t, 'ground').filter((k) => String(k).startsWith('water'));
       return { key: ks[0], uniform: ks.length === 4 && ks.every((k) => k === ks[0]) };
     });
-    check('Wasser-Anim Ping-Pong: water→water_1→water_2→water_1 an den Frame-Mitten',
-      frames.map((f) => f.key).join(',') === 'water,water_1,water_2,water_1');
+    check('Wasser-Anim 4-Frame-Zyklus: water→water_1→water_2→water_3 an den Frame-Mitten',
+      frames.map((f) => f.key).join(',') === 'water,water_1,water_2,water_3');
     check('Wasser animSync: alle Wasser-Zellen zeigen zum selben t denselben Frame',
       frames.every((f) => f.uniform));
   }
 
   // --- Grid-Maße: 16×16 (Span-Kronen 32×32), alle Zeilen gleich lang ---
   {
-    const spanKeys = ['tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c'];
+    // Grafikpass 3 §5.2.2: um die drei gespiegelten Kronen (ebenfalls 32×32) auf
+    // 6 Einträge erweitert — sonst schlägt die 16×16-Annahme auf ihnen fehl.
+    const spanKeys = [
+      'tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c',
+      'tree_canopy_2x2_am', 'tree_canopy_2x2_bm', 'tree_canopy_2x2_cm',
+    ];
     let dimBad = null;
     for (const [name, grid] of Object.entries(TILE_ART)) {
       const size = spanKeys.includes(name) ? 32 : 16;
@@ -1637,13 +1657,14 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     check("Quelltext-Wächter: kein 'Math.random'/'Date.now' in world/*.js + art/*.js", guardBad === null, guardBad || '');
   }
 
-  // --- Ground-rows-Freeze: keine M/N/O in den vier ROWS-Arrays ---
+  // --- Ground-rows-Freeze: keine Span-Anker-Zeichen in den vier ROWS-Arrays.
+  //     Grafikpass 3 §5.2.2: additiv um die gespiegelten Anker Q/V/X erweitert. ---
   {
     let freezeBad = null;
     for (const def of [GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER]) {
-      for (const row of def.rows) for (const ch of ['M', 'N', 'O']) if (row.includes(ch)) freezeBad = ch;
+      for (const row of def.rows) for (const ch of ['M', 'N', 'O', 'Q', 'V', 'X']) if (row.includes(ch)) freezeBad = ch;
     }
-    check('Ground-rows-Freeze: keine M/N/O-Zeichen in den vier ROWS-Arrays', freezeBad === null, freezeBad || '');
+    check('Ground-rows-Freeze: keine M/N/O/Q/V/X-Zeichen in den vier ROWS-Arrays', freezeBad === null, freezeBad || '');
   }
 
   // --- Ufer-Umlenkung (§8a.3): Wasser-Target mit shorePrefix + Gras-Nachbar
@@ -1744,6 +1765,110 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     check('Wasser-Tiefe: statisch + deterministisch (zwei Draws, verschiedene Zeit, identisch)',
       at2.size === 24 && ser(at1) === ser(at2));
   }
+
+  // --- Grafikpass 3 §2.1 Nassrand (additiv): Wasser-Target mit shorePrefix +
+  //     Moos-Quelle emittiert die moss_fringe_* WEITERHIN UND ZUSAETZLICH wet_*
+  //     (nur Orthogonale). Ohne shorePrefix keine wet_*. Rein über den Render-
+  //     Pfad (Proxy-Kachelquelle liefert jeden Key). ---
+  {
+    const wetLeg = {
+      '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' },
+      '~': { art: 'water', solid: false, fringeTarget: true, shorePrefix: 'wet' },
+    };
+    const wetm = createTilemap(['####', '#~~#', '#~~#', '####'], wetLeg);
+    const wk = drawKeys(wetm, { x: 0, y: 0 }, 0, 'ground');
+    check('Nassrand: Moos-Ufer liefert weiterhin moss_fringe_*',
+      wk.some((k) => String(k).startsWith('moss_fringe_')));
+    check('Nassrand: shorePrefix=wet + Moos-Quelle liefert ZUSAETZLICH wet_* (nur Orthogonale)',
+      ['wet_n', 'wet_e', 'wet_s', 'wet_w'].some((k) => wk.includes(k)) &&
+      !wk.some((k) => /^wet_/.test(String(k)) && !/^wet_[nesw]$/.test(String(k))));
+    const dryLeg = {
+      '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' },
+      '~': { art: 'water', solid: false, fringeTarget: true },
+    };
+    const drym = createTilemap(['####', '#~~#', '#~~#', '####'], dryLeg);
+    const dk = drawKeys(drym, { x: 0, y: 0 }, 0, 'ground');
+    check('Nassrand: OHNE shorePrefix keine wet_*-Keys', !dk.some((k) => /^wet_/.test(String(k))));
+  }
+
+  // --- Grafikpass 3 §2.1 Anker-Jitter: deterministischer vertikaler Versatz
+  //     variantIndex(tx,ty,5)-2 (-2..+2) auf Span-Anker; Culling +1 Tile oben. ---
+  {
+    const N = 12;
+    const gRows = Array.from({ length: N }, () => '.'.repeat(N));
+    const oGrid = Array.from({ length: N }, () => Array(N).fill('.'));
+    const AX = 4, AY = 5;
+    oGrid[AY][AX] = 'M';
+    const legend = { '.': { art: 'grass' }, M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false } };
+    const tmJ = createTilemap(gRows, legend, oGrid.map((r) => r.join('')));
+    const capSy = (store) => ({ canvas: { width: N * 16, height: N * 16 }, drawImage: (img, sx, sy) => { if (img === 'tree_canopy_2x2_a') store.v = sy; } });
+    const s1 = {}; tmJ.draw(capSy(s1), { x: 0, y: 0 }, anyTiles, 0, 'over');
+    const jy = variantIndex(AX, AY, 5) - 2;
+    check('Anker-Jitter: sy = ty*16 + (variantIndex(tx,ty,5)-2)', s1.v === AY * 16 + jy, `sy=${s1.v} erwartet=${AY * 16 + jy}`);
+    check('Anker-Jitter: Versatz deterministisch im Bereich -2..+2', jy >= -2 && jy <= 2);
+    const s2 = {}; tmJ.draw(capSy(s2), { x: 0, y: 0 }, anyTiles, 0, 'over');
+    check('Anker-Jitter: deterministisch (zwei Draws identisch)', s2.v === s1.v);
+    // Culling +1 Tile oben: Kamera so, dass der Anker EINE Zeile oberhalb des
+    // alten Kronen-Startfensters liegt — nur mit der GP3-Erweiterung wird er
+    // noch erfasst (Jitter kann ihn in den Viewport schieben).
+    const drawnJ = drawKeys(tmJ, { x: 48, y: (AY + 2) * 16 }, 0, 'over', 32, 32);
+    check('Anker-Jitter: Kamera-Fenster erfasst gejitterte Anker (Culling +1 Tile oben)',
+      drawnJ.includes('tree_canopy_2x2_a'));
+  }
+}
+
+// ===========================================================================
+// Abschnitt 36 "Gameplay-Neutralität GP3" (NEU, §5.2.3): Soliditaets-Raster +
+// Geometrie (playerSpawn/alle Gegner-/Prop-Spawns/Portale/torch-findTiles-
+// Positionen) aller 4 Maps gegen eingebettete Golden-Fingerprints von 204e28f
+// (per git archive 204e28f generiert). Ambient-Werte exakt 0.45/0.78/0.85/0.66
+// (die EINZIGEN erlaubten Zahlaenderungen, §4.2). particles.js: Node-Import,
+// harte Obergrenze 60, update ohne Browser lauffaehig.
+// ===========================================================================
+{
+  // Golden-Fingerprints aus 204e28f (sha256): sol = Soliditaets-Raster,
+  // geo = JSON aus playerSpawn + skeleton/ghoul/enemy/prop-Spawns + Portalen +
+  // torch-findTiles-Positionen. Beides ist gameplay-relevant und muss trotz der
+  // Deko-/Riss-/Anim-/Tint-Aenderungen byte-identisch bleiben.
+  const GOLD = {
+    GRAVEYARD: { sol: '14cdbe36ad7ea26c9db037c826b6ba8b74475e529261129d41950e7cfb466b04', geo: '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e' },
+    CATACOMBS: { sol: '82c22c6d845065371389f5e0ecb9ee498543740c06391b85719ada8568c4394c', geo: 'ce78746ee9e243c44d6a6bb3779c5ca535c7cee764096f8a5d29fa992269b9cb' },
+    FLUESTERGRUFT: { sol: '0cca3204f83878b54c5390aa1bc9c4159424f5424b1a749d6dad4e47fc273489', geo: '2ac0a890e545869220fec7fa8256da51192c2bc4a07bc8d8d68fb7a669f6fa7c' },
+    BOSS_KAMMER: { sol: 'ebe999cf1e6023c6d169fa24a205e224c1dc36e4424938063cdedf045c7d611c', geo: 'a7d72c33f00b83c8d974e5d3161ca2315b7d0a24aa77f24204f386bb558885eb' },
+  };
+  // Neue Ambient-Zielwerte (§4.2): GRAVEYARD unveraendert, CATACOMBS 0.82->0.78,
+  // FLUESTERGRUFT unveraendert, BOSS_KAMMER 0.70->0.66.
+  const AMBIENT = { GRAVEYARD: 0.45, CATACOMBS: 0.78, FLUESTERGRUFT: 0.85, BOSS_KAMMER: 0.66 };
+  const sha = (s) => createHash('sha256').update(s).digest('hex');
+  const solHash = (def) =>
+    sha(def.rows.map((row) => [...row].map((ch) => (def.legend[ch] && def.legend[ch].solid ? '1' : '0')).join('')).join('\n'));
+  const geoHash = (def) => {
+    const tm = createTilemap(def.rows, def.legend, def.overRows || null);
+    const torch = def.torchChars.map((ch) => [ch, tm.findTiles(ch)]);
+    return sha(JSON.stringify({
+      p: def.playerSpawn, sk: def.skeletonSpawns, gh: def.ghoulSpawns,
+      en: def.enemySpawns || [], pr: def.propSpawns, po: def.portals, torch,
+    }));
+  };
+  for (const name of Object.keys(GOLD)) {
+    const def = MAPS[name];
+    check(`§36 ${name}: Soliditaets-Raster byte-identisch zu 204e28f`, solHash(def) === GOLD[name].sol, solHash(def));
+    check(`§36 ${name}: Spawns/Portale/torch-findTiles identisch zu 204e28f`, geoHash(def) === GOLD[name].geo, geoHash(def));
+    check(`§36 ${name}: Ambient == ${AMBIENT[name]}`, Math.abs(def.ambient - AMBIENT[name]) < 1e-9, `ist ${def.ambient}`);
+  }
+
+  // particles.js (§2.4): Node-Import, harte Obergrenze 60, update ohne Browser.
+  const parts = createParticles();
+  check('§36 particles: createParticles liefert list/spawnEmbers/update/draw',
+    !!parts && Array.isArray(parts.list) && typeof parts.spawnEmbers === 'function'
+    && typeof parts.update === 'function' && typeof parts.draw === 'function');
+  // dt=1 => SPAWN_RATE*dt >= 1 > Math.random() => jeder Aufruf spawnt, bis der Deckel greift.
+  for (let i = 0; i < 300; i++) parts.spawnEmbers(100, 100, 1);
+  check('§36 particles: harte Obergrenze 60 erzwungen', parts.list.length === 60, `list=${parts.list.length}`);
+  let partThrew = null;
+  try { for (let i = 0; i < 200; i++) parts.update(1 / 60); } catch (e) { partThrew = e.message; }
+  check('§36 particles: update ohne Browser lauffaehig (kein Wurf)', partThrew === null, partThrew || '');
+  check('§36 particles: Partikel altern und verlassen die Liste (< Obergrenze)', parts.list.length < 60, `list=${parts.list.length}`);
 }
 
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);

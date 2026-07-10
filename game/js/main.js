@@ -7,6 +7,7 @@ import { createLoop } from './core/loop.js';
 import { createInput } from './core/input.js';
 import { createCamera } from './core/camera.js';
 import { createLighting } from './core/lighting.js';
+import { createParticles } from './core/particles.js';
 import { createTilemap } from './world/tilemap.js';
 // Slice 3: boss.js EINMAL explizit importieren — das Modulende registriert
 // kind 'graveward' im Verhaltens-Dispatch (registrierungs-/importreihenfolge-
@@ -73,6 +74,9 @@ const input = createInput();
 input.attach(canvas);
 const camera = createCamera(VIEW_W, VIEW_H);
 const lighting = createLighting(VIEW_W, VIEW_H);
+// Grafikpass 3 §2.4: Glut-Funken über Fackeln (moderne Alpha-Deko). Einmal
+// erzeugt, überlebt Map-Wechsel (Liste wird in buildWorld geleert).
+const particles = createParticles();
 
 // Dev-Parameter ?map=CATACOMBS: Start-Map nach dem Titel. Nur hier wird
 // location.search geparst, kein Einfluss auf andere Module.
@@ -177,6 +181,8 @@ function buildWorld(mapKey, spawn, carry) {
     props.push(...createProps([{ ...tc(10, 4), kind: 'chest', content: 'treasure' }]));
   }
   projectiles = createProjectiles();
+  // §2.4: Funken der alten Map verwerfen (kein Ember-Bleed über den Map-Wechsel).
+  particles.list.length = 0;
   drops = [];
   events.length = 0;
   toast = null;
@@ -278,6 +284,18 @@ function update(dt) {
       updateDrops(dt, drops, player, events);
       syncPlayerLight();
       followPlayer();
+
+      // §2.4: Glut-Funken an jeder SICHTBAREN Fackel-Lichtquelle spawnen
+      // (flicker >= 0.8 = nur Fackeln; Spieler/Drops/Eliten liegen bei 0.3) und
+      // die Partikel im Fixed-Step updaten. Nur hier (playing, kein Fade) — im
+      // Titel/Inventar/Game-Over/Fade pausieren die Funken (kein Update im Freeze).
+      for (const l of lights) {
+        if ((l.flicker || 0) < 0.8) continue;
+        if (l.x + 32 < camera.x || l.x - 32 > camera.x + VIEW_W ||
+            l.y + 32 < camera.y || l.y - 32 > camera.y + VIEW_H) continue;
+        particles.spawnEmbers(l.x, l.y, dt);
+      }
+      particles.update(dt);
 
       // Toasts nach Prioritaet (§3): level_up (4) > weapon/key/heart_found (3)
       // > item_pickup (2) > Rest (1). Ein Slot, pushToast ersetzt nur bei >=
@@ -456,9 +474,34 @@ function drawMarkers() {
   }
 }
 
+// §2.5: weicher Alpha-Bodenschatten (moderner Bodenkontakt) unter einer
+// beweglichen Entity — AUSSCHLIESSLICH aus fillRect (die Flusstest-Stubs kennen
+// kein ctx.ellipse/roundRect): drei gestapelte, zentrierte 1-px-Zeilen mit
+// Breiten 0.9/0.7/0.4 × Hitbox-Breite, '#000' @ globalAlpha 0.14 je Zeile,
+// Unterkante y + h - 1. Nur Spieler + Gegner (Props/Drops behalten ihre
+// gebackenen Dither-Schatten).
+const SHADOW_W = [0.9, 0.7, 0.4];
+function drawSoftShadow(ent) {
+  const cx = ent.x + ent.w / 2;
+  const baseY = ent.y + ent.h - 1;
+  ctx.save();
+  ctx.globalAlpha = 0.14;
+  ctx.fillStyle = '#000';
+  for (let i = 0; i < 3; i++) {
+    const w = Math.max(1, Math.round(ent.w * SHADOW_W[i]));
+    ctx.fillRect(Math.round(cx - w / 2 - camera.x), Math.round(baseY - camera.y) - i, w, 1);
+  }
+  ctx.restore();
+}
+
 function drawWorld() {
   map.draw(ctx, camera, tiles, timeSec, 'ground');
   drawMarkers();
+
+  // §2.5: Weichschatten VOR der renderables-Schleife (unter allen Entities, über
+  // dem Boden) für Spieler und jeden Gegner.
+  drawSoftShadow(player);
+  for (const e of enemies) drawSoftShadow(e);
 
   // Gemeinsame Y-Sortierung aller Welt-Entities nach Fußkante (y + h).
   // Array.sort ist stabil → bei Gleichstand bleibt Einfügereihenfolge
@@ -498,7 +541,11 @@ function drawWorld() {
   // §2.4: Mini-Lichter der LEBENDEN Eliten PRO FRAME (Muster Selten-Drop-
   // Lichter; NICHT ins statische lights-Array, das klebt am Spawn).
   for (const l of eliteLights(enemies)) frameLights.push(l);
-  lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec);
+  // §2.3: mapDef.ambientTint als 6. Argument durchreichen (Farbtemperatur je Map).
+  lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec, mapDef.ambientTint);
+  // §2.4: Funken NACH dem Dunkel-Overlay und VOR der Vignette — sie sind
+  // selbstleuchtende Deko und werden vom Overlay NICHT abgedunkelt.
+  particles.draw(ctx, camera);
   drawVignette(ctx);
   drawHUD(ctx, player, input, gfx);
   drawPickupToast(ctx, camera, player, toast);

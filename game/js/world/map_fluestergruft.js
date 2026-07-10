@@ -59,9 +59,12 @@ const FLUESTERGRUFT_LEGEND = {
   '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
   ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true },
-  // §8b.1: depthOverlays wie im Friedhofsteich — statische Tiefen-Schleier ueber
-  // dem begehbaren Grabwasser (Ufer flach, naechster Ring mittel).
-  '~': { art: 'water', solid: false, fringeTarget: true, anim: ['water', 'water_1', 'water_2', 'water_1'], animRate: 2, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
+  // Grafikpass 3 §2.2: nahtloser 4-Frame-Wasserzyklus (kein Ping-Pong mehr).
+  // §2.1/§4.1: shorePrefix 'wet' — am Gruft-Kanal legt die Engine ZUSAETZLICH zu
+  // den moss_fringe_*-Ufern eine additive wet_n/e/s/w-Nasskante ueber die
+  // Moos-Uferkanten (nur Orthogonale). Wasser hier BEGEHBAR (solid:false).
+  // §8b.1: depthOverlays wie im Friedhofsteich (Ufer flach, naechster Ring mittel).
+  '~': { art: 'water', solid: false, fringeTarget: true, shorePrefix: 'wet', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },
@@ -120,6 +123,8 @@ export const FLUESTERGRUFT = {
     { ...tileRect(20, 21), target: 'BOSS_KAMMER', spawn: tc(10, 9), requires: 'boss_key' },
   ],
   ambient: 0.85,          // dunkelste Ebene
+  // Grafikpass 3 §2.3/§4.2: gruenschwarzes Grabwasser (Farbtemperatur der Gruft).
+  ambientTint: '#04100c',
   playerLightRadius: 52,
   fog: false,             // Mobile-Overdraw (§2.5)
   torchChars: ['W'],

@@ -32,7 +32,10 @@ export function createLighting(viewW, viewH) {
 
   // lights: [{x, y, radius, flicker}] in WELTpixeln; flicker 0..1 (0 = statisch)
   // ambient: 0..1 Dunkelheitsgrad der Map (0 = Tag → kein Overlay, 1 = schwarz)
-  function draw(ctx, camera, lights, ambient, timeSec) {
+  // tint (Grafikpass 3 §2.3, optional): Füllfarbe des Dunkel-Overlays statt fix
+  // '#050510' — main.js reicht mapDef.ambientTint durch (Farbtemperatur je Map).
+  // Fehlt tint, bleibt der bisherige leicht-blaue Default.
+  function draw(ctx, camera, lights, ambient, timeSec, tint) {
     if (!(ambient > 0)) return;
     ensureOffscreen(ctx);
 
@@ -42,7 +45,7 @@ export function createLighting(viewW, viewH) {
     octx.globalCompositeOperation = 'source-over';
     octx.clearRect(0, 0, viewW, viewH);
     octx.globalAlpha = ambient;
-    octx.fillStyle = '#050510'; // fast schwarz, leicht blau
+    octx.fillStyle = tint || '#050510'; // Farbtemperatur der Map (§2.3), Default fast schwarz/blau
     octx.fillRect(0, 0, viewW, viewH);
 
     octx.globalCompositeOperation = 'destination-out';
@@ -77,10 +80,19 @@ export function createLighting(viewW, viewH) {
 
     // Grafikpass 2 §8a.1: additiver Warm-Glow-Pass, AUSSCHLIESSLICH für stark
     // flackernde Lichter (flicker >= 0.8 = nur Fackeln; Spieler/Drops/Eliten
-    // liegen bei 0.3). Radialer Gradient in Fackel-Orange (#d8722a), Alpha-
-    // Spitze 0.15, composite 'lighter'. Rein additiv auf den Haupt-ctx — die
-    // Dunkelheits-Logik oben (Offscreen-Stanzen) bleibt unangetastet.
-    // save/restore, damit weder Composite-Modus noch fillStyle nach außen lecken.
+    // liegen bei 0.3). Radialer Gradient in Fackel-Orange (#d8722a), composite
+    // 'lighter'. Rein additiv auf den Haupt-ctx — die Dunkelheits-Logik oben
+    // (Offscreen-Stanzen) bleibt unangetastet. save/restore, damit weder
+    // Composite-Modus noch fillStyle nach außen lecken.
+    //
+    // Grafikpass 3 §2.3 Schmier-Diagnose (Juror-Befund R3): Der weiche
+    // "Schatten-Blob" in den Katakomben-Shots war NICHT der Vignette, sondern
+    // DIESER Warm-Glow: Radius == voller Fackel-Radius (72 px → 144 px Durchmesser)
+    // mit Mittel-Stop erst bei 0.5 ergab einen breiten, diffusen Orange-Teppich,
+    // der auf dem near-black Boden als verwaschener Fleck las (mehrere Fackeln
+    // ueberlagert = smeariger Blob). FIX: (1) Glow-Radius auf 0.6× kappen (gr),
+    // (2) Gradient-Stops straffen (Abfall schon bei 0.4), (3) Alpha-Spitze 0.15→0.13.
+    // Der harte, posterisierte Stanz-Lichtkegel oben bleibt unveraendert scharf.
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const light of lights) {
@@ -96,13 +108,14 @@ export function createLighting(viewW, viewH) {
       ) continue;
       const cx = Math.round(light.x - camera.x);
       const cy = Math.round(light.y - camera.y);
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, 'rgba(216,114,42,0.15)');
-      grad.addColorStop(0.5, 'rgba(216,114,42,0.06)');
+      const gr = r * 0.6; // §2.3: Glow-Radius kappen (kein breiter Teppich mehr)
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+      grad.addColorStop(0, 'rgba(216,114,42,0.13)');
+      grad.addColorStop(0.4, 'rgba(216,114,42,0.04)');
       grad.addColorStop(1, 'rgba(216,114,42,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, gr, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

@@ -64,11 +64,12 @@ export const PALETTE = {
   T: '#434a55', // Katakomben-Stein mittel
   L: '#687180', // Katakomben-Stein hell (Kanten, Licht)
   D: '#949eae', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
-  // Ghul-Fleisch (grünlich-fahl, aufgedunsen): d -> G -> H -> 3
-  d: '#4c5a3a', // Ghul-Fleisch dunkel
-  G: '#75855a', // Ghul-Fleisch mittel
-  H: '#a9b287', // Ghul-Fleisch hell (fahle Haut)
-  3: '#c9cfa6', // Ghul-Fleisch Spitzlicht (NEU 1.5, Schädel/Schultern)
+  // Ghul-Fleisch (GFX3 §3.4: krankhaftes Gelbgrün statt Hecken-Grün; +Rot,
+  // -Blau, Helligkeit je <=5% gehalten -> aufgedunsen, fiebrig): d -> G -> H -> 3
+  d: '#585a2c', // Ghul-Fleisch dunkel (sanktionierte Hue-Verschiebung)
+  G: '#82854c', // Ghul-Fleisch mittel
+  H: '#b0b478', // Ghul-Fleisch hell (fahle, kränkliche Haut)
+  3: '#cbd090', // Ghul-Fleisch Spitzlicht (Schädel/Schultern)
   // Holz/Leder (Truhe, Vase, Stiefel): n -> q -> j -> Q -> J
   q: '#3a291d', // Holz dunkel
   j: '#553b26', // Holz mittel (NEU 1.5, Zwischenton q->Q)

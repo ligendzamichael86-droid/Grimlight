@@ -81,6 +81,18 @@ export function fringeOverlays(getDef, tx, ty) {
   corner(-1, -1, 'nw', n, w);
   corner(1, 1, 'se', s, e);
   corner(-1, 1, 'sw', s, w);
+  // Grafikpass 3 §2.1 Nassrand (additiv): Traegt das TARGET-Tile shorePrefix UND
+  // stammt der orthogonale Source-Nachbar aus dem 'moss'-Set, werden die
+  // moss_fringe_*-Keys (oben) WEITERHIN emittiert und ZUSAETZLICH danach
+  // shorePrefix_n/e/s/w (nur Orthogonale) — die dunkle Nasskante am Gruft-Kanal
+  // ueber den Moos-Ufern. Das grass-Quell-Verhalten (shore_*-Umlenkung via
+  // prefix()) bleibt exakt wie in GP2. FLUESTERGRUFT-'~' traegt shorePrefix 'wet'.
+  if (def.shorePrefix) {
+    if (n === 'moss') out.push(`${def.shorePrefix}_n`);
+    if (e === 'moss') out.push(`${def.shorePrefix}_e`);
+    if (s === 'moss') out.push(`${def.shorePrefix}_s`);
+    if (w === 'moss') out.push(`${def.shorePrefix}_w`);
+  }
   return out;
 }
 
@@ -310,14 +322,22 @@ export function createTilemap(rows, legend, overRows = null) {
     // Über-Layer: Startfenster nach links/oben um (maxSpan-1) erweitern, damit
     // Anker knapp außerhalb ihre in den Viewport ragenden Kronen zeichnen
     // (§2.3). Der Ground-Layer bleibt strikt 1x1.
-    const tyStart = over ? Math.max(0, ty0 - (maxSpanH - 1)) : ty0;
+    // Grafikpass 3 §2.1: das obere Kronen-Culling um 1 Tile ZUSAETZLICH weiten —
+    // der Anker-Jitter (bis +2 px nach unten) kann einen Anker eine Zeile ueber
+    // dem Viewport knapp in ihn hineinschieben.
+    const tyStart = over ? Math.max(0, ty0 - (maxSpanH - 1) - 1) : ty0;
     const txStart = over ? Math.max(0, tx0 - (maxSpanW - 1)) : tx0;
     for (let ty = tyStart; ty <= ty1; ty++) {
       for (let tx = txStart; tx <= tx1; tx++) {
         const def = over ? overCells[ty][tx] : cells[ty][tx];
         if (!def) continue;
         const sx = Math.round(tx * TILE - camX);
-        const sy = Math.round(ty * TILE - camY);
+        let sy = Math.round(ty * TILE - camY);
+        // Grafikpass 3 §2.1 Anker-Jitter: Span-Anker (Kronen) im Over-Layer
+        // bekommen einen deterministischen vertikalen Pixel-Versatz -2..+2, damit
+        // Baumreihen als Einzelbaeume lesen und nicht auf einer Linie sitzen.
+        // Rein deterministisch (variantIndex), Ground-Layer unberuehrt.
+        if (over && def.span) sy += variantIndex(tx, ty, 5) - 2;
         const img = tileCanvases[artFor(def, tx, ty, timeSec)];
         if (img) ctx.drawImage(img, sx, sy);
         if (!over && def.fringeTarget) {

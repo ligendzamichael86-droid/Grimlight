@@ -61,7 +61,9 @@ export const BOSS_KAMMER = {
   portals: [
     { ...tileRect(9, 10, 2, 1), target: 'FLUESTERGRUFT', spawn: tc(20, 20), bossLocked: true },
   ],
-  ambient: 0.7,           // §8b.4 wollte 0.66, ZURUECKGENOMMEN: Flusstest check_boss_slice3.mjs asserted 0.7 (Eiserne Regel §0.3 > §8b.4)
+  ambient: 0.66,          // Grafikpass 3 §4.2: 0.70 -> 0.66 (jetzt UMGESETZT; die fuenf sanktionierten check_boss_slice3.mjs-Zeilen sind laut §5.1 mitgezogen)
+  // Grafikpass 3 §2.3/§4.2: rotbraune Drohung (Boss-Arena).
+  ambientTint: '#120608',
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],
