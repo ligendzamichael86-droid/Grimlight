@@ -363,6 +363,31 @@ Art-Fixer-Runden: nur art/; Engine-Nacharbeiten nur via Hauptloop-Mandat.
 Schnittstelle: Key-Namen/Maße aus §3 eingefroren; Doppelanlage → Besitzer
 gewinnt, Inhalt = wörtlich Spec.
 
+## 8c. Runde-2-Entscheidungen des Hauptloops (nach Jury R1, Median 5,5)
+
+Jury R1 (neue Skala): 6 / 5,5 / 5,5 → Median 5,5. Vollständiges Ergebnis
+und konsolidierte Anweisungen: design/GP3_RUNDE1_JURY.md (BINDEND für
+Runde 2, Anweisungen 1-10). Zusätzliche Entscheide:
+
+1. **player_* GEÖFFNET (nur Pixel, alle Maße/Posen/Frame-Zahlen fix):**
+   Gesicht (2 px dunkle Augenlinie, 1 px Wangenschatten schattenseitig)
+   und kühle 1-px-Rim-Kante an Schultern/Kapuze oben-links — auf ALLEN
+   player_*-Frames konsistent (die Flip-Quellen bleiben dieselben Grids;
+   keine neuen Keys).
+2. **hud.js:drawVignette GEÖFFNET (eng):** Vignette deutlich abschwächen
+   (max-Alpha runter, Innenradius größer), damit der "unmotivierte
+   Dunkel-Fleck" (2 Juroren) verschwindet; KEINE Kopplung an Lichtquellen
+   in diesem Pass (zu großer Umbau — Pass-4-Kandidat).
+3. **stone_floor-Diagnose:** Die Riss-Wiederholung in g3_03/g3_06 stammt
+   aus den stone_floor-VARIANTEN (v1/v2 tragen beide Riss-Motive und
+   liegen via variantIndex auf 1/3 der Fläche). Art: nur EINE Variante
+   behält einen dezenten Riss (gespiegelt/gedreht), die andere wird
+   Platten-Versatz/Abnutzung OHNE Riss.
+4. Boss-Arena-Lesbarkeit: dunkelste Tile-Töne unter ambient 0.66 im
+   Sheet prüfen und art-seitig anheben (keine globalen Basiston-Sprünge).
+5. Anweisung 11 aus GP3_RUNDE1_JURY.md (Spieler "steht auf dem Wasser")
+   bleibt VERTAGT (Pass 4, Struktur).
+
 ## 8. Abnahme
 
 1. check_syntax grün; Smoke 3× grün (36 Abschnitte).

@@ -10,23 +10,42 @@ export function drawHUD(ctx, player, input, gfx) {
   // (Herzen, GOLD, Trank, XP-Balken). AUSSCHLIESSLICH aus fillRect (kein
   // roundRect/strokeRect/Pfad — die Flusstest-Stubs kennen sie nicht). "Rundung"
   // per Eckabzug: die Grundflaeche aus 3 fillRects (die vier 1-px-Eckpixel bleiben
-  // frei); 1-px-Rand aus vier duennen fillRect-Streifen. Panel-Fuellung bewusst
-  // NICHT '#000' (der fadeAlpha-Detektor filtert '#000'-Vollbild-Rects). KEINE
-  // Layout-/Logik-Aenderung: alle folgenden Zeichnungen bleiben identisch platziert.
+  // frei). Panel-Fuellung bewusst NICHT '#000' (der fadeAlpha-Detektor filtert nur
+  // '#000'-VOLLBILD-Rects 320x180 — dieses Panel ist klein). KEINE Layout-/Logik-
+  // Aenderung: alle folgenden Zeichnungen bleiben identisch platziert.
+  //
+  // Runde 2 (GP3_RUNDE1_JURY.md Anweisung 7): der flache 1-Ton-Rand wird zu einem
+  // 2-Ton-Bevel — hell '#575061' Alpha 0.5 oben+links (Lichtkante oben-links),
+  // dunkel '#14101a' Alpha 0.6 unten+rechts (Eigenschatten); die vier Eckpixel
+  // bleiben abgeschraegt (frei). Zusaetzlich ein 1-px-Schlagschatten ('#000'
+  // Alpha 0.3) als L-Form unten+rechts HINTER dem Panel. Die Schatten-Rects sind
+  // klein (54x1 bzw. 1x40), also KEIN Vollbild -> der fadeAlpha-Detektor der
+  // Flusstests (verlangt args[2]===320 && args[3]===180) greift NICHT. Alles
+  // weiterhin fillRect-only.
   {
     const px = 2, py = 2, pw = 54, ph = 40;
     ctx.save();
+    // 1-px-Schlagschatten unten+rechts, hinter dem Panel (nicht vollbild)
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px + 1, py + ph, pw, 1);         // Schatten unter der Unterkante (1 px nach rechts versetzt)
+    ctx.fillRect(px + pw, py + 1, 1, ph);         // Schatten rechts der rechten Kante (1 px nach unten versetzt)
+    // Grundflaeche (3 fillRects, vier Eckpixel frei = abgeschraegt)
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(px, py + 1, pw, ph - 2);        // Mittelband (volle Breite)
+    ctx.fillRect(px, py + 1, pw, ph - 2);         // Mittelband (volle Breite)
     ctx.fillRect(px + 1, py, pw - 2, 1);          // obere Zeile (Ecken frei)
     ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // untere Zeile (Ecken frei)
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#3a3542';
-    ctx.fillRect(px + 1, py, pw - 2, 1);          // Rand oben
-    ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // Rand unten
-    ctx.fillRect(px, py + 1, 1, ph - 2);          // Rand links
-    ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Rand rechts
+    // 2-Ton-Bevel: hell oben+links (Lichtkante)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#575061';
+    ctx.fillRect(px + 1, py, pw - 2, 1);          // Bevel oben (hell)
+    ctx.fillRect(px, py + 1, 1, ph - 2);          // Bevel links (hell)
+    // 2-Ton-Bevel: dunkel unten+rechts (Eigenschatten)
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // Bevel unten (dunkel)
+    ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Bevel rechts (dunkel)
     ctx.restore();
   }
 
@@ -224,13 +243,21 @@ export function drawVignette(ctx) {
     vignetteCanvas.width = VIEW_W;
     vignetteCanvas.height = VIEW_H;
     const vctx = vignetteCanvas.getContext('2d');
+    // Runde 2 (§8c.2, GP3_RUNDE1_JURY.md Anweisung 9): die Vignette las in den
+    // Katakomben (g3_03/g3_06) als unmotivierter zentraler Dunkel-Fleck. Deutlich
+    // abgeschwaecht: Innenradius 60 -> 90 (die gesamte Bildmitte bleibt jetzt klar
+    // transparent, kein Fleck mehr), max-Alpha 0.75 -> 0.45, Mittel-Stop weicher
+    // (0.6/0.35 -> 0.55/0.14). Aussenradius 200 -> 190 (knapp an die Bild-Ecken
+    // r~184 herangezogen, damit die Ecken die max-Deckung ~0.42 wirklich erreichen
+    // und ein DEZENTER Rand-Fokus bleibt, statt ihn ueber die Ecken hinaus zu
+    // verschmieren). KEINE Kopplung an Lichtquellen in diesem Pass (Pass-4-Kandidat).
     const grad = vctx.createRadialGradient(
-      VIEW_W / 2, VIEW_H / 2, 60,
-      VIEW_W / 2, VIEW_H / 2, 200
+      VIEW_W / 2, VIEW_H / 2, 90,
+      VIEW_W / 2, VIEW_H / 2, 190
     );
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.6, 'rgba(6,4,10,0.35)');
-    grad.addColorStop(1, 'rgba(4,2,8,0.75)');
+    grad.addColorStop(0.55, 'rgba(6,4,10,0.14)');
+    grad.addColorStop(1, 'rgba(4,2,8,0.45)');
     vctx.fillStyle = grad;
     vctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }

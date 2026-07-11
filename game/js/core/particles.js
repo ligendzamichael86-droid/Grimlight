@@ -11,7 +11,8 @@
 // Modell: createParticles() → { list, spawnEmbers(x,y,dt), update(dt), draw(ctx,camera) }
 // - Funken 1-2 px, Töne o/y/1 (Palette: Orange → Gelb → Flammenkern).
 // - steigen 6-12 px/s (Screen-y sinkt), leichte Sinus-Drift seitlich.
-// - Lebensdauer 1,2-2,5 s; globalAlpha blendet in der zweiten Lebenshälfte aus.
+// - Lebensdauer 1,2-2,5 s; globalAlpha faded ueber die letzten ~40 % in 3 Stufen aus.
+// - Groessenmix ~60 % 1 px / 40 % 2 px (Runde 2).
 // - Obergrenze HART: 60 Partikel gesamt (Mobile-Budget).
 
 import { PALETTE } from '../art/palette.js';
@@ -42,7 +43,7 @@ export function createParticles() {
       phase: Math.random() * Math.PI * 2,
       amp: 2 + Math.random() * 3,            // Sinus-Drift-Amplitude (px)
       freq: 2 + Math.random() * 2,           // Sinus-Drift-Frequenz
-      size: Math.random() < 0.5 ? 1 : 2,     // 1-2 px
+      size: Math.random() < 0.6 ? 1 : 2,     // Groessenmix ~60 % 1 px / 40 % 2 px (Runde 2, Anweisung 8)
       hex: EMBER_HEX[tone],
     });
   }
@@ -64,9 +65,16 @@ export function createParticles() {
     ctx.save();
     for (const p of list) {
       const t = p.age / p.life;
-      // erste Lebenshälfte volle Deckung, danach linear ausblenden (das IST der
-      // moderne Teil — globalAlpha, kein Dither).
-      const alpha = t < 0.5 ? 1 : Math.max(0, 1 - (t - 0.5) * 2);
+      // Runde 2 (GP3_RUNDE1_JURY.md Anweisung 8): die ersten 60 % volle Deckung,
+      // dann ueber die letzten ~40 % der Lebenszeit in 3 DISKRETEN Alpha-Stufen
+      // ausfaden (0.66 -> 0.4 -> 0.18). Der Funke ZERFAELLT stufig, statt weich
+      // oder abrupt zu poppen; das Ausfaden faellt bei steigenden Funken raeumlich
+      // ins obere Drittel des Aufstiegs. globalAlpha (kein Dither) = der moderne Teil.
+      let alpha = 1;
+      if (t >= 0.6) {
+        const f = (t - 0.6) / 0.4;                 // 0..1 ueber die letzten 40 %
+        alpha = f < 1 / 3 ? 0.66 : f < 2 / 3 ? 0.4 : 0.18;
+      }
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.hex;
       const sx = Math.round(p.x - camera.x);

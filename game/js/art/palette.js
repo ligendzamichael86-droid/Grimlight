@@ -14,7 +14,9 @@ export const PALETTE = {
   // 'e' und trägt die Unterseite/Kern-Pockets der Großkronen (Volumen).
   0: '#0f1a12', // Laub sehr dunkel (Kronen-Tiefenton, Gfx2)
   // Gras (entsättigt, Friedhof): e -> E -> a -> K -> m -> A
-  e: '#17211a', // Gras sehr dunkel (Basiston)
+  e: '#19241d', // Gras sehr dunkel (Basiston). GP3-R2 JURY-3: +9% angehoben
+  //             (Farbton gehalten, uniforme Skalierung) — Gras-Ecken clippen
+  //             nicht mehr auf Fast-Schwarz unterm Lichtsystem. Sanktioniert.
   E: '#253522', // Gras dunkel (Slice 1.5 R1: angehoben, überlebt das Licht)
   a: '#394d30', // Gras mittel (Gfx2-R2 §8a.2: +12% aufgehellt, Farbton gehalten)
   m: '#506341', // Moos / Grasbüschel hell (Gfx2-R2 §8a.2: +11% aufgehellt)
@@ -60,7 +62,9 @@ export const PALETTE = {
   //             Kräusel UND Tiefen-Overlays; bleibt klar unter Sprite-Helligkeit)
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
   // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
-  t: '#262a31', // Katakomben-Stein dunkel (Bodenbasis)
+  t: '#2a2e36', // Katakomben-Stein dunkel (Bodenbasis). GP3-R2 §8c.4: +10%
+  //             angehoben (Farbton gehalten) — Boss-Arena-Boden unter ambient
+  //             0.66 säuft nicht mehr ins Fast-Schwarz. Sanktioniert (10%-Rahmen).
   T: '#434a55', // Katakomben-Stein mittel
   L: '#687180', // Katakomben-Stein hell (Kanten, Licht)
   D: '#949eae', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
