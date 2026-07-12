@@ -59,12 +59,18 @@ const FLUESTERGRUFT_LEGEND = {
   '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
   ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true },
-  // Grafikpass 3 §2.2: nahtloser 4-Frame-Wasserzyklus (kein Ping-Pong mehr).
+  // Grafikpass 3 §2.2 + GP3-R3 (M-K3a): der GRUFTKANAL FLIESST VERTIKAL — die
+  // Legende lenkt '~' vom horizontalen water-Zyklus auf den VERTIKALEN water_v-
+  // Zyklus um (art:'water_v', anim water_v_0..3; Abwaertsdrift art-gebacken als
+  // vertikaler Phasenversatz ueber die 4 Frames). animRate/animSync IDENTISCH zum
+  // horizontalen Zyklus (Engine/tilemap.js UNVERAENDERT). Der Friedhofsteich
+  // (GRAVEYARD, eigene Map/Legende) bleibt horizontal. depthOverlays/shorePrefix
+  // haengen an Legenden-Flags, NICHT am 'water'-Praefix -> unveraendert gueltig.
   // §2.1/§4.1: shorePrefix 'wet' — am Gruft-Kanal legt die Engine ZUSAETZLICH zu
   // den moss_fringe_*-Ufern eine additive wet_n/e/s/w-Nasskante ueber die
   // Moos-Uferkanten (nur Orthogonale). Wasser hier BEGEHBAR (solid:false).
   // §8b.1: depthOverlays wie im Friedhofsteich (Ufer flach, naechster Ring mittel).
-  '~': { art: 'water', solid: false, fringeTarget: true, shorePrefix: 'wet', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
+  '~': { art: 'water_v', solid: false, fringeTarget: true, shorePrefix: 'wet', anim: ['water_v', 'water_v_1', 'water_v_2', 'water_v_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },

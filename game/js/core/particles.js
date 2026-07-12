@@ -13,6 +13,9 @@
 // - steigen 6-12 px/s (Screen-y sinkt), leichte Sinus-Drift seitlich.
 // - Lebensdauer 1,2-2,5 s; globalAlpha faded ueber die letzten ~40 % in 3 Stufen aus.
 // - Groessenmix ~60 % 1 px / 40 % 2 px (Runde 2).
+// - Runde 3 (M-K6a): Spawn-Dichte ~2-3x (SPAWN_RATE 3->8) und jeder Funke mit
+//   2-px additivem Glow-Halo (warmes Orange, Alpha 40 %, 'lighter') umhuellt,
+//   damit die Funken gluehen statt Einzelpunkte zu sein.
 // - Obergrenze HART: 60 Partikel gesamt (Mobile-Budget).
 
 import { PALETTE } from '../art/palette.js';
@@ -21,7 +24,13 @@ const MAX_PARTICLES = 60;
 const EMBER_TONES = ['o', 'y', '1']; // Fackel-Orange, Fackel-Gelb, Flammen-Kern
 // Fallback-Hex, falls ein Ton fehlt (defensiv; die Töne existieren in PALETTE).
 const EMBER_HEX = EMBER_TONES.map((t) => PALETTE[t] || '#f0bf4e');
-const SPAWN_RATE = 3; // ~2-4 Funken/s pro sichtbarer Fackel (Mitte des Fensters)
+// Warmes Orange fuer den additiven Glow-Halo (Runde 3, M-K6a). PALETTE['o'] =
+// Fackel-Orange (#d8722a), unabhaengig vom Kern-Ton des einzelnen Funkens.
+const HALO_HEX = PALETTE['o'] || '#d8722a';
+// Runde 3 (M-K6a): Dichte ~2,7x der R2-Rate 3 -> ~6-9 Funken/s pro sichtbarer
+// Fackel. Der harte Deckel MAX_PARTICLES=60 bleibt unveraendert (Smoke §36 prueft
+// ihn spawnraten-unabhaengig ueber die length-Guard, nicht ueber diese Rate).
+const SPAWN_RATE = 8;
 
 export function createParticles() {
   const list = [];
@@ -75,10 +84,22 @@ export function createParticles() {
         const f = (t - 0.6) / 0.4;                 // 0..1 ueber die letzten 40 %
         alpha = f < 1 / 3 ? 0.66 : f < 2 / 3 ? 0.4 : 0.18;
       }
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.hex;
       const sx = Math.round(p.x - camera.x);
       const sy = Math.round(p.y - camera.y);
+      // Runde 3 (M-K6a): 2-px additiver Glow-Halo (warmes Orange) um jeden Funken,
+      // damit sie gluehen statt Einzelpunkte zu sein. 'lighter'-Composite = echtes
+      // additives Aufhellen ueberlappender Halos; Alpha = 0,4 * der bestehenden
+      // 3-Stufen-Blende, der Halo faedet also mit dem Kern aus. fillRect-only; der
+      // Halo-Kasten ist um 1 px pro Seite groesser als der Kern (1-px-Kern -> 3x3).
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.fillStyle = HALO_HEX;
+      ctx.fillRect(sx - 1, sy - 1, p.size + 2, p.size + 2);
+      // 1-px-Kern (Groessenmix 1-2 px aus R2 unveraendert) ueber dem Halo, normal
+      // geblendet, damit der Funke einen scharfen Kern behaelt.
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.hex;
       ctx.fillRect(sx, sy, p.size, p.size);
     }
     ctx.restore();

@@ -56,16 +56,23 @@ export const PALETTE = {
   h: '#c29267', // Haut
   2: '#8f6647', // Haut-Schatten (NEU 1.5, Kapuzenschatten im Gesicht)
   // Wasser: w -> W -> 9 -> C (+ i als Glanzkante)
-  w: '#0d141b', // Wasser sehr dunkel (R1: kein Reinschwarz mehr)
-  W: '#1a2e3e', // Wasser mittel (R2: kälter und deutlich heller als w)
-  9: '#2e5568', // Wasser-Zwischenblau (Gfx2-R3 §8b.2: heller+gesättigter für
-  //             Kräusel UND Tiefen-Overlays; bleibt klar unter Sprite-Helligkeit)
+  // GP3-R3 (JURY Wasser, Prioritaet 1): Grundton 8-10% Richtung Gruen-Teal
+  // gezogen (weg vom kalten Blaugrau-Fremdkoerper in der warmgruenen Palette,
+  // M-K3c), Spitzen-Helligkeit/Saettigung um ~9% gesenkt (H-K5) -> Wasser ist
+  // NICHT mehr der hellste Ton im Frame. Alle drei nur wasser-/ufer-genutzt.
+  w: '#0c1815', // Wasser sehr dunkel (R3: teal-Verschiebung, kein Reinschwarz)
+  W: '#1a3438', // Wasser mittel (R3: teal statt kaltblau, heller als w)
+  9: '#284e54', // Wasser-Zwischenblau/Ripple-Kamm (R3: -9% Helligkeit+Saettigung,
+  //             teal; Kraeusel UND Tiefen-Overlays; klar unter Sprite-Helligkeit)
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
   // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
   t: '#2a2e36', // Katakomben-Stein dunkel (Bodenbasis). GP3-R2 §8c.4: +10%
   //             angehoben (Farbton gehalten) — Boss-Arena-Boden unter ambient
   //             0.66 säuft nicht mehr ins Fast-Schwarz. Sanktioniert (10%-Rahmen).
-  T: '#434a55', // Katakomben-Stein mittel
+  T: '#4a4a45', // Katakomben-Stein mittel. GP3-R3 (M-K5b/Palette-5): blauen Kalt-
+  //             Cast entzogen, Hauch waermer -> gemeinsamer warmer Mittelton mit
+  //             dem Friedhof-Erdweg (M/P) = Paletten-Verwandtschaft, kein neues
+  //             Tile. Luminanz gehalten (Boss-Arena-Lesbarkeit unter ambient 0.66).
   L: '#687180', // Katakomben-Stein hell (Kanten, Licht)
   D: '#949eae', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
   // Ghul-Fleisch (GFX3 §3.4: krankhaftes Gelbgrün statt Hecken-Grün; +Rot,

@@ -102,21 +102,54 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillRect(5, 37, Math.round(24 * frac), 1); // Fuellung Stein-Hell
   }
 
-  // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x5 bei (120,8),
-  // Rahmen #3a3542, Grund #14101a, Fuellung #ae2f2a, zwei 1-px-Kerben bei
-  // 2/3 und 1/3. Kein Namenstext (der Name kommt als Toast).
+  // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x8 bei (120,7).
+  // Runde 3 (H-K6): 2-px dunkler Rahmen, 1-px Innenbevel (hell oben-links,
+  // dunkel unten-rechts), Vertikal-Gradient aus 3 fillRect-Baendern (helleres
+  // oberes Drittel), Segment-Ticks bei 25/50/75 % und eine entsaettigte
+  // 'verlorene HP'-Rinne hinter der aktuellen Fuellung. AUSSCHLIESSLICH fillRect
+  // (keine strokeRect/arc/Gradient-Objekte). Bar bleibt in drawHUD NACH
+  // lighting.draw, damit der ambientAlpha-Detektor der Boss-Flusstests (erstes
+  // Teilalpha-fillRect auf dem Lighting-Offscreen, NICHT auf dem Haupt-Canvas)
+  // unberuehrt bleibt. Keine Gameplay-Werte (bb.hp/bb.maxHp nur gelesen).
+  // Kein Namenstext (der Name kommt als Toast).
   const bb = player.bossBar;
   if (bb) {
-    ctx.fillStyle = '#3a3542';
-    ctx.fillRect(120, 8, 80, 5);
+    const bx = 120, by = 7, bw = 80, bh = 8;              // Aussenmasse
+    const ix = bx + 2, iy = by + 2, iw = bw - 4, ih = bh - 4; // Innenflaeche 122,9,76,4
+    ctx.save();
+    // 2-px dunkler Rahmen (Vollflaeche; die Innenflaeche wird darueber neu gefuellt)
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#14101a';
-    ctx.fillRect(121, 9, 78, 3);
-    const bw = Math.max(0, Math.round((78 * bb.hp) / bb.maxHp));
-    ctx.fillStyle = '#ae2f2a';
-    ctx.fillRect(121, 9, bw, 3);
+    ctx.fillRect(bx, by, bw, bh);
+    // entsaettigte 'verlorene HP'-Rinne ueber die volle Innenbreite (dahinter)
+    ctx.fillStyle = '#5a3936';
+    ctx.fillRect(ix, iy, iw, ih);
+    // aktuelle HP-Fuellung als 3-Band-Vertikal-Gradient (oberes Drittel heller)
+    const fw = Math.max(0, Math.round((iw * bb.hp) / bb.maxHp));
+    if (fw > 0) {
+      ctx.fillStyle = '#c9463b';                 // oberes Drittel: heller
+      ctx.fillRect(ix, iy, fw, 1);
+      ctx.fillStyle = '#ae2f2a';                 // Mitte: Grundton
+      ctx.fillRect(ix, iy + 1, fw, ih - 2);
+      ctx.fillStyle = '#872420';                 // unten: dunkler
+      ctx.fillRect(ix, iy + ih - 1, fw, 1);
+    }
+    // Segment-Ticks alle 25 % (1-px dunkle Vertikalen ueber die Innenhoehe)
     ctx.fillStyle = '#14101a';
-    ctx.fillRect(121 + Math.round((78 * 2) / 3), 9, 1, 3);
-    ctx.fillRect(121 + Math.round((78 * 1) / 3), 9, 1, 3);
+    for (let k = 1; k <= 3; k++) {
+      ctx.fillRect(ix + Math.round((iw * k) / 4), iy, 1, ih);
+    }
+    // 1-px Innenbevel: hell oben+links (Lichtkante)
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#575061';
+    ctx.fillRect(ix, iy, iw, 1);                 // oben (hell)
+    ctx.fillRect(ix, iy, 1, ih);                 // links (hell)
+    // 1-px Innenbevel: dunkel unten+rechts (Eigenschatten)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(ix, iy + ih - 1, iw, 1);        // unten (dunkel)
+    ctx.fillRect(ix + iw - 1, iy, 1, ih);        // rechts (dunkel)
+    ctx.restore();
   }
 
   // Item-Box oben rechts (Slice 2): erscheint erst, wenn das Inventar etwas

@@ -35,35 +35,40 @@ export { tc, tileRect };
 // F Fackel (animiert, solide), D Krypta-Treppe abwärts (begehbar, Portal).
 // Krypta-Eingang im Nordosten (x30-35, y1-4), Zugang über die Lücke bei
 // (32-33, y4).
-// Grafikpass 3 §4.3: Ground-ROWS mit deterministisch gestreuter Gras-Deko
-// (u=grass_tuft, p=pebble_small, d=dirt_patch; ~1/20 der reinen '.'-Zellen,
-// nie an Portale/Spawns/Truhen angrenzend, nie zwei Deko orthogonal benachbart).
-// Erzeugt/verifiziert via .tmp/gen_deco3.mjs (Gameplay-Neutralitaet bewiesen:
-// Soliditaets-Raster, Spawns, Portale, Fackel-Positionen byte-identisch zu 204e28f).
+// Grafikpass 3 §4.3 + GP3-R3 (K-K1a/K-K1b/H-K1): Ground-ROWS mit deterministisch
+// per Koordinaten-Hash gestreuter Gras-Deko. DREI unterscheidbare Gras-Details
+// (u=grass_tuft, j=grass_blade, k=grass_speck; je +Spiegelvariante) plus
+// p=pebble_small, d=dirt_patch und das seltene Grossdetail r=dirt_patch_v1
+// (~1/6-8 der Detail-Zellen). Detail-Dichte < 1 pro 3x3 Kacheln; nie an Portale/
+// Spawns/Truhen angrenzend, nie zwei Details orthogonal benachbart. ZUSAETZLICH
+// Makro-Patches (e): unregelmaessige begehbare dunklere Gras-Cluster ueber 2x2..3x3
+// (grass_dark_v3-Konzentration). Erzeugt/verifiziert via .tmp/gen_deco3.mjs
+// (Gameplay-Neutralitaet bewiesen: Soliditaets-Raster, Spawns, Portale, Fackel-
+// Positionen byte-identisch zu 204e28f; Span-Zeichen M/N/O/Q/V/X nur in overRows).
 const GRAVEYARD_ROWS = [
   '########################################',
-  '#TT.,..b.T.....,..p...,..s.o..######..T#',
-  '#T....o...,...,...b....p..,...#.DD.#..T#',
-  '#..G.g.h..,......G.g.h.G......#....#,.T#',
-  '#...o.........d.......s.....b.##..##..T#',
-  '#..g.G.h..d....F.....G.h.g......o.....T#',
-  '#.,....b.......==....ff...ff.........uT#',
-  '#..G.g.G..d.,..==....g.h.Gu.....G.g...T#',
-  '#....ou........==....................,T#',
-  '#T...,.........==........,...p..T..b..T#',
-  '#T.,..s........==..,..,........T......T#',
-  '#T.............==...p......o..,.......T#',
+  '#TT.,.ebeT.....,......,..s.o..######..T#',
+  '#T....o.e.,...,...b.eee...,...#.DD.#..T#',
+  '#..G.g.he.,......G.geh.G......#....#,.T#',
+  '#...o...............e.s.....b.##..##..T#',
+  '#..g.G.h..u....F.....G.h.g......o.....T#',
+  '#.,....bk......==....ff...ff.........pT#',
+  '#..G.g.G..p.,..==....g.h.G......G.gr..T#',
+  '#....o.........==.......r............,T#',
+  '#T...,.........==........,..eee.T..b.kT#',
+  '#T.,..s........==..,..,.....ee.T......T#',
+  '#T.............==....u.....oee,......kT#',
   '#=================================,...T#',
   '#=================================,...T#',
-  '#.,..b.p.F..f..f........,..s..........T#',
-  '#....G.g.....G.h...............~~~~~..T#',
-  '#..o....................,....~~~~~~~~.T#',
-  '#..,.G.h.....g.G.....u.......~~~~~~~~.T#',
-  '#u............b..,........d.F..~~~~~..T#',
-  '#T....,..........o.....Gdg............T#',
-  '#T..,..su...gdG..................,..bTT#',
-  '#TT.....b............,....o.....,....TT#',
-  '#TTT...,.....T..s...d.u...T.........TTT#',
+  '#.,..b...F..f..f........,..s..d.......T#',
+  '#ee..Gkg.....Gjh...............~~~~~..T#',
+  '#e.o........r.....e.....,....~~~~~~~~.T#',
+  '#re,.G.h..u..g.G..e..........~~~~~~~~.T#',
+  '#e.e..........b..,eee.......F..~~~~~u.T#',
+  '#Te.ee,..........o.....Gpg.......d....T#',
+  '#Te.,..s....g.G..................,..bTT#',
+  '#TTeee..b............,....o...p.,....TT#',
+  '#TTTe..,.....T..s...d.....T........uTTT#',
   '########################################',
 ];
 
@@ -96,13 +101,25 @@ const GRAVEYARD_LEGEND = {
   // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
   '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3'] },
   ',': { art: 'grass_detail', solid: false, fringeSource: true, fringeSet: 'grass' },
-  // Grafikpass 3 §3.3/§4.1/§4.3: begehbare Gras-Deko (deterministisch gestreut,
-  // .tmp/gen_deco3.mjs, ~1/20 der reinen '.'-Zellen). WIE '.'-Gras behandelt:
-  // solid:false UND fringeSource/fringeSet 'grass' — ohne fringeSource entstuenden
-  // 1-Tile-Fringe-Loecher an Weg-/Wasserkanten neben der Deko (Review-Major).
+  // Grafikpass 3 §3.3/§4.1/§4.3 + GP3-R3 K-K1a/b/H-K1: begehbare Gras-Deko,
+  // deterministisch per Hash-Noise gestreut (.tmp/gen_deco3.mjs, Details <1/9,
+  // Makro-Patches ueber 2x2..3x3). ALLE wie '.'-Gras behandelt: solid:false UND
+  // fringeSource/fringeSet 'grass' — ohne fringeSource entstuenden 1-Tile-Fringe-
+  // Loecher an Weg-/Wasserkanten neben der Deko (Review-Major).
+  // Drei unterscheidbare Gras-Detail-Sprites (K-K1a) + je Spiegel-Variante:
   'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_blade', 'grass_blade_v1'] },
+  'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_speck', 'grass_speck_v1'] },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
+  'r': { art: 'dirt_patch_v1', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['dirt_patch_v1', 'dirt_patch'] },
+  // Makro-Patch (K-K1b): unregelmaessige dunklere Gras-Cluster. Das Asset-Set hat
+  // keinen dunkler-gruenen Vollton als das Basisgras ('.' == grass_dark, #19241d,
+  // bereits der dunkelste Gruenton), daher nutzt der Makro-Layer die erdig/moosige
+  // grass_dark_v3-Konzentration als verfuegbare 2. Makro-Textur (keine neuen Art-
+  // Grids). variants[0] === art (Engine-Assert). WIE '.'-Gras: begehbar, Gras-Fringe.
+  'e': { art: 'grass_dark_v3', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark_v3', 'dirt_patch', 'grass_dark_v3'] },
   '=': { art: 'path', solid: false, fringeTarget: true, variants: ['path', 'path_v1', 'path_v2', 'path_v3'] },
   'G': { art: 'gravestone', solid: true },
   'g': { art: 'gravestone_2', solid: true },
