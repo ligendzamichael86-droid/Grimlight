@@ -6,7 +6,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { PALETTE } from '../game/js/art/palette.js';
 import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
-import { createTilemap, variantIndex } from '../game/js/world/tilemap.js';
+// (erlaubte Alt-Test-Aenderung #5, GP4-§5): fringeOverlays + litDitherCells fuer
+// die neuen Konkav-Shore-/Lit-Dither-/Back-Kronen-Tests importiert.
+import { createTilemap, variantIndex, fringeOverlays, litDitherCells } from '../game/js/world/tilemap.js';
 // Slice 3: boss.js EINMAL zentral importieren — registriert kind 'graveward'
 // im Verhaltens-Dispatch (import-reihenfolgeabhaengig, §4).
 import { createGraveward } from '../game/js/entities/boss.js';
@@ -499,6 +501,25 @@ let fightWorld = null;
   ];
   const missingG3 = gfx3Tiles.filter((k) => !TILE_ART[k]);
   check('Alle Grafikpass-3-TILE_ART-Schlüssel existieren', missingG3.length === 0, missingG3.join(','));
+  // (erlaubte Alt-Test-Aenderung #4, GP4-§5): additive Existenz-Pruefung der
+  // kompletten GP4-Interface-Liste (§3.7/§3.8/§2.8). Werden von Art-/Engine-
+  // Buildern parallel geliefert; der generische Faenger (unten) verlangt jede
+  // Legenden-art ohnehin — diese Liste deckt zusaetzlich die NICHT verlegten
+  // Rotations-/Sway-/Decal-Keys ab.
+  const gfx4Tiles = [
+    'shore_ine', 'shore_inw', 'shore_ise', 'shore_isw',
+    'licht_dither_1', 'licht_dither_2',
+    'tree_canopy_back_a', 'tree_canopy_back_b', 'tree_canopy_back_c',
+    'gravestone_4', 'gravestone_5',
+    'grass_lumahi', 'grass_lumalo',
+    'floor_decal_crack', 'floor_decal_bones',
+    'torch_2', 'torch_wall_2',
+    'grass_tuft_f1', 'grass_blade_f1',
+    'grass_tuft_r1', 'grass_blade_r1', 'grass_speck_r1',
+    'path_v4', 'path_v5',
+  ];
+  const missingG4 = gfx4Tiles.filter((k) => !TILE_ART[k]);
+  check('Alle Grafikpass-4-TILE_ART-Schlüssel existieren', missingG4.length === 0, missingG4.join(','));
   let cyc = null;
   for (const dir of ['down', 'up', 'side']) {
     for (let f = 0; f < 4; f++) if (!SPRITES[`player_${dir}_${f}`]) cyc = `player_${dir}_${f}`;
@@ -1632,6 +1653,8 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     const spanKeys = [
       'tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c',
       'tree_canopy_2x2_am', 'tree_canopy_2x2_bm', 'tree_canopy_2x2_cm',
+      // (erlaubte Alt-Test-Aenderung #3, GP4-§5): + Back-Kronen (32x32, §2.8/§3.3a).
+      'tree_canopy_back_a', 'tree_canopy_back_b', 'tree_canopy_back_c',
     ];
     let dimBad = null;
     for (const [name, grid] of Object.entries(TILE_ART)) {
@@ -1662,9 +1685,11 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   {
     let freezeBad = null;
     for (const def of [GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER]) {
-      for (const row of def.rows) for (const ch of ['M', 'N', 'O', 'Q', 'V', 'X']) if (row.includes(ch)) freezeBad = ch;
+      // (erlaubte Alt-Test-Aenderung #2, GP4-§5): + 'Y','Z','A' (Back-Kronen-Anker,
+      // nur GRAVEYARD_OVER_ROWS — duerfen wie die Front-Anker nie in Ground-rows).
+      for (const row of def.rows) for (const ch of ['M', 'N', 'O', 'Q', 'V', 'X', 'Y', 'Z', 'A']) if (row.includes(ch)) freezeBad = ch;
     }
-    check('Ground-rows-Freeze: keine M/N/O/Q/V/X-Zeichen in den vier ROWS-Arrays', freezeBad === null, freezeBad || '');
+    check('Ground-rows-Freeze: keine M/N/O/Q/V/X/Y/Z/A-Zeichen in den vier ROWS-Arrays', freezeBad === null, freezeBad || '');
   }
 
   // --- Ufer-Umlenkung (§8a.3): Wasser-Target mit shorePrefix + Gras-Nachbar
@@ -1831,7 +1856,11 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   // torch-findTiles-Positionen. Beides ist gameplay-relevant und muss trotz der
   // Deko-/Riss-/Anim-/Tint-Aenderungen byte-identisch bleiben.
   const GOLD = {
-    GRAVEYARD: { sol: '14cdbe36ad7ea26c9db037c826b6ba8b74475e529261129d41950e7cfb466b04', geo: '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e' },
+    // (erlaubte Alt-Test-Aenderung #1, GP4-§5): GRAVEYARD.sol neu erzeugt aus der
+    // sanktionierten Teich-Umformung (§2.7a, .tmp/gen_gfx4.mjs). geo BLEIBT
+    // byte-identisch (Spawns/Portale/torch-findTiles unberuehrt) — ein geo-Drift
+    // waere ein STOPP-Signal.
+    GRAVEYARD: { sol: '432b1c3217d1e70a560f98392f54fc29b021e3f86042283ee7fb5c4ec917b4a9', geo: '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e' },
     CATACOMBS: { sol: '82c22c6d845065371389f5e0ecb9ee498543740c06391b85719ada8568c4394c', geo: 'ce78746ee9e243c44d6a6bb3779c5ca535c7cee764096f8a5d29fa992269b9cb' },
     FLUESTERGRUFT: { sol: '0cca3204f83878b54c5390aa1bc9c4159424f5424b1a749d6dad4e47fc273489', geo: '2ac0a890e545869220fec7fa8256da51192c2bc4a07bc8d8d68fb7a669f6fa7c' },
     BOSS_KAMMER: { sol: 'ebe999cf1e6023c6d169fa24a205e224c1dc36e4424938063cdedf045c7d611c', geo: 'a7d72c33f00b83c8d974e5d3161ca2315b7d0a24aa77f24204f386bb558885eb' },
@@ -1869,6 +1898,111 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   try { for (let i = 0; i < 200; i++) parts.update(1 / 60); } catch (e) { partThrew = e.message; }
   check('§36 particles: update ohne Browser lauffaehig (kein Wurf)', partThrew === null, partThrew || '');
   check('§36 particles: Partikel altern und verlassen die Liste (< Obergrenze)', parts.list.length < 60, `list=${parts.list.length}`);
+}
+
+// ===========================================================================
+// (erlaubte Alt-Test-Aenderung #5, GP4-§5): drei additive NEUE Smoke-Tests.
+// ===========================================================================
+{
+  // (a) Konkav-Shore-Emission gegen die §2.1-Wahrheitstabelle. fringeOverlays
+  // ist rein: getDef(tx,ty) liefert je Nachbarschaft synthetisch das gewuenschte
+  // Legenden-Verhalten. Das Ziel-Tile (0,0) traegt shorePrefix 'shore'; ein
+  // Gras-Source-Nachbar ist { fringeSource:true, fringeSet:'grass' }.
+  const WATER = { fringeTarget: true, shorePrefix: 'shore' };
+  const GRASS = { fringeSource: true, fringeSet: 'grass' };
+  // sides: Menge der Gras-Orthoseiten (n/e/s/w). Alle anderen Zellen = null.
+  const emit = (sides) => {
+    const getDef = (tx, ty) => {
+      if (tx === 0 && ty === 0) return WATER;
+      if (tx === 0 && ty === -1 && sides.includes('n')) return GRASS;
+      if (tx === 1 && ty === 0 && sides.includes('e')) return GRASS;
+      if (tx === 0 && ty === 1 && sides.includes('s')) return GRASS;
+      if (tx === -1 && ty === 0 && sides.includes('w')) return GRASS;
+      return null;
+    };
+    return fringeOverlays(getDef, 0, 0);
+  };
+  // 1 Seite -> Bestands-Ortho-Key (byte-gleich), KEIN i-Key.
+  check('§5#5a Shore: genau 1 Seite (N) -> shore_n, kein Konkav-Key',
+    JSON.stringify(emit(['n'])) === JSON.stringify(['shore_n']));
+  check('§5#5a Shore: genau 1 Seite (W) -> shore_w, kein Konkav-Key',
+    JSON.stringify(emit(['w'])) === JSON.stringify(['shore_w']));
+  // 2 ADJAZENTE Seiten -> NUR der Konkav-Key (ERSETZUNGS-Fall, keine Ortho-Keys).
+  const adjCases = [
+    [['n', 'e'], 'shore_ine'], [['n', 'w'], 'shore_inw'],
+    [['s', 'e'], 'shore_ise'], [['s', 'w'], 'shore_isw'],
+  ];
+  for (const [sides, key] of adjCases) {
+    const out = emit(sides);
+    check(`§5#5a Shore: 2 adjazente Seiten ${sides.join('+')} -> NUR ${key} (Ersetzung)`,
+      out.length === 1 && out[0] === key && !out.some((k) => /^shore_[nesw]$/.test(k)),
+      JSON.stringify(out));
+  }
+  // 2 OPPONIERTE Seiten -> Bestand (beide Ortho-Keys, KEIN i-Key).
+  const ns = emit(['n', 's']);
+  check('§5#5a Shore: 2 opponierte Seiten N+S -> beide Ortho-Keys, kein Konkav-Key',
+    ns.includes('shore_n') && ns.includes('shore_s') && !ns.some((k) => /_in[ew]$|_is[ew]$/.test(k)),
+    JSON.stringify(ns));
+  const ew = emit(['e', 'w']);
+  check('§5#5a Shore: 2 opponierte Seiten E+W -> beide Ortho-Keys, kein Konkav-Key',
+    ew.includes('shore_e') && ew.includes('shore_w') && !ew.some((k) => /_in[ew]$|_is[ew]$/.test(k)),
+    JSON.stringify(ew));
+
+  // (b) litDitherCells-Determinismus (Import aus tilemap.js) + Stufen-Radien.
+  const lights = [{ x: 40, y: 40, radius: 40, flicker: 0.5 }, { x: 120, y: 88, radius: 52, flicker: 0.8 }];
+  const camera = { x: 0, y: 0 };
+  const a = litDitherCells(lights, camera, 1.234, 320, 180);
+  const b = litDitherCells(lights, camera, 1.234, 320, 180);
+  check('§5#5b litDither: gleiche Args -> identische Liste (deterministisch)',
+    JSON.stringify(a) === JSON.stringify(b) && a.length > 0);
+  // Stufen-Radien: eine Zelle im Kern (dist < r*0.45) ist Stufe 2, eine im
+  // Aussenring (r*0.45 <= dist < r*0.75) ist Stufe 1. Einzelne ruhige Fackel
+  // (flicker 0) fuer exakte Radien.
+  const one = [{ x: 40, y: 40, radius: 40, flicker: 0 }];
+  const cells = litDitherCells(one, { x: 0, y: 0 }, 0, 320, 180);
+  const at = (tx, ty) => cells.find((c) => c.tx === tx && c.ty === ty);
+  // Tile (2,2) Zentrum (40,40) == Fackel -> dist 0 < 18 -> Stufe 2.
+  check('§5#5b litDither: Zellzentrum auf der Fackel -> Stufe 2 (dist < r*0.45)',
+    !!at(2, 2) && at(2, 2).stufe === 2);
+  // r*0.45 = 18, r*0.75 = 30. Tile (0,2): Zentrum (8,40), dist=32 >= 30 -> keine
+  // Zelle. Tile (1,2): Zentrum (24,40), dist=16 < 18 -> Stufe 2. Tile (2,0):
+  // Zentrum (40,8), dist=32 -> keine. Suche eine Stufe-1-Zelle (18<=dist<30):
+  const stufe1 = cells.find((c) => c.stufe === 1);
+  check('§5#5b litDither: Aussenring liefert Stufe-1-Zellen (r*0.45 <= dist < r*0.75)',
+    !!stufe1);
+  // keine Zelle ausserhalb r*0.75.
+  const anyBadRadius = cells.some((c) => {
+    const cx = c.tx * 16 + 8, cy = c.ty * 16 + 8;
+    const d = Math.hypot(cx - 40, cy - 40);
+    return d >= 40 * 0.75 + 1e-9;
+  });
+  check('§5#5b litDither: keine Zelle jenseits r*0.75', !anyBadRadius);
+  check('§5#5b litDither: key via variantIndex(tx,ty,2) -> licht_dither_1/_2',
+    cells.every((c) => c.key === (variantIndex(c.tx, c.ty, 2) === 0 ? 'licht_dither_1' : 'licht_dither_2')));
+
+  // (c) Back-Kronen-Z-Ordnung: Back-Anker (Y) EINE Zeile ueber dem Front-Anker (M)
+  // muss VOR ihm gezeichnet werden (frueheres ty -> frueher im Draw-Loop -> Front
+  // uebermalt Back). Reine Render-Reihenfolge ueber den Over-Pass.
+  {
+    const N = 10;
+    const gRows = Array.from({ length: N }, () => '.'.repeat(N));
+    const oGrid = Array.from({ length: N }, () => Array(N).fill('.'));
+    oGrid[4][4] = 'Y'; // Back-Anker eine Zeile ueber ...
+    oGrid[5][4] = 'M'; // ... dem Front-Anker
+    const legend = {
+      '.': { art: 'grass' },
+      Y: { art: 'tree_canopy_back_a', span: [2, 2], solid: false },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+    };
+    const tmZ = createTilemap(gRows, legend, oGrid.map((r) => r.join('')));
+    const order = [];
+    const ctxZ = { canvas: { width: N * 16, height: N * 16 }, drawImage: (img) => order.push(img) };
+    tmZ.draw(ctxZ, { x: 0, y: 0 }, { tree_canopy_back_a: 'B', tree_canopy_2x2_a: 'F' }, 0, 'over');
+    const iBack = order.indexOf('B');
+    const iFront = order.indexOf('F');
+    check('§5#5c Back-Kronen: Back-Anker zeichnet VOR dem Front-Anker (Z-Ordnung)',
+      iBack >= 0 && iFront >= 0 && iBack < iFront, `back=${iBack} front=${iFront}`);
+  }
 }
 
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);

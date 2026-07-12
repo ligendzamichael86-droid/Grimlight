@@ -117,8 +117,38 @@ export function createLighting(viewW, viewH) {
       ctx.beginPath();
       ctx.arc(cx, cy, gr, 0, Math.PI * 2);
       ctx.fill();
+
+      // Grafikpass 4 §2.3: (a) flacher Boden-Glow an der Fackelbasis (EIN kleiner
+      // ~10 px Kreis leicht unter dem Fackelzentrum — die Draufsicht liest ihn
+      // ausreichend oval, keine Zwei-Kreis-"Erdnuss"), Spitzen-Stop max 0.15->0,
+      // pulsierend ueber den vorhandenen Doppel-Sinus (wob in ~[-1..1]).
+      const pulse = 0.75 + 0.25 * wob;               // ~[0.5 .. 1.0]
+      const baseY = cy + 5;                          // Fackelbasis liegt unter der Flamme
+      const bg = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, 10);
+      bg.addColorStop(0, `rgba(216,150,70,${(0.15 * pulse).toFixed(3)})`);
+      bg.addColorStop(1, 'rgba(216,150,70,0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.arc(cx, baseY, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      // (b) 2-3 px weiss-gelber Flammenkern-Hotspot (Radial ~3 px, Stops ~0.5->0),
+      // pulsierend wie der Boden-Glow. Sitzt knapp ueber dem Zentrum (Flammenkern).
+      const hotY = cy - 3;
+      const hs = ctx.createRadialGradient(cx, hotY, 0, cx, hotY, 3);
+      hs.addColorStop(0, `rgba(255,240,200,${(0.5 * pulse).toFixed(3)})`);
+      hs.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = hs;
+      ctx.beginPath();
+      ctx.arc(cx, hotY, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
+    // §0.5 Composite-Hygiene PFLICHT: gco/globalAlpha explizit zuruecksetzen
+    // (save/restore reicht nicht — der Boss-Flusstest-Stub restauriert gco NICHT;
+    // ein Leak braeche im Browser Portal-Fade und HUD).
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
   }
 
   return { draw };

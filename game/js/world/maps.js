@@ -47,24 +47,24 @@ export { tc, tileRect };
 // Positionen byte-identisch zu 204e28f; Span-Zeichen M/N/O/Q/V/X nur in overRows).
 const GRAVEYARD_ROWS = [
   '########################################',
-  '#TT.,.ebeT.....,......,..s.o..######..T#',
-  '#T....o.e.,...,...b.eee...,...#.DD.#..T#',
-  '#..G.g.he.,......G.geh.G......#....#,.T#',
-  '#...o...............e.s.....b.##..##..T#',
+  '#TTH,.ebeT.....,......,..s.o..######..T#',
+  '#THHH.o.e.,.HH,...b.eee...,...#.DD.#..T#',
+  '#.HGHg.he.,.H....G.gehLG......#....#,.T#',
+  '#...o.......HH......eLs.....b.##..##..T#',
   '#..g.G.h..u....F.....G.h.g......o.....T#',
-  '#.,....bk......==....ff...ff.........pT#',
+  '#.,....bkw..y..==....ff...ff.........pT#',
   '#..G.g.G..p.,..==....g.h.G......G.gr..T#',
   '#....o.........==.......r............,T#',
-  '#T...,.........==........,..eee.T..b.kT#',
-  '#T.,..s........==..,..,.....ee.T......T#',
-  '#T.............==....u.....oee,......kT#',
+  '#T.w.,..HHH....==........,..eee.T..b.kT#',
+  '#T.,..s.HHH....==..,..,.L...ee.T......T#',
+  '#T...y..HHH....==....u.LL..oee,......kT#',
   '#=================================,...T#',
   '#=================================,...T#',
-  '#.,..b...F..f..f........,..s..d.......T#',
-  '#ee..Gkg.....Gjh...............~~~~~..T#',
-  '#e.o........r.....e.....,....~~~~~~~~.T#',
-  '#re,.G.h..u..g.G..e..........~~~~~~~~.T#',
-  '#e.e..........b..,eee.......F..~~~~~u.T#',
+  '#.,..b...F..f..f........,..s..d.~~....T#',
+  '#eeLLGkg.....Gjh..............~~~~~~..T#',
+  '#e.o........r.....e.....,....~~~~~~~~~T#',
+  '#re,LG.h..u..g.G..e..........~~~~~~~~~T#',
+  '#e.e..........b..,eee.......F..~~...u.T#',
   '#Te.ee,..........o.....Gpg.......d....T#',
   '#Te.,..s....g.G..................,..bTT#',
   '#TTeee..b............,....o...p.,....TT#',
@@ -97,6 +97,14 @@ const GRAVEYARD_LEGEND = {
   'Q': { art: 'tree_canopy_2x2_am', span: [2, 2], solid: false },
   'V': { art: 'tree_canopy_2x2_bm', span: [2, 2], solid: false },
   'X': { art: 'tree_canopy_2x2_cm', span: [2, 2], solid: false },
+  // Grafikpass 4 §2.8: zweite, dunklere Kronenreihe (Back-Kuppen). Anker-Zeichen
+  // 'Y','Z','A' (Legende-Namespace, getrennt von Palette-Tonen '=','+','*') fuer
+  // tree_canopy_back_a/_b/_c, span:[2,2], NON-SOLID (Over-Layer). Sitzen EINE
+  // Zeile ueber passenden Front-Ankern (getrennte Zellen) -> Back-Kuppe ragt hinter
+  // 60-80% der Front-Kronen hervor. Setzung deterministisch via .tmp/gen_gfx4.mjs.
+  'Y': { art: 'tree_canopy_back_a', span: [2, 2], solid: false },
+  'Z': { art: 'tree_canopy_back_b', span: [2, 2], solid: false },
+  'A': { art: 'tree_canopy_back_c', span: [2, 2], solid: false },
   // Grafikpass 2: Boden-/Weg-/Mauer-Varianten gegen Flächen-Wiederholung
   // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
   '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3'] },
@@ -107,9 +115,23 @@ const GRAVEYARD_LEGEND = {
   // fringeSource/fringeSet 'grass' — ohne fringeSource entstuenden 1-Tile-Fringe-
   // Loecher an Weg-/Wasserkanten neben der Deko (Review-Major).
   // Drei unterscheidbare Gras-Detail-Sprites (K-K1a) + je Spiegel-Variante:
-  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_blade', 'grass_blade_v1'] },
-  'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_speck', 'grass_speck_v1'] },
+  // Grafikpass 4 §2.7b: die drei Deko-Glyphen tragen jetzt zusaetzlich ihre
+  // 90-Grad-Rotationsvariante (_r1) als weitere variants — deterministische
+  // variantIndex-Wahl streut die Ausrichtung, ohne Laufzeit-Flip.
+  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_tuft', 'grass_tuft_r1'] },
+  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_blade', 'grass_blade_v1', 'grass_blade_r1'] },
+  'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_speck', 'grass_speck_v1', 'grass_speck_r1'] },
+  // Grafikpass 4 §3.8b/§4 Gras-Sway: zwei animierte Deko-Glyphen (Halme wiegen
+  // sich, zweiter Frame _f1). Eigene Zeichen, weil variants UND anim an EINEM
+  // Legendeneintrag verboten sind (createTilemap wirft). animRate langsam (0.8),
+  // KEIN animSync -> die Positions-Offset-Mechanik staffelt die Halme (Bestand).
+  'w': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', anim: ['grass_tuft', 'grass_tuft_f1'], animRate: 0.8 },
+  'y': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', anim: ['grass_blade', 'grass_blade_f1'], animRate: 0.8 },
+  // Grafikpass 4 §2.7b Wiesenlicht-Makro: hellere/dunklere nahtlose Gras-Basis
+  // in unregelmaessigen Patches (48-64px). Begehbar, WIE '.'-Gras (fringeSource/
+  // fringeSet 'grass'), sonst entstuenden 1-Tile-Fringe-Loecher an den Patch-Raendern.
+  'H': { art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'L': { art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass' },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
@@ -135,7 +157,10 @@ const GRAVEYARD_LEGEND = {
   // TARGETs auf shore_*-Ufer-Keys um (nur hier, nur bei Quelle-Set 'grass').
   // §8b.1: depthOverlays legt statische Tiefen-Schleier ueber das animierte Wasser.
   '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
-  'F': { art: 'torch_0', solid: true, anim: ['torch_0', 'torch_1'] },
+  // Grafikpass 4 §3.8a/§4: Fackel-Flamme jetzt 3-Frame-Zyklus (torch_2 = dritter
+  // Frame). animRate wie Bestand (Default 6), Positions-Offset (kein animSync)
+  // laesst benachbarte Fackeln versetzt flackern.
+  'F': { art: 'torch_0', solid: true, anim: ['torch_0', 'torch_1', 'torch_2'] },
   'D': { art: 'crypt_stairs_down', solid: false },
 };
 
@@ -149,27 +174,27 @@ const GRAVEYARD_LEGEND = {
 // benachbart, nicht strikt alternierend). Anker-Jitter (-2..+2 px) kommt zur
 // Laufzeit aus tilemap.js (§2.1).
 const GRAVEYARD_OVER_ROWS = [
-  '.O.......K...........................V..',
-  '.V.......B............................N.',
-  '.....................................Q..',
-  '......................................M.',
-  '.....................................O..',
-  '......................................V.',
-  '.....................................M..',
-  '......................................Q.',
-  'M...............................K....X..',
-  '.X.............................KB.....V.',
-  'Q..............................B.....O..',
-  '......................................M.',
-  '.....................................N..',
-  '......................................X.',
-  '.....................................M..',
-  '......................................O.',
-  '.....................................N..',
-  '......................................M.',
-  'V....................................Q..',
+  '.O.......K...........................VZ.',
+  '.V.......B...........................ZN.',
+  '.....................................QA.',
+  '.....................................AM.',
+  '.....................................OZ.',
+  '.....................................ZV.',
+  '.....................................MA.',
+  'A....................................YQ.',
+  'MY..............................K....XY.',
+  'ZX.............................KB....ZV.',
+  'Q..............................B.....OY.',
+  '.....................................ZM.',
+  '.....................................NA.',
+  '.....................................AX.',
+  '.....................................MZ.',
+  '.....................................AO.',
+  '.....................................NY.',
+  'Z....................................AM.',
+  'VA...................................Q..',
   '.M...................................M..',
-  '.Q...................................N..',
+  '.QY.................................YN..',
   '.XX..........K............K.........QO..',
   '.............B............B.............',
   '........................................',
@@ -229,7 +254,8 @@ const CATACOMBS_LEGEND = {
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },
-  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1'] },
+  // Grafikpass 4 §3.8a/§4: Wandfackel jetzt 3-Frame-Zyklus (torch_wall_2).
+  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false },
   // Slice 3: Abgang zur FLUESTERGRUFT in der Schatzkammer (begehbar, Portal).
   'D': { art: 'crypt_stairs_down', solid: false },

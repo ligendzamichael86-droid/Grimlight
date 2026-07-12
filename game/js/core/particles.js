@@ -31,17 +31,26 @@ const HALO_HEX = PALETTE['o'] || '#d8722a';
 // Fackel. Der harte Deckel MAX_PARTICLES=60 bleibt unveraendert (Smoke §36 prueft
 // ihn spawnraten-unabhaengig ueber die length-Guard, nicht ueber diese Rate).
 const SPAWN_RATE = 8;
+// Grafikpass 4 §2.5: 3 seitliche Cluster-Offsets (px) um die Fackel — die Funken
+// buendeln sich in Gruppen statt einer gleichverteilten Wolke.
+const CLUSTER_DX = [-5, 0, 5];
 
 export function createParticles() {
   const list = [];
 
   // Spawnt Funken an (x, y) mit ~SPAWN_RATE Funken/s. dt steuert die Rate
   // (probabilistisch, höchstens ein Funke pro Aufruf). Harte Obergrenze zuerst.
+  // Grafikpass 4 §2.5 (Staub-Mote-Buendelung): statt einer gleichverteilten
+  // ±2-px-Wolke streuen die Funken in 2-3 CLUSTERN nahe der Fackel — ein
+  // Cluster-Offset aus CLUSTER_DX + enge ±1-px-Streuung im Cluster. Der Spawn
+  // erfolgt (in main.js) NUR an Fackelpositionen, die dunkle Raummitte bleibt
+  // also frei. Deckel MAX_PARTICLES=60 unveraendert.
   function spawnEmbers(x, y, dt) {
     if (list.length >= MAX_PARTICLES) return;
     if (Math.random() >= SPAWN_RATE * dt) return;
     const tone = Math.floor(Math.random() * EMBER_TONES.length);
-    const baseX = x + (Math.random() * 4 - 2);
+    const cluster = CLUSTER_DX[Math.floor(Math.random() * CLUSTER_DX.length)];
+    const baseX = x + cluster + (Math.random() * 2 - 1);
     list.push({
       baseX,
       x: baseX,

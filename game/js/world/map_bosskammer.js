@@ -18,12 +18,12 @@ const BOSS_KAMMER_ROWS = [
   '#####W########W#####',
   '###..............###',
   '##................##',
-  '#..................#',
+  '#.....c............#',
   'W..................W',
+  '#.............x....#',
   '#..................#',
-  '#..................#',
-  '#..................#',
-  '#..................#',
+  '#.....x............#',
+  '#............c.....#',
   '##................##',
   '###......UU......###',
   '#####W########W#####',
@@ -36,8 +36,15 @@ const BOSS_KAMMER_LEGEND = {
   // (der Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche).
   '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
-  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1'] },
+  // Grafikpass 4 §3.8a/§4: Wandfackel jetzt 3-Frame-Zyklus (torch_wall_2).
+  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false }, // Rueck-Portal FLUESTERGRUFT
+  // Grafikpass 4 §2.7c: begehbare Boden-Decals (verifyNeutral, sol/geo bleiben
+  // gruen). 'c' = floor_decal_crack (dunkler), 'x' = floor_decal_bones (heller
+  // via Knochen-Toene). WIE '.'-Boden: solid:false, fringeTarget:true, damit die
+  // Moos-Fringes der Wand weiter ueber die Decal-Kanten wachsen.
+  'c': { art: 'floor_decal_crack', solid: false, fringeTarget: true },
+  'x': { art: 'floor_decal_bones', solid: false, fringeTarget: true },
 };
 
 export const BOSS_KAMMER = {

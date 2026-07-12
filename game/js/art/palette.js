@@ -98,4 +98,12 @@ export const PALETTE = {
   // Spektral-Gruen, klar abgesetzt von Elite-Rot und Fackel-Orange.
   7: '#2f7d5c', // Seelenglut dunkel (Augenhoehlen-Tiefe, Klingenrunen-Grund)
   8: '#7ff0b8', // Seelenglut hell (gluehende Augen, heisse Runen, Telegraph)
+  // GRAFIKPASS 4 (§3.6): genau 3 NEUE Symbol-Toene (Alnum voll, 'l' verboten).
+  // Symbol-Keys sind ein eigener Namespace ggue. Map-Legenden ('=' ist zugleich
+  // GRAVEYARD-Weg-Legendenzeichen — hier reine PALETTE-Rolle, kein Konflikt).
+  '=': '#3f7a70', // Teich-Glanz: gedaempftes Hell-Teal, Luma ~101. BEWUSST NICHT
+  //               heller als der hellste Wasserton (9=#284e54) uebertrieben —
+  //               R3-Entsaettigung bleibt gewahrt, Wasser nicht wieder hellster Ton.
+  '+': '#1a2a1b', // Kronen-Back dunkel 1 (zweite Kronenreihe, ~-20% Value ggue e).
+  '*': '#141f15', // Kronen-Back dunkel 2 (tiefster Back-Kronen-Ton, unter '+').
 };

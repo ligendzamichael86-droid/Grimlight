@@ -36,6 +36,17 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillRect(px, py + 1, pw, ph - 2);         // Mittelband (volle Breite)
     ctx.fillRect(px + 1, py, pw - 2, 1);          // obere Zeile (Ecken frei)
     ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // untere Zeile (Ecken frei)
+    // §2.6 [GP4] leichter Vertikal-Gradient: oberes Drittel +6 Luma (ein
+    // helleres fillRect-Band ueber der Grundflaeche, kein Gradient-Objekt).
+    ctx.fillStyle = '#10101c';
+    ctx.fillRect(px + 1, py + 1, pw - 2, Math.round((ph - 2) / 3));
+    // §2.6 [GP4] Innen-Schlagschatten: 1-px-Dunkellinien knapp INNEN unter der
+    // oberen und rechts der linken Kante — die Grundflaeche liegt in einer
+    // Vertiefung hinter dem erhabenen Rahmen (Tiefe). Klein (kein Vollbild).
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px + 2, py + 1, pw - 4, 1);      // Innenschatten oben
+    ctx.fillRect(px + 1, py + 2, 1, ph - 4);      // Innenschatten links
     // 2-Ton-Bevel: hell oben+links (Lichtkante)
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#575061';
@@ -82,24 +93,50 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.drawImage(gfx.icon_key, 30, 25);
   }
 
-  // XP-Leiste (§3): 26x3 bei (4,36), unter der Trank-Zeile. Fuellstand =
-  // Fortschritt zwischen den zwei umgebenden Schwellen (Update sofort); bei
-  // LEVEL_CAP dauerhaft voll; beim Level-Up 2 Frames Weissblink #f1e9d3.
-  // KEINE Levelzahl im HUD (die kommt in die Inventar-Fusszeile).
+  // XP-Leiste (§2.6 GP4): 26x5 bei (4,36), unter der Trank-Zeile, in Boss-Bar-
+  // Sprache: 1-px-Dunkelrahmen, entsaettigte Rinne, 2-Band-Gradient-Fuellung
+  // (oberes Band heller), 1-px-Innenbevel (hell oben-links, dunkel unten-rechts),
+  // KEINE Ticks. Fuellstand = Fortschritt zwischen den zwei umgebenden Schwellen
+  // (Update sofort); bei LEVEL_CAP dauerhaft voll; beim Level-Up Weissblink
+  // #f1e9d3. AUSSCHLIESSLICH fillRect. Kollisionsfrei (Panel y2..42, Boss-Bar
+  // 120,7). KEINE Levelzahl im HUD (die kommt in die Inventar-Fusszeile).
   const prog = player.prog;
   if (prog) {
-    ctx.fillStyle = '#3a3542';
-    ctx.fillRect(4, 36, 26, 3);      // Rahmen
+    const xx = 4, xy = 36, xw = 26, xh = 5;
+    const ix = xx + 1, iy = xy + 1, iw = xw - 2, ih = xh - 2; // Innenflaeche 5,37,24,3
+    ctx.save();
+    // 1-px-Dunkelrahmen (Vollflaeche, Innen wird ueberfuellt)
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#14101a';
-    ctx.fillRect(5, 37, 24, 1);      // Grund
+    ctx.fillRect(xx, xy, xw, xh);
+    // entsaettigte Rinne ueber die volle Innenbreite
+    ctx.fillStyle = '#3a3542';
+    ctx.fillRect(ix, iy, iw, ih);
     let frac = 1;
     if (prog.level < LEVEL_CAP) {
       const lo = XP_THRESHOLDS[prog.level - 1];
       const hi = XP_THRESHOLDS[prog.level];
       frac = hi > lo ? Math.max(0, Math.min(1, (prog.xp - lo) / (hi - lo))) : 1;
     }
-    ctx.fillStyle = (player.xpBlink ?? 0) > 0 ? '#f1e9d3' : '#7d7588';
-    ctx.fillRect(5, 37, Math.round(24 * frac), 1); // Fuellung Stein-Hell
+    const fw = Math.round(iw * frac);
+    if (fw > 0) {
+      const blink = (player.xpBlink ?? 0) > 0;
+      ctx.fillStyle = blink ? '#f1e9d3' : '#9a90a6'; // oberes Band: heller
+      ctx.fillRect(ix, iy, fw, 1);
+      ctx.fillStyle = blink ? '#f1e9d3' : '#7d7588'; // unteres Band: Grundton
+      ctx.fillRect(ix, iy + 1, fw, ih - 1);
+    }
+    // 1-px-Innenbevel: hell oben+links (Lichtkante)
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#575061';
+    ctx.fillRect(ix, iy, iw, 1);
+    ctx.fillRect(ix, iy, 1, ih);
+    // 1-px-Innenbevel: dunkel unten+rechts (Eigenschatten)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(ix, iy + ih - 1, iw, 1);
+    ctx.fillRect(ix + iw - 1, iy, 1, ih);
+    ctx.restore();
   }
 
   // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x8 bei (120,7).

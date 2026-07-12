@@ -38,6 +38,48 @@ export function variantIndex(tx, ty, n) {
   return h % n;
 }
 
+// Grafikpass 4 §2.2a Lit-Dither-Pass — REINE, Node-importierbare Funktion.
+// Liefert fuer jedes sichtbare Boden-Tile, dessen ZENTRUM im Fackelkegel liegt,
+// einen Eintrag {tx, ty, stufe, key}: Stufe 2 bei Distanz < r*0.45, Stufe 1 bei
+// < r*0.75. r enthaelt den deterministischen Doppel-Sinus-Flicker — die Formel
+// aus lighting.js:57-60 ist hierher DUPLIZIERT (Spec §2.2a erlaubt Duplikat),
+// damit der Kegel deckungsgleich mit dem gestanzten Lichtkreis pulst und die
+// Funktion headless (ohne core/lighting.js) baubar bleibt. key via
+// variantIndex(tx,ty,2) -> licht_dither_1/_2. Kein Zufall/Zeitstempel (world/).
+// lights: [{x,y,radius,flicker}] in Weltpixeln; camera {x,y}; timeSec Sekunden.
+// Deterministisch: gleiche Argumente -> identische Liste (Smoke §5#5b).
+export function litDitherCells(lights, camera, timeSec, viewW, viewH) {
+  const out = [];
+  const tx0 = Math.max(0, Math.floor(camera.x / TILE));
+  const ty0 = Math.max(0, Math.floor(camera.y / TILE));
+  const tx1 = Math.floor((camera.x + viewW) / TILE);
+  const ty1 = Math.floor((camera.y + viewH) / TILE);
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) {
+      const cx = tx * TILE + TILE / 2;
+      const cy = ty * TILE + TILE / 2;
+      let stufe = 0;
+      for (const light of lights) {
+        const flicker = light.flicker || 0;
+        const wob =
+          Math.sin(timeSec * 13 + light.x * 7) * 0.6 +
+          Math.sin(timeSec * 8.3 + light.y * 5 + light.x * 3) * 0.4;
+        const r = light.radius * (1 + flicker * 0.1 * wob);
+        const dx = cx - light.x;
+        const dy = cy - light.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < r * 0.45) { stufe = 2; break; } // hoechste Stufe -> fertig
+        if (dist < r * 0.75 && stufe < 1) stufe = 1;
+      }
+      if (stufe > 0) {
+        const key = variantIndex(tx, ty, 2) === 0 ? 'licht_dither_1' : 'licht_dither_2';
+        out.push({ tx, ty, stufe, key });
+      }
+    }
+  }
+  return out;
+}
+
 // Fringe-Nachbarlogik als REINE Funktion (Node-testbar, Smoke-Test).
 // getDef(tx, ty) → Legendeneintrag oder null/undefined (außerhalb der Map).
 // Liefert die fringe_*-Art-Keys, die ÜBER dem Tile (tx,ty) liegen müssen:
@@ -69,10 +111,32 @@ export function fringeOverlays(getDef, tx, ty) {
   const e = srcSet(1, 0);
   const s = srcSet(0, 1);
   const w = srcSet(-1, 0);
-  if (n) out.push(`${prefix(n)}_n`);
-  if (e) out.push(`${prefix(e)}_e`);
-  if (s) out.push(`${prefix(s)}_s`);
-  if (w) out.push(`${prefix(w)}_w`);
+  // Grafikpass 4 §2.1 Konkav-Ufer (Wahrheitstabelle): Genau 2 ADJAZENTE
+  // grass-Shore-Orthoseiten an einem shorePrefix-Tile ERSETZEN die beiden
+  // Ortho-Shore-Keys durch EINEN organischen Innenecken-Bogen
+  // (shore_ine/inw/ise/isw). Betroffen ist AUSSCHLIESSLICH der grass->shore-
+  // Namespace: moss/fringe-Orthos, die Diagonal-Ecken und die GP3-Nassrand-
+  // Emission bleiben byte-gleich. 1 Seite / 2 opponierte Seiten / nur diagonal
+  // = Bestand. Deterministisch aus (tx,ty). Reihenfolge im out-Array bleibt fuer
+  // alle Bestandsfaelle identisch (inneKey wird null -> nichts eingeschoben).
+  const sp = def.shorePrefix;
+  const isShore = (side) => !!sp && side === 'grass';
+  const shN = isShore(n), shE = isShore(e), shS = isShore(s), shW = isShore(w);
+  const shoreCount = shN + shE + shS + shW;
+  let inneKey = null;
+  const skip = { n: false, e: false, s: false, w: false };
+  if (shoreCount === 2) {
+    if (shN && shE) { inneKey = `${sp}_ine`; skip.n = skip.e = true; }
+    else if (shN && shW) { inneKey = `${sp}_inw`; skip.n = skip.w = true; }
+    else if (shS && shE) { inneKey = `${sp}_ise`; skip.s = skip.e = true; }
+    else if (shS && shW) { inneKey = `${sp}_isw`; skip.s = skip.w = true; }
+    // opponiert (N+S / E+W): inneKey bleibt null -> Bestand (beide Ortho-Keys).
+  }
+  if (n && !skip.n) out.push(`${prefix(n)}_n`);
+  if (e && !skip.e) out.push(`${prefix(e)}_e`);
+  if (s && !skip.s) out.push(`${prefix(s)}_s`);
+  if (w && !skip.w) out.push(`${prefix(w)}_w`);
+  if (inneKey) out.push(inneKey);
   const corner = (dx, dy, name, ortho1, ortho2) => {
     const d = srcSet(dx, dy);
     if (d && d !== 'moss' && !ortho1 && !ortho2) out.push(`${prefix(d)}_${name}`);

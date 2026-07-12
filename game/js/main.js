@@ -8,7 +8,7 @@ import { createInput } from './core/input.js';
 import { createCamera } from './core/camera.js';
 import { createLighting } from './core/lighting.js';
 import { createParticles } from './core/particles.js';
-import { createTilemap } from './world/tilemap.js';
+import { createTilemap, litDitherCells } from './world/tilemap.js';
 // Slice 3: boss.js EINMAL explizit importieren — das Modulende registriert
 // kind 'graveward' im Verhaltens-Dispatch (registrierungs-/importreihenfolge-
 // abhaengig, dokumentiertes Risiko §3).
@@ -474,20 +474,30 @@ function drawMarkers() {
   }
 }
 
-// §2.5: weicher Alpha-Bodenschatten (moderner Bodenkontakt) unter einer
-// beweglichen Entity — AUSSCHLIESSLICH aus fillRect (die Flusstest-Stubs kennen
-// kein ctx.ellipse/roundRect): drei gestapelte, zentrierte 1-px-Zeilen mit
-// Breiten 0.9/0.7/0.4 × Hitbox-Breite, '#000' @ globalAlpha 0.14 je Zeile,
-// Unterkante y + h - 1. Nur Spieler + Gegner (Props/Drops behalten ihre
-// gebackenen Dither-Schatten).
+// Grafikpass 4 §2.2b: Lit-Dither-Pass NUR auf Stein-Boden-Maps. Bewusster
+// Hauptloop-Entscheid: Konstante in main.js STATT mapDef.litFloor-Flag, weil
+// map_fluestergruft.js tabu ist (dort koennte das Flag nicht gesetzt werden).
+const LIT_FLOOR_MAPS = new Set(['CATACOMBS', 'FLUESTERGRUFT', 'BOSS_KAMMER']);
+
+// §2.4 [GP4]: weicher Alpha-Bodenschatten (moderner Bodenkontakt) unter einer
+// Entity — AUSSCHLIESSLICH aus fillRect (die Flusstest-Stubs kennen kein
+// ctx.ellipse/roundRect): drei gestapelte, zentrierte 1-px-Zeilen mit Breiten
+// 0.9/0.7/0.4 × Hitbox-Breite. GP4-Korrektur (Review-Befund): die drei Zeilen
+// liegen auf VERSCHIEDENEN y (baseY-i) und ueberlappen NICHT — mit einheitlichem
+// Alpha 0.14 lag die reale Kontaktdeckung bei 0.14 statt der von der Jury
+// gewuenschten ~35 %. FIX: Zeilen-Alphas als Gradient [0.32 Basiszeile (breiteste,
+// unten), 0.20, 0.10] — unten satt, oben auslaufend. Gilt fuer Spieler, Gegner
+// UND (neu) echte Props (vase/urn/chest verlieren ihre gebackenen Schatten,
+// Art-Builder §3.5b). '#000', Unterkante y + h - 1.
 const SHADOW_W = [0.9, 0.7, 0.4];
+const SHADOW_A = [0.32, 0.20, 0.10];
 function drawSoftShadow(ent) {
   const cx = ent.x + ent.w / 2;
   const baseY = ent.y + ent.h - 1;
   ctx.save();
-  ctx.globalAlpha = 0.14;
   ctx.fillStyle = '#000';
   for (let i = 0; i < 3; i++) {
+    ctx.globalAlpha = SHADOW_A[i];
     const w = Math.max(1, Math.round(ent.w * SHADOW_W[i]));
     ctx.fillRect(Math.round(cx - w / 2 - camera.x), Math.round(baseY - camera.y) - i, w, 1);
   }
@@ -496,12 +506,39 @@ function drawSoftShadow(ent) {
 
 function drawWorld() {
   map.draw(ctx, camera, tiles, timeSec, 'ground');
+
+  // §2.2b [GP4]: Lit-Dither NACH map.draw('ground'), VOR den Entities. Nur auf
+  // Stein-Boden-Maps (LIT_FLOOR_MAPS) und NUR mit statischen Fackellichtern
+  // (flicker >= 0.8 = mapDef-Fackeln; Spieler/Elite/Drop-Lichter liegen bei 0.3
+  // und werden ausgeschlossen). drawImage je Zelle mit 'lighter', Alpha 0.18
+  // (Stufe 1) / 0.30 (Stufe 2) auf dem HAUPT-ctx. TILE = 16 px.
+  if (LIT_FLOOR_MAPS.has(currentMapKey)) {
+    const torchLights = lights.filter((l) => (l.flicker || 0) >= 0.8);
+    const ditherCells = litDitherCells(torchLights, camera, timeSec, VIEW_W, VIEW_H);
+    if (ditherCells.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const c of ditherCells) {
+        const dimg = tiles[c.key];
+        if (!dimg) continue;
+        ctx.globalAlpha = c.stufe === 2 ? 0.30 : 0.18;
+        ctx.drawImage(dimg, Math.round(c.tx * 16 - camera.x), Math.round(c.ty * 16 - camera.y));
+      }
+      ctx.restore();
+      // §0.5 PFLICHT: gco/globalAlpha explizit zuruecksetzen (save/restore reicht
+      // nicht — Composite-Leak braeche im Browser Portal-Fade und HUD).
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+  }
+
   drawMarkers();
 
-  // §2.5: Weichschatten VOR der renderables-Schleife (unter allen Entities, über
-  // dem Boden) für Spieler und jeden Gegner.
+  // §2.4: Weichschatten VOR der renderables-Schleife (unter allen Entities, über
+  // dem Boden) für Spieler, jeden Gegner UND jeden echten Prop.
   drawSoftShadow(player);
   for (const e of enemies) drawSoftShadow(e);
+  for (const p of props) drawSoftShadow(p);
 
   // Gemeinsame Y-Sortierung aller Welt-Entities nach Fußkante (y + h).
   // Array.sort ist stabil → bei Gleichstand bleibt Einfügereihenfolge
