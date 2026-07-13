@@ -10,6 +10,23 @@
 // screen = Math.round(weltX - camera.x) — sonst jittern die Lichtkreise
 // um 1 px gegen die Tiles.
 
+// Grafikpass 4 R2 §(a) Banding-Fix: die Fackelkegel-Punch-Stufen von 3 auf 6
+// feine Ringe erhoeht. Die alten 3 harten Baender (kumulative Restdunkelheit
+// 1 -> 0.65 -> 0.29 -> 0, Spruenge ~0.35) lasen als 'aufgemalte Rosetten/
+// Kornkreise'. Die 6 Ringe unten ergeben (destination-out ist multiplikativ:
+// dst *= (1-a)) eine kumulative Restdunkelheit von 0.82 -> 0.64 -> 0.46 ->
+// 0.30 -> 0.15 -> 0 — benachbarte Baender liegen nur ~0.15-0.18 auseinander
+// (max ~1 Palettenstufe, Wirbel-Kontrast gedeckelt). rf = Radius-Faktor,
+// a = destination-out-Alpha des Rings.
+const PUNCH_RINGS = [
+  { rf: 1.00, a: 0.18 },
+  { rf: 0.85, a: 0.22 },
+  { rf: 0.70, a: 0.28 },
+  { rf: 0.55, a: 0.35 },
+  { rf: 0.40, a: 0.50 },
+  { rf: 0.25, a: 1.00 },
+];
+
 export function createLighting(viewW, viewH) {
   let off = null;  // Offscreen-Canvas, lazy + gecacht
   let octx = null;
@@ -68,10 +85,18 @@ export function createLighting(viewW, viewH) {
 
       const cx = Math.round(light.x - camera.x);
       const cy = Math.round(light.y - camera.y);
-      // 3 konzentrische Stufen: außen schwach, Mitte mittel, innen voll.
-      punch(cx, cy, r, 0.35);
-      punch(cx, cy, r * 0.75, 0.55);
-      punch(cx, cy, r * 0.45, 1);
+      // Grafikpass 4 R2 §(a): 6 feine konzentrische Stufen (PUNCH_RINGS) statt
+      // der frueheren 3 harten Baender. Die Bogenradien werden pro Licht
+      // deterministisch leicht variiert (Sinus aus der Weltposition, KEIN
+      // Math.random) — so rasten die konzentrischen Kanten mehrerer Fackeln
+      // NICHT auf identische Radien ein, das 'Kornkreis'-Muster bricht auf.
+      const seed = light.x * 0.7 + light.y * 1.3;
+      for (let k = 0; k < PUNCH_RINGS.length; k++) {
+        const ring = PUNCH_RINGS[k];
+        // Innerste Vollstufe (Kern) NICHT jittern -> kein Dunkel-Loch im Zentrum.
+        const rWob = k === PUNCH_RINGS.length - 1 ? 0 : Math.sin(seed + k * 2.399) * 0.02;
+        punch(cx, cy, r * (ring.rf + rWob), ring.a);
+      }
     }
     octx.globalAlpha = 1;
     octx.globalCompositeOperation = 'source-over';
@@ -109,10 +134,16 @@ export function createLighting(viewW, viewH) {
       const cx = Math.round(light.x - camera.x);
       const cy = Math.round(light.y - camera.y);
       const gr = r * 0.6; // §2.3: Glow-Radius kappen (kein breiter Teppich mehr)
+      // Grafikpass 4 R2 §(a) GLOW-FARBVERLAUF: 2-Stufen-FARB-Verlauf statt reiner
+      // Alpha-Abnahme — Kern warmorange (#d8722a = 216,114,42), die aeusseren
+      // ~30 % (ab Stop 0.7) Richtung entsaettigt rosabraun/orange-rot (150,82,70).
+      // Das Intensitaets-Profil (0.13 -> 0.04 -> ~0 zum Rand) bleibt wie im R3-
+      // Anti-Schmier-Fix, nur der Farbton wandert. Stub-sicher (addColorStop no-op).
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
-      grad.addColorStop(0, 'rgba(216,114,42,0.13)');
-      grad.addColorStop(0.4, 'rgba(216,114,42,0.04)');
-      grad.addColorStop(1, 'rgba(216,114,42,0)');
+      grad.addColorStop(0, 'rgba(216,114,42,0.13)');    // Kern: warmorange
+      grad.addColorStop(0.4, 'rgba(198,96,54,0.04)');   // Uebergang
+      grad.addColorStop(0.7, 'rgba(150,82,70,0.015)');  // aeussere ~30 %: entsaettigt rosabraun
+      grad.addColorStop(1, 'rgba(150,82,70,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(cx, cy, gr, 0, Math.PI * 2);
@@ -124,9 +155,13 @@ export function createLighting(viewW, viewH) {
       // pulsierend ueber den vorhandenen Doppel-Sinus (wob in ~[-1..1]).
       const pulse = 0.75 + 0.25 * wob;               // ~[0.5 .. 1.0]
       const baseY = cy + 5;                          // Fackelbasis liegt unter der Flamme
+      // Grafikpass 4 R2 §(a) GLOW-FARBVERLAUF: auch der Boden-Glow bekommt den
+      // 2-Stufen-Farb-Verlauf — Kern warm-amber, aeusserer Rand Richtung
+      // entsaettigt rosabraun (158,88,72). Spitzen-Alpha wie bisher (0.15*pulse).
       const bg = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, 10);
-      bg.addColorStop(0, `rgba(216,150,70,${(0.15 * pulse).toFixed(3)})`);
-      bg.addColorStop(1, 'rgba(216,150,70,0)');
+      bg.addColorStop(0, `rgba(216,150,70,${(0.15 * pulse).toFixed(3)})`);   // Kern: warm-amber
+      bg.addColorStop(0.7, `rgba(178,104,74,${(0.05 * pulse).toFixed(3)})`); // Uebergang
+      bg.addColorStop(1, 'rgba(158,88,72,0)');                               // Rand: entsaettigt rosabraun
       ctx.fillStyle = bg;
       ctx.beginPath();
       ctx.arc(cx, baseY, 10, 0, Math.PI * 2);

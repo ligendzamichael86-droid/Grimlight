@@ -47,28 +47,28 @@ export { tc, tileRect };
 // Positionen byte-identisch zu 204e28f; Span-Zeichen M/N/O/Q/V/X nur in overRows).
 const GRAVEYARD_ROWS = [
   '########################################',
-  '#TTH,.ebeT.....,......,..s.o..######..T#',
-  '#THHH.o.e.,.HH,...b.eee...,...#.DD.#..T#',
-  '#.HGHg.he.,.H....G.gehLG......#....#,.T#',
-  '#...o.......HH......eLs.....b.##..##..T#',
+  '#TT.,.ebeT.....,......,..s.o..######..T#',
+  '#T.wyyo.e.,...,...b.eee...,...#.DD.#..T#',
+  '#..Gwg.he.,......G.geh.G...ww.#....#,.T#',
+  '#...o...............e.s....yb.##..##..T#',
   '#..g.G.h..u....F.....G.h.g......o.....T#',
-  '#.,....bkw..y..==....ff...ff.........pT#',
-  '#..G.g.G..p.,..==....g.h.G......G.gr..T#',
-  '#....o.........==.......r............,T#',
-  '#T.w.,..HHH....==........,..eee.T..b.kT#',
-  '#T.,..s.HHH....==..,..,.L...ee.T......T#',
-  '#T...y..HHH....==....u.LL..oee,......kT#',
+  '#.,....bkIII...==....ffJJJff.........pT#',
+  '#..G.g.GIIpI,..==....gJhJGJ.....G.gr..T#',
+  '#....o..III....==.....JJrJLJ.........,T#',
+  '#T...,..I.I....==.....JLJ,J.eee.T..b.kT#',
+  '#T.,..s..IH....==..,..,J.JJ.ee.T......T#',
+  '#T........II...==....u.JJJ.oee,......kT#',
   '#=================================,...T#',
   '#=================================,...T#',
   '#.,..b...F..f..f........,..s..d.~~....T#',
-  '#eeLLGkg.....Gjh..............~~~~~~..T#',
-  '#e.o........r.....e.....,....~~~~~~~~~T#',
-  '#re,LG.h..u..g.G..e..........~~~~~~~~~T#',
-  '#e.e..........b..,eee.......F..~~...u.T#',
-  '#Te.ee,..........o.....Gpg.......d....T#',
-  '#Te.,..s....g.G..................,..bTT#',
-  '#TTeee..b............,....o...p.,....TT#',
-  '#TTTe..,.....T..s...d.....T........uTTT#',
+  '#ee..Gkg.....Gjh.........I....~~~~~~..T#',
+  '#e.o....JJLJr.....e.....,I...~~~~~~~~~T#',
+  '#re,.G.h..uLJg.G..e...I.IHI..~~~~~~~~~T#',
+  '#e.e......LLJ.b..,eeeIHIII..F..~~...u.T#',
+  '#Te.ee,...LJ.....owy..IGpg.......d....T#',
+  '#Te.,..sJJJ.g.G...wy...I.........,..bTT#',
+  '#TTeee..b.wy.........,....o...p.,....TT#',
+  '#TTTe..,..wy.T..s...d.....T........uTTT#',
   '########################################',
 ];
 
@@ -132,6 +132,16 @@ const GRAVEYARD_LEGEND = {
   // fringeSet 'grass'), sonst entstuenden 1-Tile-Fringe-Loecher an den Patch-Raendern.
   'H': { art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass' },
   'L': { art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // Grafikpass 4 RUNDE 2 (§2.7b, Jury-Mandat d.1): MIX-Rand-Tiles der Wiesenlicht-
+  // Patches. Orientierungs-agnostisches 2x2-Schachbrett Luma<->Grundgras, das die
+  // Patch-Silhouette 4-6px in den Grundton ueberblendet (statt scharfe Rechteck-
+  // kante). 'I' = grass_lumahi_mix (hell<->Gras), 'J' = grass_lumalo_mix
+  // (dunkel<->Gras). Legende-Namespace, getrennt von den Palette-Tonen. WIE
+  // '.'-Gras: begehbar (solid:false) UND fringeSource/fringeSet 'grass' — sonst
+  // 1-Tile-Fringe-Loecher an den Patch-Raendern. Der Generator (.tmp/gen_gfx4.mjs)
+  // setzt sie deterministisch auf alle Blob-Randzellen.
+  'I': { art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'J': { art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
@@ -156,7 +166,7 @@ const GRAVEYARD_LEGEND = {
   // fringeTarget unberuehrt. §8a.3: shorePrefix lenkt die Gras-Fringes dieses
   // TARGETs auf shore_*-Ufer-Keys um (nur hier, nur bei Quelle-Set 'grass').
   // §8b.1: depthOverlays legt statische Tiefen-Schleier ueber das animierte Wasser.
-  '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
+  '~': { art: 'water', solid: true, fringeTarget: true, shorePrefix: 'shore', anim: ['water', 'water_1', 'water_2', 'water_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid_calm'] },
   // Grafikpass 4 §3.8a/§4: Fackel-Flamme jetzt 3-Frame-Zyklus (torch_2 = dritter
   // Frame). animRate wie Bestand (Default 6), Positions-Offset (kein animSync)
   // laesst benachbarte Fackeln versetzt flackern.
@@ -179,8 +189,8 @@ const GRAVEYARD_OVER_ROWS = [
   '.....................................QA.',
   '.....................................AM.',
   '.....................................OZ.',
-  '.....................................ZV.',
-  '.....................................MA.',
+  '...................................A.ZV.',
+  '...................................V.MA.',
   'A....................................YQ.',
   'MY..............................K....XY.',
   'ZX.............................KB....ZV.',
@@ -192,10 +202,10 @@ const GRAVEYARD_OVER_ROWS = [
   '.....................................AO.',
   '.....................................NY.',
   'Z....................................AM.',
-  'VA...................................Q..',
-  '.M...................................M..',
-  '.QY.................................YN..',
-  '.XX..........K............K.........QO..',
+  'VA.................................Y.Q..',
+  '.M.................................Q.M..',
+  '.QY................................Z.N..',
+  '.XX..........K............K........N.O..',
   '.............B............B.............',
   '........................................',
 ];
@@ -244,7 +254,17 @@ const CATACOMBS_ROWS = [
 const CATACOMBS_LEGEND = {
   // Grafikpass 2: Ziegel-/Steinboden-Varianten gegen Flächen-Wiederholung.
   // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten.
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
+  // Grafikpass 4 RUNDE 2 (§ Jury-Mandat d.2, H-K1 "Katakomben-Mauer"): Moos-Brick-
+  // Varianten brick_moss_tl/_br via variants[] verdrahtet. Ziel-Mix ~40/30/30
+  // (kahl / Moos-oben-links / Moos-unten-rechts): 4 kahle Textur-Varianten (Indizes
+  // 0-3 = ~40%), 3x brick_moss_tl (~30%), 3x brick_moss_br (~30%) -> variantIndex
+  // (tx,ty,10) streut sie deterministisch. variants[0] === art (Engine-Assert).
+  // Soliditaet/fringe bleiben (Varianten aendern nur das gezeichnete Grid, nicht
+  // solid) -> CATACOMBS sol/geo bleiben byte-identisch (§36). Hinweis: eine
+  // Positions-Hash-Streuung kann "nie zwei identische horizontal benachbart" fuer
+  // durchgehende Wandreihen NICHT garantieren (das forderte die Jury nur fuer die
+  // Plaketten, s.u.) — hier zaehlt der 40/30/30-Mix.
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_br', 'brick_moss_br', 'brick_moss_br'] },
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
   // Grafikpass 3 §3.3/§4.1: drei Riss-Motive statt eines "7"-Stempels
   // (variants[0] === art). Die ','-Dichte wurde zugleich ausgeduennt (§4.3,
@@ -253,7 +273,15 @@ const CATACOMBS_LEGEND = {
   ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true, variants: ['stone_floor_cracked', 'stone_floor_cracked_v1', 'stone_floor_cracked_v2'] },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
-  'S': { art: 'sarcophagus', solid: true },
+  // Grafikpass 4 RUNDE 2 (§ Jury-Mandat d.2, K/M "Katakomben-Plaketten"): Sarkophag-
+  // Reliefdeckel als Plaketten-Panel; 2 Gravur-Varianten (v1 versetzte Gravur, v2
+  // angebrochene Ecke) via variants[]. Die 4 S-Tiles bilden 2 horizontale Paare —
+  // (32,12)/(33,12) und (5,15)/(6,15). variantIndex(x,y,4) liefert fuer beide Paare
+  // UNTERSCHIEDLICHE Indizes (3/2 bzw. 0/2) -> nie zwei identische Plaketten
+  // horizontal benachbart. n=4 (nicht 3) ist noetig, weil bei n=3 das Paar
+  // (32,12)/(33,12) kollidiert; der 4. Slot dupliziert sarcophagus_v1. variants[0]
+  // === art (Engine-Assert), solid unveraendert (§36 sol/geo halten).
+  'S': { art: 'sarcophagus', solid: true, variants: ['sarcophagus', 'sarcophagus_v1', 'sarcophagus_v2', 'sarcophagus_v1'] },
   // Grafikpass 4 §3.8a/§4: Wandfackel jetzt 3-Frame-Zyklus (torch_wall_2).
   'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false },

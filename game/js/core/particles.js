@@ -34,6 +34,15 @@ const SPAWN_RATE = 8;
 // Grafikpass 4 §2.5: 3 seitliche Cluster-Offsets (px) um die Fackel — die Funken
 // buendeln sich in Gruppen statt einer gleichverteilten Wolke.
 const CLUSTER_DX = [-5, 0, 5];
+// Grafikpass 4 R2 §(b): heisser weiss-gelber Funkenkern (1 px), sitzt obenauf dem
+// warmen Nachzieher, damit in Standbildern mindestens ein Funke klar heraussticht.
+const EMBER_CORE_HEX = '#ffe9b0';
+// Grafikpass 4 R2 §(b): Staub-Motes (2 px, driftend, twinkelnd) sind ein ZWEITER
+// Partikel-Typ im selben Stream (main.js ruft nur spawnEmbers). ~1/3 der Spawns
+// sind Motes; der harte Deckel 60 (Smoke §36) zaehlt beide Typen gemeinsam.
+const MOTE_SHARE = 0.35;
+// Warm-neutraler Staubton (Bestandston, kein Palette-Symbol) fuer die Motes.
+const MOTE_HEX = '#d6cbb1';
 
 export function createParticles() {
   const list = [];
@@ -48,10 +57,31 @@ export function createParticles() {
   function spawnEmbers(x, y, dt) {
     if (list.length >= MAX_PARTICLES) return;
     if (Math.random() >= SPAWN_RATE * dt) return;
-    const tone = Math.floor(Math.random() * EMBER_TONES.length);
     const cluster = CLUSTER_DX[Math.floor(Math.random() * CLUSTER_DX.length)];
     const baseX = x + cluster + (Math.random() * 2 - 1);
+    // Grafikpass 4 R2 §(b): ein Teil der Spawns sind driftende Staub-Motes statt
+    // aufsteigender Glut-Funken — 2 px, langsamer, warm-neutral, mit Twinkle in
+    // draw(). Sie altern und zaehlen zum Deckel 60 exakt wie die Funken.
+    if (Math.random() < MOTE_SHARE) {
+      list.push({
+        kind: 'mote',
+        baseX,
+        x: baseX,
+        y: y + (Math.random() * 3 - 1),
+        vy: -(2 + Math.random() * 3),         // driftet langsam 2-5 px/s
+        age: 0,
+        life: 1.8 + Math.random() * 1.0,       // 1,8-2,8 s (< 3,33 s: altert im Smoke §36 sicher aus)
+        phase: Math.random() * Math.PI * 2,
+        amp: 1 + Math.random() * 2,            // sanftere Seitendrift als die Funken
+        freq: 1 + Math.random() * 1.5,
+        size: 2,
+        hex: MOTE_HEX,
+      });
+      return;
+    }
+    const tone = Math.floor(Math.random() * EMBER_TONES.length);
     list.push({
+      kind: 'ember',
       baseX,
       x: baseX,
       y: y + (Math.random() * 2 - 1),
@@ -95,6 +125,21 @@ export function createParticles() {
       }
       const sx = Math.round(p.x - camera.x);
       const sy = Math.round(p.y - camera.y);
+
+      // Grafikpass 4 R2 §(b): Staub-Mote — 2 px, dezent additiv, mit 2-Frame-
+      // Twinkle (Alpha wechselt zwischen hell/matt). Der Twinkle laeuft aus
+      // p.age (update() treibt ihn) + p.phase, damit die Motes NICHT synchron
+      // blinken. Kein timeSec noetig -> draw(ctx,camera)-Signatur unveraendert.
+      if (p.kind === 'mote') {
+        const twinkle = Math.floor((p.age + p.phase) / 0.12) % 2 === 0 ? 1 : 0.5;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha * 0.5 * twinkle;
+        ctx.fillStyle = MOTE_HEX;
+        ctx.fillRect(sx, sy, 2, 2);
+        continue;
+      }
+
+      // --- Glut-Funke ---
       // Runde 3 (M-K6a): 2-px additiver Glow-Halo (warmes Orange) um jeden Funken,
       // damit sie gluehen statt Einzelpunkte zu sein. 'lighter'-Composite = echtes
       // additives Aufhellen ueberlappender Halos; Alpha = 0,4 * der bestehenden
@@ -104,13 +149,23 @@ export function createParticles() {
       ctx.globalAlpha = alpha * 0.4;
       ctx.fillStyle = HALO_HEX;
       ctx.fillRect(sx - 1, sy - 1, p.size + 2, p.size + 2);
-      // 1-px-Kern (Groessenmix 1-2 px aus R2 unveraendert) ueber dem Halo, normal
-      // geblendet, damit der Funke einen scharfen Kern behaelt.
+      // Grafikpass 4 R2 §(b): warmer Koerper + 2-px-NACHZIEHER nach unten. Der
+      // Funke steigt (vy < 0, sy sinkt), der glimmende Schweif bleibt 2 px darunter
+      // zurueck. Warmer Funken-Ton, normal geblendet (scharfe Kante gegen den Halo).
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.hex;
-      ctx.fillRect(sx, sy, p.size, p.size);
+      ctx.fillRect(sx, sy, p.size, p.size + 2);
+      // Grafikpass 4 R2 §(b): 1-px weiss-gelber KERN (#ffe9b0) obenauf — der heisse
+      // Funkenkopf, der in Standbildern klar aus dem warmen Schweif heraussticht.
+      ctx.fillStyle = EMBER_CORE_HEX;
+      ctx.fillRect(sx, sy, 1, 1);
     }
+    // §0.5 Composite-Hygiene: gco/globalAlpha explizit zuruecksetzen, falls der
+    // letzte Partikel ein Mote war (dann steht gco noch auf 'lighter'). Der Boss-
+    // Flusstest-Stub restauriert gco in restore() NICHT — ein Leak braeche dort.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 

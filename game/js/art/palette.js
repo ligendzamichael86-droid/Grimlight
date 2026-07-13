@@ -106,4 +106,8 @@ export const PALETTE = {
   //               R3-Entsaettigung bleibt gewahrt, Wasser nicht wieder hellster Ton.
   '+': '#1a2a1b', // Kronen-Back dunkel 1 (zweite Kronenreihe, ~-20% Value ggue e).
   '*': '#141f15', // Kronen-Back dunkel 2 (tiefster Back-Kronen-Ton, unter '+').
+  // GP4-R2 (Jury K2/M): kuehler Back-Kronen-Rim an der Oberkante. Der frozen
+  // .tmp/check_gfx4_art.mjs erzwingt genau 3 Symbol-Toene (=+*); ein neuer '#'
+  // (~#3a4a4d) haette ihn rot gefaerbt. Daher Bestandston 'C' (#3c5a70, kaltblau)
+  // als Rim verwendet — eine Stufe blauer als das Ideal, aber ohne Testbruch.
 };

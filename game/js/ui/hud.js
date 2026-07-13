@@ -40,13 +40,19 @@ export function drawHUD(ctx, player, input, gfx) {
     // helleres fillRect-Band ueber der Grundflaeche, kein Gradient-Objekt).
     ctx.fillStyle = '#10101c';
     ctx.fillRect(px + 1, py + 1, pw - 2, Math.round((ph - 2) / 3));
-    // §2.6 [GP4] Innen-Schlagschatten: 1-px-Dunkellinien knapp INNEN unter der
-    // oberen und rechts der linken Kante — die Grundflaeche liegt in einer
-    // Vertiefung hinter dem erhabenen Rahmen (Tiefe). Klein (kein Vollbild).
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(px + 2, py + 1, pw - 4, 1);      // Innenschatten oben
-    ctx.fillRect(px + 1, py + 2, 1, ph - 4);      // Innenschatten links
+    // §(c) [GP4 R2] 1-px-Innen-Bevel in Boss-Balken-Sprache, 1 px INNEN vom
+    // erhabenen Aussenrahmen: oben/links +1 Stufe (hell #575061), unten/rechts
+    // -1 Stufe (dunkel #14101a) — dieselben Toene/Alphas wie der XP-/Boss-Bar-
+    // Innenbevel. Ersetzt den frueheren dunklen Innen-Schlagschatten oben/links
+    // (der als Vertiefung las und der Bevel-Lichtkante widersprach). fillRect-only.
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#575061';
+    ctx.fillRect(px + 2, py + 1, pw - 4, 1);      // Innenbevel oben (hell)
+    ctx.fillRect(px + 1, py + 2, 1, ph - 4);      // Innenbevel links (hell)
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#14101a';
+    ctx.fillRect(px + 2, py + ph - 2, pw - 4, 1); // Innenbevel unten (dunkel)
+    ctx.fillRect(px + pw - 2, py + 2, 1, ph - 4); // Innenbevel rechts (dunkel)
     // 2-Ton-Bevel: hell oben+links (Lichtkante)
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#575061';
@@ -57,6 +63,22 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillStyle = '#14101a';
     ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // Bevel unten (dunkel)
     ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Bevel rechts (dunkel)
+    // §(c) [GP4 R2] 2x2-Nieten in den vier Ecken in Boss-Balken-Sprache: heller
+    // Metallkopf (#575061) mit 1-px dunklem Schattenpunkt (#14101a) unten-rechts.
+    const rivets = [
+      [px + 1, py + 1],           // oben-links
+      [px + pw - 3, py + 1],      // oben-rechts
+      [px + 1, py + ph - 3],      // unten-links
+      [px + pw - 3, py + ph - 3], // unten-rechts
+    ];
+    for (const [rx, ry] of rivets) {
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#575061';
+      ctx.fillRect(rx, ry, 2, 2);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#14101a';
+      ctx.fillRect(rx + 1, ry + 1, 1, 1);
+    }
     ctx.restore();
   }
 
