@@ -53,20 +53,20 @@ const GRAVEYARD_ROWS = [
   '#...o...............e.s....yb.##..##..T#',
   '#..g.G.h..u....F.....G.h.g......o.....T#',
   '#.,....bkIII...==....ffJJJff.........pT#',
-  '#..G.g.GIIpI,..==....gJhJGJ.....G.gr..T#',
-  '#....o..III....==.....JJrJLJ.........,T#',
-  '#T...,..I.I....==.....JLJ,J.eee.T..b.kT#',
-  '#T.,..s..IH....==..,..,J.JJ.ee.T......T#',
-  '#T........II...==....u.JJJ.oee,......kT#',
+  '#..G.g.GIIpI,..==....gJhJGx.....G.gr..T#',
+  '#....o..III....==.....JxrxLx.........,T#',
+  '#T...,..I.i....==.....xLx,x.eee.T..b.kT#',
+  '#T.,..s..iH....==..,..,x.JJ.ee.T......T#',
+  '#T........iI...==....u.JJJ.oee,......kT#',
   '#=================================,...T#',
   '#=================================,...T#',
   '#.,..b...F..f..f........,..s..d.~~....T#',
   '#ee..Gkg.....Gjh.........I....~~~~~~..T#',
-  '#e.o....JJLJr.....e.....,I...~~~~~~~~~T#',
-  '#re,.G.h..uLJg.G..e...I.IHI..~~~~~~~~~T#',
-  '#e.e......LLJ.b..,eeeIHIII..F..~~...u.T#',
-  '#Te.ee,...LJ.....owy..IGpg.......d....T#',
-  '#Te.,..sJJJ.g.G...wy...I.........,..bTT#',
+  '#e.o....JxLxr.....e.....,i...~~~~~~~~~T#',
+  '#re,.G.h..uLxg.G..e...i.iHi..~~~~~~~~~T#',
+  '#e.e......LLx.b..,eeeiHiIi..F..~~...u.T#',
+  '#Te.ee,...Lx.....owy..iGpg.......d....T#',
+  '#Te.,..sJJx.g.G...wy...I.........,..bTT#',
   '#TTeee..b.wy.........,....o...p.,....TT#',
   '#TTTe..,..wy.T..s...d.....T........uTTT#',
   '########################################',
@@ -107,7 +107,12 @@ const GRAVEYARD_LEGEND = {
   'A': { art: 'tree_canopy_back_c', span: [2, 2], solid: false },
   // Grafikpass 2: Boden-/Weg-/Mauer-Varianten gegen Flächen-Wiederholung
   // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
-  '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3'] },
+  // §PRIO2 [GP4 R3] (Jury K1 "Gras-Tapete"): drei zusaetzliche Basis-Gras-Varianten
+  // (v4 Dither Hauptdiagonale, v5 Gegendiagonale, v6 fast leer) + 1 Erd-Fleck-
+  // Variante (grass_dark_earth) ANGEHAENGT. variantIndex(tx,ty,8) streut jetzt ueber
+  // 8 statt 4 Grids -> bricht das uniforme Grundraster. variants[0] === grass_dark
+  // bleibt (Engine-Assert); Reihenfolge 0-3 unveraendert, nur ergaenzt.
+  '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3', 'grass_dark_v4', 'grass_dark_v5', 'grass_dark_v6', 'grass_dark_earth'] },
   ',': { art: 'grass_detail', solid: false, fringeSource: true, fringeSet: 'grass' },
   // Grafikpass 3 §3.3/§4.1/§4.3 + GP3-R3 K-K1a/b/H-K1: begehbare Gras-Deko,
   // deterministisch per Hash-Noise gestreut (.tmp/gen_deco3.mjs, Details <1/9,
@@ -142,6 +147,15 @@ const GRAVEYARD_LEGEND = {
   // setzt sie deterministisch auf alle Blob-Randzellen.
   'I': { art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
   'J': { art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // §PRIO2 [GP4 R3] (Jury K1 "Patch-Kante Rampe"): ZWEITES Mix-Tile je Patchfarbe =
+  // 75%-Dither ('i' = grass_lumahi_mix75, 'x' = grass_lumalo_mix75) fuer den INNEREN
+  // Rand-Ring. Zusammen mit dem bestehenden 50%-_mix (I/J, aeusserer Ring) ergibt
+  // sich die zweistufige Rampe Grund 0% -> aussen 50% -> innen 75% -> Kern 100%
+  // (H/L). Legende-Namespace, getrennt von Palette-Tonen. WIE '.'-Gras: begehbar
+  // (solid:false) UND fringeSource/fringeSet 'grass'. Der Ring wird deterministisch
+  // per Distanz-Band gesetzt (.tmp/gen_grass_r3.mjs, laeuft NACH gen_gfx4).
+  'i': { art: 'grass_lumahi_mix75', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'x': { art: 'grass_lumalo_mix75', solid: false, fringeSource: true, fringeSet: 'grass' },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.

@@ -14,8 +14,11 @@
 // - Lebensdauer 1,2-2,5 s; globalAlpha faded ueber die letzten ~40 % in 3 Stufen aus.
 // - Groessenmix ~60 % 1 px / 40 % 2 px (Runde 2).
 // - Runde 3 (M-K6a): Spawn-Dichte ~2-3x (SPAWN_RATE 3->8) und jeder Funke mit
-//   2-px additivem Glow-Halo (warmes Orange, Alpha 40 %, 'lighter') umhuellt,
-//   damit die Funken gluehen statt Einzelpunkte zu sein.
+//   additivem Glow-Halo (warmes Orange, 'lighter') umhuellt, damit die Funken
+//   gluehen statt Einzelpunkte zu sein.
+// - Grafikpass 4 R3 (Juror H): Halo von 2-px-Kasten auf 1-px-RING gestrafft
+//   (Alpha ~0,35), Nachzieher als 3 diskrete Pixel 100/60/30 % statt weichem
+//   Schweif; weiss-gelber Kern bleibt.
 // - Obergrenze HART: 60 Partikel gesamt (Mobile-Budget).
 
 import { PALETTE } from '../art/palette.js';
@@ -140,24 +143,38 @@ export function createParticles() {
       }
 
       // --- Glut-Funke ---
-      // Runde 3 (M-K6a): 2-px additiver Glow-Halo (warmes Orange) um jeden Funken,
-      // damit sie gluehen statt Einzelpunkte zu sein. 'lighter'-Composite = echtes
-      // additives Aufhellen ueberlappender Halos; Alpha = 0,4 * der bestehenden
-      // 3-Stufen-Blende, der Halo faedet also mit dem Kern aus. fillRect-only; der
-      // Halo-Kasten ist um 1 px pro Seite groesser als der Kern (1-px-Kern -> 3x3).
+      // Grafikpass 4 R3 §(b): der fruehere 2-px-Glow-KASTEN wird zu einem 1-px-RING
+      // gestrafft (Juror H: 'harte Kerne + max. 1px-Glow-Ring'). Der Ring ist die
+      // hohle 1-px-Kontur um den Kern (4 fillRects: oben/unten/links/rechts),
+      // additiv ('lighter', warmes Orange, Alpha ~0,35 * der bestehenden 3-Stufen-
+      // Blende — faedet mit dem Kern aus). fillRect-only (strokeRect ist §0.3-verboten);
+      // kein gefuellter Kasten mehr -> der Funke gluehht, ohne zur weichen Wolke zu
+      // werden.
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = alpha * 0.4;
+      ctx.globalAlpha = alpha * 0.35;
       ctx.fillStyle = HALO_HEX;
-      ctx.fillRect(sx - 1, sy - 1, p.size + 2, p.size + 2);
-      // Grafikpass 4 R2 §(b): warmer Koerper + 2-px-NACHZIEHER nach unten. Der
-      // Funke steigt (vy < 0, sy sinkt), der glimmende Schweif bleibt 2 px darunter
-      // zurueck. Warmer Funken-Ton, normal geblendet (scharfe Kante gegen den Halo).
+      const rs = p.size;                          // Kerngroesse (1 o. 2 px)
+      ctx.fillRect(sx - 1, sy - 1, rs + 2, 1);    // Ring oben
+      ctx.fillRect(sx - 1, sy + rs, rs + 2, 1);   // Ring unten
+      ctx.fillRect(sx - 1, sy, 1, rs);            // Ring links
+      ctx.fillRect(sx + rs, sy, 1, rs);           // Ring rechts
+      // Grafikpass 4 R3 §(b): warmer KOPF + NACHZIEHER als 3 diskrete Pixel
+      // abnehmender Helligkeit (100/60/30 % der Blende) statt des frueheren weichen
+      // 2-px-Schweifs (Juror H: 'Nachzieher als 3 Pixel 100/60/30 %'). Der Funke
+      // steigt (vy < 0, sy sinkt), der glimmende Schweif bleibt darunter zurueck.
+      // Warmer Funken-Ton, normal geblendet (scharfe Kante gegen den Halo-Ring).
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.hex;
-      ctx.fillRect(sx, sy, p.size, p.size + 2);
+      ctx.fillRect(sx, sy, rs, rs);               // Kopf (100 %)
+      const TRAIL = [1, 0.6, 0.3];                // 3-Pixel-Schweif, abnehmend
+      for (let ti = 0; ti < TRAIL.length; ti++) {
+        ctx.globalAlpha = alpha * TRAIL[ti];
+        ctx.fillRect(sx, sy + rs + ti, rs, 1);    // je 1 px tiefer, dunkler
+      }
       // Grafikpass 4 R2 §(b): 1-px weiss-gelber KERN (#ffe9b0) obenauf — der heisse
       // Funkenkopf, der in Standbildern klar aus dem warmen Schweif heraussticht.
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = EMBER_CORE_HEX;
       ctx.fillRect(sx, sy, 1, 1);
     }

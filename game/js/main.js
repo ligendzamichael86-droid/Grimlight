@@ -489,8 +489,8 @@ const LIT_FLOOR_MAPS = new Set(['CATACOMBS', 'FLUESTERGRUFT', 'BOSS_KAMMER']);
 // unten), 0.20, 0.10] — unten satt, oben auslaufend. Gilt fuer Spieler, Gegner
 // UND (neu) echte Props (vase/urn/chest verlieren ihre gebackenen Schatten,
 // Art-Builder §3.5b). '#000', Unterkante y + h - 1.
-const SHADOW_W = [0.9, 0.7, 0.4];
-const SHADOW_A = [0.32, 0.20, 0.10];
+const SHADOW_W = [0.95, 0.7, 0.4];
+const SHADOW_A = [0.40, 0.20, 0.10];
 function drawSoftShadow(ent) {
   const cx = ent.x + ent.w / 2;
   const baseY = ent.y + ent.h - 1;

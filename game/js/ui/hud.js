@@ -42,14 +42,17 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillRect(px + 1, py + 1, pw - 2, Math.round((ph - 2) / 3));
     // §(c) [GP4 R2] 1-px-Innen-Bevel in Boss-Balken-Sprache, 1 px INNEN vom
     // erhabenen Aussenrahmen: oben/links +1 Stufe (hell #575061), unten/rechts
-    // -1 Stufe (dunkel #14101a) — dieselben Toene/Alphas wie der XP-/Boss-Bar-
-    // Innenbevel. Ersetzt den frueheren dunklen Innen-Schlagschatten oben/links
-    // (der als Vertiefung las und der Bevel-Lichtkante widersprach). fillRect-only.
-    ctx.globalAlpha = 0.4;
+    // -1 Stufe (dunkel #14101a) — dieselben Toene wie der XP-/Boss-Bar-Innenbevel.
+    // Ersetzt den frueheren dunklen Innen-Schlagschatten oben/links (der als
+    // Vertiefung las und der Bevel-Lichtkante widersprach). fillRect-only.
+    // §(d) [GP4 R3] Bevel NACHGESCHAERFT (Juror-M: 'echten eingelassenen Bevel'):
+    // Highlight-Alpha 0.4 -> 0.6, Schatten-Alpha 0.5 -> 0.7 — der eingelassene
+    // Bevel liest jetzt klar (Highlight oben/links, Schatten unten/rechts).
+    ctx.globalAlpha = 0.6;
     ctx.fillStyle = '#575061';
     ctx.fillRect(px + 2, py + 1, pw - 4, 1);      // Innenbevel oben (hell)
     ctx.fillRect(px + 1, py + 2, 1, ph - 4);      // Innenbevel links (hell)
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.7;
     ctx.fillStyle = '#14101a';
     ctx.fillRect(px + 2, py + ph - 2, pw - 4, 1); // Innenbevel unten (dunkel)
     ctx.fillRect(px + pw - 2, py + 2, 1, ph - 4); // Innenbevel rechts (dunkel)
@@ -65,6 +68,8 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Bevel rechts (dunkel)
     // §(c) [GP4 R2] 2x2-Nieten in den vier Ecken in Boss-Balken-Sprache: heller
     // Metallkopf (#575061) mit 1-px dunklem Schattenpunkt (#14101a) unten-rechts.
+    // §(d) [GP4 R3] zusaetzlich 1-px Glanzpunkt oben-links (#9a90a6, heller als der
+    // Kopf) — die Niete bekommt so ihre Specular-Spitze (Juror-M). fillRect-only.
     const rivets = [
       [px + 1, py + 1],           // oben-links
       [px + pw - 3, py + 1],      // oben-rechts
@@ -77,7 +82,10 @@ export function drawHUD(ctx, player, input, gfx) {
       ctx.fillRect(rx, ry, 2, 2);
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = '#14101a';
-      ctx.fillRect(rx + 1, ry + 1, 1, 1);
+      ctx.fillRect(rx + 1, ry + 1, 1, 1);      // Schattenpunkt unten-rechts
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#9a90a6';
+      ctx.fillRect(rx, ry, 1, 1);              // §(d) Glanzpunkt oben-links
     }
     ctx.restore();
   }

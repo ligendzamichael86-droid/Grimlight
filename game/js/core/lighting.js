@@ -133,7 +133,11 @@ export function createLighting(viewW, viewH) {
       ) continue;
       const cx = Math.round(light.x - camera.x);
       const cy = Math.round(light.y - camera.y);
-      const gr = r * 0.6; // §2.3: Glow-Radius kappen (kein breiter Teppich mehr)
+      // §2.3: Glow-Radius kappen (kein breiter Teppich mehr). Grafikpass 4 R3
+      // §(a): zusaetzlich um ~20 % gekuerzt (0.6 -> 0.48) — die warmen Pools
+      // liefen ueber die Tile-Kanten aus (Juror H-K5). NUR der Radius, der
+      // Farbverlauf (addColorStop) und der Kegel-Punch bleiben unangetastet.
+      const gr = r * 0.48;
       // Grafikpass 4 R2 §(a) GLOW-FARBVERLAUF: 2-Stufen-FARB-Verlauf statt reiner
       // Alpha-Abnahme — Kern warmorange (#d8722a = 216,114,42), die aeusseren
       // ~30 % (ab Stop 0.7) Richtung entsaettigt rosabraun/orange-rot (150,82,70).
@@ -155,27 +159,33 @@ export function createLighting(viewW, viewH) {
       // pulsierend ueber den vorhandenen Doppel-Sinus (wob in ~[-1..1]).
       const pulse = 0.75 + 0.25 * wob;               // ~[0.5 .. 1.0]
       const baseY = cy + 5;                          // Fackelbasis liegt unter der Flamme
+      // Grafikpass 4 R3 §(a): Boden-Glow-Radius um ~20 % gekuerzt (10 -> 8 px) —
+      // der Pool lief ueber die Tile-Kanten aus (Juror H-K5). NUR der Radius.
+      const bgR = 8;
       // Grafikpass 4 R2 §(a) GLOW-FARBVERLAUF: auch der Boden-Glow bekommt den
       // 2-Stufen-Farb-Verlauf — Kern warm-amber, aeusserer Rand Richtung
       // entsaettigt rosabraun (158,88,72). Spitzen-Alpha wie bisher (0.15*pulse).
-      const bg = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, 10);
+      const bg = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, bgR);
       bg.addColorStop(0, `rgba(216,150,70,${(0.15 * pulse).toFixed(3)})`);   // Kern: warm-amber
       bg.addColorStop(0.7, `rgba(178,104,74,${(0.05 * pulse).toFixed(3)})`); // Uebergang
       bg.addColorStop(1, 'rgba(158,88,72,0)');                               // Rand: entsaettigt rosabraun
       ctx.fillStyle = bg;
       ctx.beginPath();
-      ctx.arc(cx, baseY, 10, 0, Math.PI * 2);
+      ctx.arc(cx, baseY, bgR, 0, Math.PI * 2);
       ctx.fill();
 
-      // (b) 2-3 px weiss-gelber Flammenkern-Hotspot (Radial ~3 px, Stops ~0.5->0),
+      // (b) 2-3 px weiss-gelber Flammenkern-Hotspot (Radial, Stops ~0.5->0),
       // pulsierend wie der Boden-Glow. Sitzt knapp ueber dem Zentrum (Flammenkern).
+      // Grafikpass 4 R3 §(b): Hotspot-Radius leicht reduziert (~25 %: 3 -> 2.25 px),
+      // damit der weiss-gelbe Kern straffer sitzt (begleitet die Funken-Straffung).
       const hotY = cy - 3;
-      const hs = ctx.createRadialGradient(cx, hotY, 0, cx, hotY, 3);
+      const hsR = 2.25;
+      const hs = ctx.createRadialGradient(cx, hotY, 0, cx, hotY, hsR);
       hs.addColorStop(0, `rgba(255,240,200,${(0.5 * pulse).toFixed(3)})`);
       hs.addColorStop(1, 'rgba(255,240,200,0)');
       ctx.fillStyle = hs;
       ctx.beginPath();
-      ctx.arc(cx, hotY, 3, 0, Math.PI * 2);
+      ctx.arc(cx, hotY, hsR, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
