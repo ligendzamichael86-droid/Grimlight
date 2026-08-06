@@ -22,6 +22,18 @@
 
 import { tc, tileRect } from './coords.js';
 
+// Grafikpass 5 §3.B5 KANAL-SILHOUETTE (hash-frei entrechteckigt): beide
+// Wasser-Komponenten waren perfekte Rechtecke (Kanal x19-22/y9-16, geflutete
+// Herz-Nische x2-5/y12-18) — im Bild las sich das als gestempelter Block.
+// Je Komponente DREI '~'<->'.'-Tausche (Spec erlaubt 2-3), erzeugt und
+// nachgewiesen von .tmp/gen_canal_gp5.mjs:
+//   Kanal:   (19,9) '~'->'.'   (22,16) '~'->'.'   (18,16) '.'->'~'
+//   Nische:  (5,12) '~'->'.'   (2,18)  '~'->'.'   (6,17)  '.'->'~'
+// BEIDE Zeichen sind solid:false -> das Soliditaets-Raster ist BYTE-IDENTISCH,
+// der §36-Golden-Hash (sol UND geo) bleibt unveraendert; keine der 6 Zellen
+// traegt einen Spawn, ein Prop, ein Portal oder eine Fackel (§0.5-Tabu
+// eingehalten). Alle Zellen bleiben begehbar, die Erreichbarkeit aendert sich
+// nicht (beide Zeichen sind Boden).
 const FLUESTERGRUFT_ROWS = [
   '########################################',
   '####W#############W#####################',
@@ -32,16 +44,16 @@ const FLUESTERGRUFT_ROWS = [
   '####.#########.............####........#',
   '####.#########.............####........#',
   '####.#########..........P..#############',
-  '####.#########.....~~~~....#############',
+  '####.#########......~~~....#############',
   '####.#############W~~~~#################',
   '####...........####~~~~#################',
-  '##~~~~.........####~~~~#################',
+  '##~~~..........####~~~~#################',
   '##~~~~.........####~~~~#################',
   '##~~~~.........####~~~~#################',
   '##~~~~.........####~~~~W################',
-  '##~~~~.............~~~~.....############',
-  '##~~~~......................############',
-  '##~~~~......W...............W###########',
+  '##~~~~............~~~~......############',
+  '##~~~~~.....................############',
+  '##.~~~......W...............W###########',
   '#####.......................############',
   '#############...............############',
   '#############....R..D..R....############',
@@ -56,9 +68,15 @@ const FLUESTERGRUFT_LEGEND = {
   // (synchron, langsam). art:'water' bleibt Frame 0/Fallback, solid:false und
   // fringeTarget unberührt (begehbares Grabwasser).
   // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten.
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
-  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
-  ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true },
+  // Grafikpass 5 §2.A2 UNGERADE-n-SWEEP: n war 4 (gerade) -> brick_wall_v5
+  // (Art: Sickerspuren) haengt an, n=5. Ziegel-WAENDE bekommen bewusst KEIN
+  // bankSet-Flag (§3.B2/Review): kein Uferband an senkrechten Waenden.
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v5'] },
+  // §2.A2: n war 4 -> stone_floor_v7 (Art: Sickerflecken) haengt an, n=5.
+  // §3.B2 bankSet 's': der Steinboden ist die LANDkachel am Gruft-Kanal ->
+  // nasse Steinkante (t/T + n/k), KEIN Schlamm auf Stein.
+  '.': { art: 'stone_floor', solid: false, fringeTarget: true, bankSet: 's', variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3', 'stone_floor_v7'] },
+  ',': { art: 'stone_floor_cracked', solid: false, fringeTarget: true, bankSet: 's' },
   // Grafikpass 3 §2.2 + GP3-R3 (M-K3a): der GRUFTKANAL FLIESST VERTIKAL — die
   // Legende lenkt '~' vom horizontalen water-Zyklus auf den VERTIKALEN water_v-
   // Zyklus um (art:'water_v', anim water_v_0..3; Abwaertsdrift art-gebacken als
@@ -74,7 +92,12 @@ const FLUESTERGRUFT_LEGEND = {
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },
-  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1'] },
+  // Grafikpass 5 §1.8: die Gruft-Fackeln liefen als EINZIGE noch auf 2 Frames
+  // (Katakomben/Bosskammer sind seit GP4 dreiframig) — das las sich als Blinken
+  // statt als Flackern. Jetzt der gleiche 3-Frame-Zyklus wie ueberall sonst;
+  // animRate bleibt Default (6), kein animSync -> Positions-Offset staffelt
+  // benachbarte Fackeln weiterhin gegeneinander.
+  'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false },      // Portal zurueck CATACOMBS
   'D': { art: 'crypt_stairs_down', solid: false }, // Portal hinab BOSS_KAMMER
 };

@@ -31,7 +31,11 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillRect(px + 1, py + ph, pw, 1);         // Schatten unter der Unterkante (1 px nach rechts versetzt)
     ctx.fillRect(px + pw, py + 1, 1, ph);         // Schatten rechts der rechten Kante (1 px nach unten versetzt)
     // Grundflaeche (3 fillRects, vier Eckpixel frei = abgeschraegt)
-    ctx.globalAlpha = 0.55;
+    // Grafikpass 5 §1.4 (Jury-Dauerklage 'HUD schwimmt auf der Welt'): die
+    // Grundflaeche ist jetzt VOLL DECKEND (1.0 statt 0.55). 0.9 haette die Klage
+    // bestehen lassen (Review) — durch ein halbtransparentes Panel las die
+    // Gras-/Ziegeltextur weiter durch und fraß die Lesbarkeit der Herzen.
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#0a0a12';
     ctx.fillRect(px, py + 1, pw, ph - 2);         // Mittelband (volle Breite)
     ctx.fillRect(px + 1, py, pw - 2, 1);          // obere Zeile (Ecken frei)
@@ -52,8 +56,12 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillStyle = '#575061';
     ctx.fillRect(px + 2, py + 1, pw - 4, 1);      // Innenbevel oben (hell)
     ctx.fillRect(px + 1, py + 2, 1, ph - 4);      // Innenbevel links (hell)
+    // Grafikpass 5 §1.4: Schatten-Ton des Bevels von #14101a auf den MITTELTON
+    // #3a3542 (beide Vorkommen, innen wie aussen). Auf der jetzt voll deckenden,
+    // sehr dunklen Grundflaeche verschwand #14101a komplett — der Bevel las nur
+    // noch einseitig (Lichtkante ohne Gegenkante).
     ctx.globalAlpha = 0.7;
-    ctx.fillStyle = '#14101a';
+    ctx.fillStyle = '#3a3542';
     ctx.fillRect(px + 2, py + ph - 2, pw - 4, 1); // Innenbevel unten (dunkel)
     ctx.fillRect(px + pw - 2, py + 2, 1, ph - 4); // Innenbevel rechts (dunkel)
     // 2-Ton-Bevel: hell oben+links (Lichtkante)
@@ -61,9 +69,9 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.fillStyle = '#575061';
     ctx.fillRect(px + 1, py, pw - 2, 1);          // Bevel oben (hell)
     ctx.fillRect(px, py + 1, 1, ph - 2);          // Bevel links (hell)
-    // 2-Ton-Bevel: dunkel unten+rechts (Eigenschatten)
+    // 2-Ton-Bevel: dunkel unten+rechts (Eigenschatten) — §1.4: Mittelton #3a3542.
     ctx.globalAlpha = 0.6;
-    ctx.fillStyle = '#14101a';
+    ctx.fillStyle = '#3a3542';
     ctx.fillRect(px + 1, py + ph - 1, pw - 2, 1); // Bevel unten (dunkel)
     ctx.fillRect(px + pw - 1, py + 1, 1, ph - 2); // Bevel rechts (dunkel)
     // §(c) [GP4 R2] 2x2-Nieten in den vier Ecken in Boss-Balken-Sprache: heller
@@ -109,6 +117,13 @@ export function drawHUD(ctx, player, input, gfx) {
   ctx.font = '8px monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
+  // Grafikpass 5 §5.D6 GOLD-DOPPEL-DRAW: erst ein 1-px versetzter Dunkel-Zug
+  // (#14101a), dann der goldene Text darueber — die Zahl bekommt eine harte
+  // Kontur und steht auch auf hellem Panel-Bevel. Testneutral: die Flusstests
+  // lesen den GOLD-Text ueber find/startsWith, beide Zuege tragen denselben
+  // String (der erste Treffer ist unveraendert 'GOLD <n>').
+  ctx.fillStyle = '#14101a';
+  ctx.fillText(`GOLD ${player.gold}`, 5, 16);
   ctx.fillStyle = '#f0bf4e';
   ctx.fillText(`GOLD ${player.gold}`, 4, 15);
 
@@ -155,6 +170,12 @@ export function drawHUD(ctx, player, input, gfx) {
       ctx.fillRect(ix, iy, fw, 1);
       ctx.fillStyle = blink ? '#f1e9d3' : '#7d7588'; // unteres Band: Grundton
       ctx.fillRect(ix, iy + 1, fw, ih - 1);
+      // Grafikpass 5 §5.D6: 1-px-ANFANGS-SCHIMMER — die erste Spalte der
+      // Fuellung traegt den hellsten Ton. Der Balken bekommt damit einen
+      // Lichtanschlag und liest schon bei minimalem Fortschritt als GEFUELLT
+      // (vorher war der erste Fortschritt vom Rinnen-Ton kaum zu trennen).
+      ctx.fillStyle = '#f1e9d3';
+      ctx.fillRect(ix, iy, 1, ih);
     }
     // 1-px-Innenbevel: hell oben+links (Lichtkante)
     ctx.globalAlpha = 0.4;
@@ -169,11 +190,12 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.restore();
   }
 
-  // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x8 bei (120,7).
-  // Runde 3 (H-K6): 2-px dunkler Rahmen, 1-px Innenbevel (hell oben-links,
-  // dunkel unten-rechts), Vertikal-Gradient aus 3 fillRect-Baendern (helleres
-  // oberes Drittel), Segment-Ticks bei 25/50/75 % und eine entsaettigte
-  // 'verlorene HP'-Rinne hinter der aktuellen Fuellung. AUSSCHLIESSLICH fillRect
+  // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x12 bei (120,7)
+  // (Grafikpass 5 §1.5, vorher 80x8). 2-px Rahmen im Mittelton mit freien
+  // Eckpixeln, 1-px Innenbevel (hell oben-links, dunkel unten-rechts),
+  // Vertikal-Gradient aus 3 fillRect-Baendern (helleres oberes Band), KEINE
+  // Segment-Ticks mehr und eine entsaettigte 'verlorene HP'-Rinne hinter der
+  // aktuellen Fuellung. AUSSCHLIESSLICH fillRect
   // (keine strokeRect/arc/Gradient-Objekte). Bar bleibt in drawHUD NACH
   // lighting.draw, damit der ambientAlpha-Detektor der Boss-Flusstests (erstes
   // Teilalpha-fillRect auf dem Lighting-Offscreen, NICHT auf dem Haupt-Canvas)
@@ -181,39 +203,47 @@ export function drawHUD(ctx, player, input, gfx) {
   // Kein Namenstext (der Name kommt als Toast).
   const bb = player.bossBar;
   if (bb) {
-    const bx = 120, by = 7, bw = 80, bh = 8;              // Aussenmasse
-    const ix = bx + 2, iy = by + 2, iw = bw - 4, ih = bh - 4; // Innenflaeche 122,9,76,4
+    // Grafikpass 5 §1.5: bh 8 -> 12 (der Balken war auf 320x180 schlicht zu
+    // duenn, um als Boss-Leiste zu lesen). Kollisionsfrei belegt: das HUD-Panel
+    // endet bei x=56, der Balken beginnt bei (120,7) und endet bei y=19.
+    const bx = 120, by = 7, bw = 80, bh = 12;             // Aussenmasse
+    const ix = bx + 2, iy = by + 2, iw = bw - 4, ih = bh - 4; // Innenflaeche 122,9,76,8
     ctx.save();
-    // 2-px dunkler Rahmen (Vollflaeche; die Innenflaeche wird darueber neu gefuellt)
+    // 2-px Rahmen in lesbarem MITTELTON (§1.5: #575061 statt des frueheren
+    // #14101a, das vor dunklem Hintergrund unsichtbar war). Wie am HUD-Panel
+    // bleiben die vier ECKPIXEL FREI (3 fillRects statt einer Vollflaeche =
+    // abgeschraegte Ecken); die Innenflaeche wird darueber neu gefuellt.
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#14101a';
-    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = '#575061';
+    ctx.fillRect(bx, by + 1, bw, bh - 2);        // Mittelband (volle Breite)
+    ctx.fillRect(bx + 1, by, bw - 2, 1);         // obere Zeile (Ecken frei)
+    ctx.fillRect(bx + 1, by + bh - 1, bw - 2, 1); // untere Zeile (Ecken frei)
     // entsaettigte 'verlorene HP'-Rinne ueber die volle Innenbreite (dahinter)
     ctx.fillStyle = '#5a3936';
     ctx.fillRect(ix, iy, iw, ih);
-    // aktuelle HP-Fuellung als 3-Band-Vertikal-Gradient (oberes Drittel heller)
+    // aktuelle HP-Fuellung als 3-Band-Vertikal-Gradient (oberes Band heller).
+    // §1.5: bei ih 8 traegt das Lichtband 2 px (statt 1 px bei ih 4), damit das
+    // Verhaeltnis der drei Baender das alte Bild behaelt.
     const fw = Math.max(0, Math.round((iw * bb.hp) / bb.maxHp));
     if (fw > 0) {
-      ctx.fillStyle = '#c9463b';                 // oberes Drittel: heller
-      ctx.fillRect(ix, iy, fw, 1);
+      ctx.fillStyle = '#c9463b';                 // oberes Band: heller
+      ctx.fillRect(ix, iy, fw, 2);
       ctx.fillStyle = '#ae2f2a';                 // Mitte: Grundton
-      ctx.fillRect(ix, iy + 1, fw, ih - 2);
+      ctx.fillRect(ix, iy + 2, fw, ih - 3);
       ctx.fillStyle = '#872420';                 // unten: dunkler
       ctx.fillRect(ix, iy + ih - 1, fw, 1);
     }
-    // Segment-Ticks alle 25 % (1-px dunkle Vertikalen ueber die Innenhoehe)
-    ctx.fillStyle = '#14101a';
-    for (let k = 1; k <= 3; k++) {
-      ctx.fillRect(ix + Math.round((iw * k) / 4), iy, 1, ih);
-    }
+    // Grafikpass 5 §1.5: die Segment-Ticks (25/50/75 %) sind GESTRICHEN — sie
+    // zerhackten die ohnehin knappe Fuellflaeche in Kaestchen und lasen als
+    // Ladebalken statt als Lebensleiste.
     // 1-px Innenbevel: hell oben+links (Lichtkante)
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#575061';
     ctx.fillRect(ix, iy, iw, 1);                 // oben (hell)
     ctx.fillRect(ix, iy, 1, ih);                 // links (hell)
-    // 1-px Innenbevel: dunkel unten+rechts (Eigenschatten)
+    // 1-px Innenbevel: dunkel unten+rechts (§1.4-Mittelton #3a3542)
     ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#14101a';
+    ctx.fillStyle = '#3a3542';
     ctx.fillRect(ix, iy + ih - 1, iw, 1);        // unten (dunkel)
     ctx.fillRect(ix + iw - 1, iy, 1, ih);        // rechts (dunkel)
     ctx.restore();
@@ -337,32 +367,76 @@ export function drawFog(ctx, camera, gfx, timeSec) {
 
 let vignetteCanvas = null;
 
+// Grafikpass 5 §5.D1: die Vignette wird QUANTISIERT gebacken — 6 Alpha-Stufen
+// (0 .. 0.45 in Schritten von 0.09) plus geordnetes Bayer-4x4-Dither an den
+// Bandgrenzen. Der weiche Gradient war der letzte "moderne Weichzeichner" im
+// Bild; als Stufen+Dither spricht der Rand dieselbe Raster-Sprache wie
+// Lit-Dither und Wasser-Tiefen.
+// DETEKTOR-PFLICHT (§0.1): der Bake laeuft auf einem NICHT-Main-Canvas — die
+// Deckung steckt deshalb in der rgba-FUELLFARBE, globalAlpha bleibt exakt 1.
+// Sonst waere dieser fillRect der erste Teilalpha-fillRect auf einem
+// Offscreen und der ambientAlpha-Detektor der Boss-Flusstests laese ihn statt
+// lighting.js:66.
+const BAYER4 = [
+  [0, 8, 2, 10],
+  [12, 4, 14, 6],
+  [3, 11, 1, 9],
+  [15, 7, 13, 5],
+];
+const VIG_STEP = 0.09;               // Stufenhoehe; 5 * 0.09 = 0.45 = Max wie bisher
+const VIG_MAX_LEVEL = 5;             // Stufen 0..5 = 6 Stufen
+// Vorgerechnete Fuellfarben je Stufe (Ton wie bisher: fast schwarzes Blau).
+const VIG_STYLES = [];
+for (let i = 0; i <= VIG_MAX_LEVEL; i++) VIG_STYLES.push(`rgba(5,3,9,${(i * VIG_STEP).toFixed(2)})`);
+
 export function drawVignette(ctx) {
   if (!vignetteCanvas) {
     vignetteCanvas = document.createElement('canvas');
     vignetteCanvas.width = VIEW_W;
     vignetteCanvas.height = VIEW_H;
     const vctx = vignetteCanvas.getContext('2d');
-    // Runde 2 (§8c.2, GP3_RUNDE1_JURY.md Anweisung 9): die Vignette las in den
-    // Katakomben (g3_03/g3_06) als unmotivierter zentraler Dunkel-Fleck. Deutlich
-    // abgeschwaecht: Innenradius 60 -> 90 (die gesamte Bildmitte bleibt jetzt klar
-    // transparent, kein Fleck mehr), max-Alpha 0.75 -> 0.45, Mittel-Stop weicher
-    // (0.6/0.35 -> 0.55/0.14). Aussenradius 200 -> 190 (knapp an die Bild-Ecken
-    // r~184 herangezogen, damit die Ecken die max-Deckung ~0.42 wirklich erreichen
-    // und ein DEZENTER Rand-Fokus bleibt, statt ihn ueber die Ecken hinaus zu
-    // verschmieren). KEINE Kopplung an Lichtquellen in diesem Pass (Pass-4-Kandidat).
-    const grad = vctx.createRadialGradient(
-      VIEW_W / 2, VIEW_H / 2, 90,
-      VIEW_W / 2, VIEW_H / 2, 190
-    );
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(0.55, 'rgba(6,4,10,0.14)');
-    grad.addColorStop(1, 'rgba(4,2,8,0.45)');
-    vctx.fillStyle = grad;
-    vctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    // Radiales Profil wie GP3 (Innenradius 90 klar, Mittel-Stop 0.55 -> 0.14,
+    // Aussenradius 190 -> 0.45), aber in 6 Stufen gerastert statt interpoliert.
+    const cx = VIEW_W / 2;
+    const cy = VIEW_H / 2;
+    const R_IN = 90;
+    const R_OUT = 190;
+    vctx.globalAlpha = 1;
+    for (let y = 0; y < VIEW_H; y++) {
+      let runStart = 0;
+      let runStyle = null;
+      for (let x = 0; x <= VIEW_W; x++) {
+        let style = null;
+        if (x < VIEW_W) {
+          const dx = x + 0.5 - cx;
+          const dy = y + 0.5 - cy;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          const t = Math.max(0, Math.min(1, (d - R_IN) / (R_OUT - R_IN)));
+          // stueckweise lineares Profil (dieselben zwei Abschnitte wie der
+          // fruehere Gradient), danach Stufe + Bayer-Schwelle.
+          const a = t <= 0.55 ? (t / 0.55) * 0.14 : 0.14 + ((t - 0.55) / 0.45) * 0.31;
+          const lvl = Math.min(
+            VIG_MAX_LEVEL,
+            Math.floor(a / VIG_STEP + BAYER4[y & 3][x & 3] / 16)
+          );
+          if (lvl > 0) style = VIG_STYLES[lvl];
+        }
+        if (style !== runStyle) {
+          // Lauf abschliessen (zusammenhaengende Pixel gleicher Stufe = EIN
+          // fillRect; die Dither-Kanten brechen die Laeufe von selbst auf).
+          if (runStyle) {
+            vctx.fillStyle = runStyle;
+            vctx.fillRect(runStart, y, x - runStart, 1);
+          }
+          runStyle = style;
+          runStart = x;
+        }
+      }
+    }
   }
   ctx.drawImage(vignetteCanvas, 0, 0);
 }
+
 
 function centerText(ctx, text, y, color, font) {
   ctx.font = font;

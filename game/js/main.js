@@ -8,7 +8,7 @@ import { createInput } from './core/input.js';
 import { createCamera } from './core/camera.js';
 import { createLighting } from './core/lighting.js';
 import { createParticles } from './core/particles.js';
-import { createTilemap, litDitherCells } from './world/tilemap.js';
+import { createTilemap, litDitherCells, waterReflections } from './world/tilemap.js';
 // Slice 3: boss.js EINMAL explizit importieren — das Modulende registriert
 // kind 'graveward' im Verhaltens-Dispatch (registrierungs-/importreihenfolge-
 // abhaengig, dokumentiertes Risiko §3).
@@ -479,6 +479,15 @@ function drawMarkers() {
 // map_fluestergruft.js tabu ist (dort koennte das Flag nicht gesetzt werden).
 const LIT_FLOOR_MAPS = new Set(['CATACOMBS', 'FLUESTERGRUFT', 'BOSS_KAMMER']);
 
+// §1.7 [GP5]: Zellfilter fuer den Lit-Dither-Pass. Ausgeschlossen sind Wasser-
+// Kacheln (shorePrefix/depthOverlays) und ALLE animierten Kacheln (Wellen,
+// Fackelfuesse, Sway-Gras) — dort stuende das statische Dither-Raster auf einer
+// laufenden Textur. Ausserhalb der Map (defAt -> null) ebenfalls nichts.
+function litFilter(tx, ty) {
+  const d = map.defAt(tx, ty);
+  return !!d && !d.anim && !d.shorePrefix && !d.depthOverlays;
+}
+
 // §2.4 [GP4]: weicher Alpha-Bodenschatten (moderner Bodenkontakt) unter einer
 // Entity — AUSSCHLIESSLICH aus fillRect (die Flusstest-Stubs kennen kein
 // ctx.ellipse/roundRect): drei gestapelte, zentrierte 1-px-Zeilen mit Breiten
@@ -514,7 +523,11 @@ function drawWorld() {
   // (Stufe 1) / 0.30 (Stufe 2) auf dem HAUPT-ctx. TILE = 16 px.
   if (LIT_FLOOR_MAPS.has(currentMapKey)) {
     const torchLights = lights.filter((l) => (l.flicker || 0) >= 0.8);
-    const ditherCells = litDitherCells(torchLights, camera, timeSec, VIEW_W, VIEW_H);
+    // §1.7 [GP5]: 6. Parameter = Zellfilter. Wasser- und anim-Kacheln bekommen
+    // KEIN Lit-Dither — auf laufenden Wellen/Flammen schmiert das statische
+    // Raster (die Dither-Punkte stehen, die Kachel darunter laeuft). map.defAt
+    // ist die additive API aus tilemap.js.
+    const ditherCells = litDitherCells(torchLights, camera, timeSec, VIEW_W, VIEW_H, litFilter);
     if (ditherCells.length) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -527,6 +540,31 @@ function drawWorld() {
       ctx.restore();
       // §0.5 PFLICHT: gco/globalAlpha explizit zuruecksetzen (save/restore reicht
       // nicht — Composite-Leak braeche im Browser Portal-Fade und HUD).
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // §3.B4 [GP5] KANAL-REFLEXION: warme, geditherte Lichtsaeulen auf den
+  // WASSER-Kacheln, die orthogonal an einer Fackel liegen (geometrisch nur im
+  // Gruft-Kanal, Jury-Deklaration). Die Zellen kommen aus der reinen Funktion
+  // waterReflections (tilemap.js) — inkl. ganzzahligem ±1-px-Wackeln und der
+  // Intensitaets-Wahl water_reflect_0/_1. Gezeichnet direkt nach dem Boden
+  // (unter Markern/Entities) per 3-Argument-drawImage mit 'lighter'; fehlt der
+  // Art-Key noch, wird still nichts gezeichnet.
+  {
+    const reflectCells = waterReflections(lights, map.defAt, camera, timeSec);
+    if (reflectCells.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const c of reflectCells) {
+        const rimg = tiles[c.key];
+        if (!rimg) continue;
+        ctx.drawImage(rimg, c.sx, c.sy);
+      }
+      ctx.restore();
+      // §0.3 PFLICHT: Composite-Reset explizit (save/restore reicht nicht —
+      // ein Leak braeche im Browser Portal-Fade und HUD).
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
     }
@@ -578,11 +616,22 @@ function drawWorld() {
   // §2.4: Mini-Lichter der LEBENDEN Eliten PRO FRAME (Muster Selten-Drop-
   // Lichter; NICHT ins statische lights-Array, das klebt am Spawn).
   for (const l of eliteLights(enemies)) frameLights.push(l);
+  // §5.D4 [GP5]: statische Fuell-Lichter der Map (mapDef.extraLights, Engine-B
+  // setzt das Feld; BOSS_KAMMER bekommt ein Zentrums-Licht mit flicker 0.5).
+  // Sie liegen bewusst UNTER der 0.8-Schwelle: kein Warm-Glow, kein Lit-Dither,
+  // keine Funken, keine Wasser-Reflexion — nur Grundaufhellung der Arena.
+  // Fehlt das Feld, passiert nichts (additiv).
+  if (mapDef.extraLights) {
+    for (const l of mapDef.extraLights) frameLights.push(l);
+  }
   // §2.3: mapDef.ambientTint als 6. Argument durchreichen (Farbtemperatur je Map).
   lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec, mapDef.ambientTint);
   // §2.4: Funken NACH dem Dunkel-Overlay und VOR der Vignette — sie sind
   // selbstleuchtende Deko und werden vom Overlay NICHT abgedunkelt.
-  particles.draw(ctx, camera);
+  // §5.D3 [GP5]: frameLights + ambient durchreichen — die Staub-Motes werden
+  // damit lichtabhaengig gedimmt (Floor 0.25); die Glut-Funken bleiben bewusst
+  // lichtunabhaengig (Deklaration).
+  particles.draw(ctx, camera, frameLights, mapDef.ambient);
   drawVignette(ctx);
   drawHUD(ctx, player, input, gfx);
   drawPickupToast(ctx, camera, player, toast);

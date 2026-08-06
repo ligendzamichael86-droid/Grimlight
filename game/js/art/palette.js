@@ -110,4 +110,38 @@ export const PALETTE = {
   // .tmp/check_gfx4_art.mjs erzwingt genau 3 Symbol-Toene (=+*); ein neuer '#'
   // (~#3a4a4d) haette ihn rot gefaerbt. Daher Bestandston 'C' (#3c5a70, kaltblau)
   // als Rim verwendet — eine Stufe blauer als das Ideal, aber ohne Testbruch.
+  //
+  // GRAFIKPASS 5 (§1.1/§1.6/§3.B4/§3.B6) — NUR Kommentar, KEIN neuer Ton.
+  // Die Palette bleibt bei 61 Alnum + 3 Symbolen ('='/'+'/'*'). Festgehalten
+  // sind hier die Ton-Entscheide des Passes, weil sie sonst nur im Grid stehen:
+  //  1. Der GP4-R2-Notbehelf 'C' als Back-Kronen-Rim ist ZURUECKGENOMMEN. Der
+  //     kaltblaue Streifen las bei 4-6x als Stahlband quer durch den Wald
+  //     (Jury-Prio-0). Rim ist jetzt 'E' (#253522, Gras dunkel) — 'a' waere zu
+  //     hell und haette den Defekt in Gruen neu erzeugt (Review-Entscheid).
+  //     Damit taucht 'C' im ganzen art/-Bestand nur noch dort auf, wo Stahl
+  //     gemeint ist (Klingen).
+  //  2. TON-WAISEN beseitigt: 'n' (Nacht-Schatten) ist auf den shore_*-Kacheln
+  //     kein Wasserton mehr — er bleibt nur als LAND-seitiges Kontaktband und
+  //     als wasserseitiges Tiefenband der Konkav-Kacheln. Freistehende Tupfer
+  //     im offenen Wasser sind 'w'. Ebenso ersetzt: kalter 'i'-Schaum auf den
+  //     Konkav-Ufern -> 'W' (zweithellste Wasserstufe, wie GP4-R2 auf den
+  //     geraden Ufer-Tiles); Trank-Glanz 'i' -> warme Rampe 1 > y > o;
+  //     heart_full ohne Knochen-'N' (reine x > R > r-Rampe).
+  //  3. WASSER-RAMPE, gemessene Luminanz (0.299R+0.587G+0.114B):
+  //     k #14101a ~18  <  w #0c1815 ~20  <  W #1a3438 ~44
+  //     <  9 #284e54 ~63  <  '=' #3f7a70 ~103.
+  //     Deshalb ist §3.B6 "eine Stufe" wortwoertlich umsetzbar:
+  //     water_shallow  9 -> '='   (eine Stufe HELLER)
+  //     water_mid      9 -> 'W'   (eine Stufe DUNKLER)
+  //     water_mid_calm w -> 'k'   (eine Stufe DUNKLER; 'k' ist der einzige Ton
+  //                                UNTER 'w', dithered ~50 % gesetzt, damit die
+  //                                Tiefzone nicht flach schwarz kippt).
+  //     Der Deckungsgrad der drei Schleier ist dabei UNVERAENDERT geblieben —
+  //     die zeitliche Varianz im Teich-Fenster (Gate §7) haengt allein daran.
+  //     '=' bleibt mit ~103 unter dem Gras-Spitzlicht 'A' (#66804a ~114) und
+  //     weit unter dem Stein-Spitzlicht 'D' (#949eae ~157): Wasser wird durch
+  //     die Anhebung NICHT wieder der hellste Ton im Frame (GP3-R3-Auflage).
+  //  4. WARME TEXEL AUF WASSER gibt es ausschliesslich in water_reflect_0/_1
+  //     (Y/o/y). Das ist die Ton-Seite der Konsistenz-Regel §3.B4/§7: was warm
+  //     auf Wasser leuchtet, ist Kanal-Reflexion, nichts sonst.
 };

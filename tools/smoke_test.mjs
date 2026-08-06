@@ -8,7 +8,11 @@ import { PALETTE } from '../game/js/art/palette.js';
 import { SPRITES, TILE_ART } from '../game/js/art/sprites.js';
 // (erlaubte Alt-Test-Aenderung #5, GP4-§5): fringeOverlays + litDitherCells fuer
 // die neuen Konkav-Shore-/Lit-Dither-/Back-Kronen-Tests importiert.
-import { createTilemap, variantIndex, fringeOverlays, litDitherCells } from '../game/js/world/tilemap.js';
+// (erlaubte Alt-Test-Aenderung #4, GP5-§6): shoreEdges/bankOverlays/
+// waterReflections fuer die additiven Paket-B-Tests (a)-(c) importiert.
+// anchorOffset wird BEWUSST NICHT importiert — Test #1 spiegelt die
+// §4.C2-Formeln woertlich, damit eine Formel-Aenderung in tilemap.js auffliegt.
+import { createTilemap, variantIndex, fringeOverlays, litDitherCells, shoreEdges, bankOverlays, waterReflections } from '../game/js/world/tilemap.js';
 // Slice 3: boss.js EINMAL zentral importieren — registriert kind 'graveward'
 // im Verhaltens-Dispatch (import-reihenfolgeabhaengig, §4).
 import { createGraveward } from '../game/js/entities/boss.js';
@@ -520,6 +524,41 @@ let fightWorld = null;
   ];
   const missingG4 = gfx4Tiles.filter((k) => !TILE_ART[k]);
   check('Alle Grafikpass-4-TILE_ART-Schlüssel existieren', missingG4.length === 0, missingG4.join(','));
+  // (erlaubte Alt-Test-Aenderung #3, GP5-§6): ADDITIVE Existenz-Pruefung des in
+  // §9 EINGEFRORENEN GP5-Interfaces. Werden von Art parallel geliefert.
+  {
+    // §2.A1 GRAS-POOL: 47 Kacheln grass_g5_00..46 (Praefix-Zaehlung >= 47).
+    const pool = Object.keys(TILE_ART).filter((k) => k.startsWith('grass_g5_'));
+    check('GP5 §2.A1: Gras-Pool grass_g5_* hat >= 47 Kacheln',
+      pool.length >= 47, `gefunden ${pool.length}`);
+    const poolMissing = [];
+    for (let i = 0; i < 47; i++) {
+      const k = `grass_g5_${String(i).padStart(2, '0')}`;
+      if (!TILE_ART[k]) poolMissing.push(k);
+    }
+    check('GP5 §2.A1: grass_g5_00..grass_g5_46 lueckenlos vorhanden',
+      poolMissing.length === 0, poolMissing.join(','));
+    // §3.B2/B3/B4: Uferband, Diagonal-Kappen, Kanal-Reflexion.
+    const bankKeys = [];
+    for (const side of ['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw']) {
+      for (const set of ['g', 's']) bankKeys.push(`bank_${side}_${set}`);
+    }
+    const capKeys = ['shore_cap_nw', 'shore_cap_ne', 'shore_cap_sw', 'shore_cap_se',
+      'shore_cap_wn', 'shore_cap_en', 'shore_cap_ws', 'shore_cap_es'];
+    const gfx5Tiles = [...bankKeys, ...capKeys, 'water_reflect_0', 'water_reflect_1'];
+    const missingG5 = gfx5Tiles.filter((k) => !TILE_ART[k]);
+    check('GP5 §3.B2/B3/B4: bank_*_g|s (16), shore_cap_* (8), water_reflect_0/_1 existieren',
+      missingG5.length === 0, missingG5.join(','));
+    // §2.A2 ZUSATZVARIANTEN (die neuen Grids der UNGERADE-n-Sweeps).
+    const a2Tiles = [
+      'brick_wall_v4', 'brick_wall_v5', 'brick_wall_v6',
+      'stone_floor_v4', 'stone_floor_v5', 'stone_floor_v6', 'stone_floor_v7', 'stone_floor_v8',
+      'path_v6', 'grass_tuft_v1',
+    ];
+    const missingA2 = a2Tiles.filter((k) => !TILE_ART[k]);
+    check('GP5 §2.A2: alle Zusatzvarianten (brick_wall_v4-v6, stone_floor_v4-v8, path_v6, grass_tuft_v1) existieren',
+      missingA2.length === 0, missingA2.join(','));
+  }
   let cyc = null;
   for (const dir of ['down', 'up', 'side']) {
     for (let f = 0; f < 4; f++) if (!SPRITES[`player_${dir}_${f}`]) cyc = `player_${dir}_${f}`;
@@ -1733,12 +1772,27 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     const shadowAt = [];
     const ctxS = {
       canvas: { width: N * 16, height: N * 16 },
-      drawImage: (img, sx, sy) => { if (img === 'canopy_shadow') shadowAt.push([sx / 16, sy / 16]); },
+      drawImage: (img, sx, sy) => { if (img === 'canopy_shadow') shadowAt.push([sx, sy]); },
     };
     tmS.draw(ctxS, { x: 0, y: 0 }, anyTiles, 0, 'ground');
-    const hit = (x, y) => shadowAt.some(([sx, sy]) => sx === x && sy === y);
-    check('Kronen-Schatten: canopy_shadow im GROUND-Pass unter der 2×2-Anker-Fläche (ay+2)',
-      shadowAt.length === 2 && hit(2, 4) && hit(3, 4), `zellen=${JSON.stringify(shadowAt)}`);
+    // (erlaubte Alt-Test-Aenderung #1, GP5-§6 — SCHATTEN-HAELFTE der Anker-Formel):
+    // §4.C2 verlangt, dass der canopy_shadow-Zeichenpfad DENSELBEN dx/dy anwendet
+    // wie die Krone (sonst risse der Schatten bei bis zu ±14/±4 px sichtbar ab).
+    // Der Test rechnete bisher sx/16 auf ganze Tiles zurueck und kann das
+    // Pixel-Offset deshalb nicht mehr abbilden. Die Zell-Zuordnung (ax..ax+sw-1,
+    // Zeile ay+sh) bleibt unveraendert geprueft — nur in PIXELN statt in Tiles,
+    // und mit dem WOERTLICH aus §4.C2 gespiegelten Versatz des Ankers (2,2).
+    const AS_X = 2, AS_Y = 2;
+    const dxRawS = variantIndex(AS_X + 1013, AS_Y + 571, 29);
+    const dx0S = dxRawS - 14;
+    const W_S = 2; // 'M' = tree_canopy_2x2_a -> Anker-Klasse "Front _a/_am/_c/_cm"
+    const dxS = Math.max(-W_S, Math.min(W_S, dx0S));
+    const dyRawS = variantIndex(AS_X + 421, AS_Y + 907, 17);
+    const dyS = (dyRawS % 9) - 4;
+    const hit = (x, y) => shadowAt.some(([sx, sy]) => sx === x * 16 + dxS && sy === y * 16 + dyS);
+    check('Kronen-Schatten: canopy_shadow im GROUND-Pass unter der 2×2-Anker-Fläche (ay+2), mit dem Anker-Offset §4.C2',
+      shadowAt.length === 2 && hit(2, 4) && hit(3, 4),
+      `zellen=${JSON.stringify(shadowAt)} erwartet dx=${dxS} dy=${dyS}`);
     const overShadow = drawKeys(tmS, { x: 0, y: 0 }, 0, 'over').filter((k) => k === 'canopy_shadow');
     check('Kronen-Schatten: der Over-Pass zeichnet keinen canopy_shadow', overShadow.length === 0);
   }
@@ -1816,29 +1870,99 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     check('Nassrand: OHNE shorePrefix keine wet_*-Keys', !dk.some((k) => /^wet_/.test(String(k))));
   }
 
-  // --- Grafikpass 3 §2.1 Anker-Jitter: deterministischer vertikaler Versatz
-  //     variantIndex(tx,ty,5)-2 (-2..+2) auf Span-Anker; Culling +1 Tile oben. ---
+  // --- (erlaubte Alt-Test-Aenderung #1, GP5-§6) Grafikpass 5 §4.C2 ANKER-OFFSET.
+  //     Der GP3-Jitter (vertikal, variantIndex(tx,ty,5)-2, -2..+2) ist ERSETZT
+  //     durch einen ZWEIDIMENSIONALEN, pro Anker-KLASSE geklammerten Versatz.
+  //     Die Formeln stehen hier WOERTLICH wie in Spec §4.C2 — sie werden NICHT
+  //     aus tilemap.js importiert, damit jede Formel-Aenderung dort auffliegt:
+  //       dxRaw = variantIndex(tx + 1013, ty + 571, 29)
+  //       dx0   = dxRaw - 14                              // -14..+14
+  //       dx    = clamp(dx0, -W, +W)                      // W je ANKER-KLASSE
+  //       dyRaw = variantIndex(tx + 421, ty + 907, 17); dy = dyRaw % 9 - 4
+  //     ANKER-KLASSEN: Back (Y/Z/A) W=14 | Front ohne Stammdeckung W=14 |
+  //     Front _b/_bm W=6 | Front _a/_am/_c/_cm W=2. ---
   {
     const N = 12;
     const gRows = Array.from({ length: N }, () => '.'.repeat(N));
-    const oGrid = Array.from({ length: N }, () => Array(N).fill('.'));
     const AX = 4, AY = 5;
-    oGrid[AY][AX] = 'M';
-    const legend = { '.': { art: 'grass' }, M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false } };
-    const tmJ = createTilemap(gRows, legend, oGrid.map((r) => r.join('')));
-    const capSy = (store) => ({ canvas: { width: N * 16, height: N * 16 }, drawImage: (img, sx, sy) => { if (img === 'tree_canopy_2x2_a') store.v = sy; } });
-    const s1 = {}; tmJ.draw(capSy(s1), { x: 0, y: 0 }, anyTiles, 0, 'over');
-    const jy = variantIndex(AX, AY, 5) - 2;
-    check('Anker-Jitter: sy = ty*16 + (variantIndex(tx,ty,5)-2)', s1.v === AY * 16 + jy, `sy=${s1.v} erwartet=${AY * 16 + jy}`);
-    check('Anker-Jitter: Versatz deterministisch im Bereich -2..+2', jy >= -2 && jy <= 2);
-    const s2 = {}; tmJ.draw(capSy(s2), { x: 0, y: 0 }, anyTiles, 0, 'over');
-    check('Anker-Jitter: deterministisch (zwei Draws identisch)', s2.v === s1.v);
-    // Culling +1 Tile oben: Kamera so, dass der Anker EINE Zeile oberhalb des
-    // alten Kronen-Startfensters liegt — nur mit der GP3-Erweiterung wird er
-    // noch erfasst (Jitter kann ihn in den Viewport schieben).
-    const drawnJ = drawKeys(tmJ, { x: 48, y: (AY + 2) * 16 }, 0, 'over', 32, 32);
-    check('Anker-Jitter: Kamera-Fenster erfasst gejitterte Anker (Culling +1 Tile oben)',
+    const mkOver = (ch) => {
+      const g = Array.from({ length: N }, () => Array(N).fill('.'));
+      g[AY][AX] = ch;
+      return g.map((r) => r.join(''));
+    };
+    const legend = {
+      '.': { art: 'grass' },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },  // Klasse W=2
+      N: { art: 'tree_canopy_2x2_b', span: [2, 2], solid: false },  // Klasse W=6
+      Y: { art: 'tree_canopy_back_a', span: [2, 2], solid: false }, // Klasse W=14
+      P: { art: 'crown_no_trunk', span: [2, 2], solid: false },     // Default W=14
+    };
+    // Formeln WOERTLICH aus §4.C2 (Klammerbreite W als Parameter):
+    const dxOf = (tx, ty, W) => {
+      const dxRaw = variantIndex(tx + 1013, ty + 571, 29);
+      const dx0 = dxRaw - 14;
+      return Math.max(-W, Math.min(W, dx0));
+    };
+    const dyOf = (tx, ty) => {
+      const dyRaw = variantIndex(tx + 421, ty + 907, 17);
+      return (dyRaw % 9) - 4;
+    };
+    const capXY = (tm, art) => {
+      const store = {};
+      tm.draw({ canvas: { width: N * 16, height: N * 16 }, drawImage: (img, sx, sy) => { if (img === art) { store.x = sx; store.y = sy; } } },
+        { x: 0, y: 0 }, anyTiles, 0, 'over');
+      return store;
+    };
+    const tmM = createTilemap(gRows, legend, mkOver('M'));
+    const s1 = capXY(tmM, 'tree_canopy_2x2_a');
+    const dxM = dxOf(AX, AY, 2);
+    const dyA = dyOf(AX, AY);
+    check('Anker-Offset §4.C2: sx = tx*16 + clamp(variantIndex(tx+1013,ty+571,29)-14, -W, +W)',
+      s1.x === AX * 16 + dxM, `sx=${s1.x} erwartet=${AX * 16 + dxM} (W=2)`);
+    check('Anker-Offset §4.C2: sy = ty*16 + (variantIndex(tx+421,ty+907,17) % 9 - 4)',
+      s1.y === AY * 16 + dyA, `sy=${s1.y} erwartet=${AY * 16 + dyA}`);
+    check('Anker-Offset §4.C2: dy-Bereich -4..+4', dyA >= -4 && dyA <= 4, `dy=${dyA}`);
+    check('Anker-Offset §4.C2: dx-Bereich der Klasse Front _a (W=2)', dxM >= -2 && dxM <= 2, `dx=${dxM}`);
+    const s2 = capXY(tmM, 'tree_canopy_2x2_a');
+    check('Anker-Offset: deterministisch (zwei Draws identisch)', s2.x === s1.x && s2.y === s1.y);
+    // ANKER-KLASSEN-TABELLE: derselbe Anker-Ort, andere Klasse -> andere Klammer.
+    const sN = capXY(createTilemap(gRows, legend, mkOver('N')), 'tree_canopy_2x2_b');
+    const sY = capXY(createTilemap(gRows, legend, mkOver('Y')), 'tree_canopy_back_a');
+    const sP = capXY(createTilemap(gRows, legend, mkOver('P')), 'crown_no_trunk');
+    check('Anker-Offset §4.C2: Klasse Front _b/_bm -> W=6',
+      sN.x === AX * 16 + dxOf(AX, AY, 6), `sx=${sN.x} erwartet=${AX * 16 + dxOf(AX, AY, 6)}`);
+    check('Anker-Offset §4.C2: Klasse Back (Y/Z/A) -> W=14',
+      sY.x === AX * 16 + dxOf(AX, AY, 14), `sx=${sY.x} erwartet=${AX * 16 + dxOf(AX, AY, 14)}`);
+    check('Anker-Offset §4.C2: unbekannter Anker (Front ohne Stammdeckung) -> Default W=14',
+      sP.x === AX * 16 + dxOf(AX, AY, 14), `sx=${sP.x} erwartet=${AX * 16 + dxOf(AX, AY, 14)}`);
+    check('Anker-Offset §4.C2: dy ist klassen-UNABHAENGIG (identisch fuer alle vier)',
+      sN.y === s1.y && sY.y === s1.y && sP.y === s1.y);
+    // CULLING (§4.C2, NUR der Over-Zweig): txStart 1 Spalte weiter links (dx>0
+    // zieht Anker von links herein), tyEnd +1 (dy<0 zieht Anker von unten herein),
+    // beide weiterhin auf 0..wTiles-1 / 0..hTiles-1 geklammert.
+    const drawnJ = drawKeys(tmM, { x: 48, y: (AY + 2) * 16 }, 0, 'over', 32, 32);
+    check('Anker-Offset: Kamera-Fenster erfasst versetzte Anker (Culling oben, Bestand GP3)',
       drawnJ.includes('tree_canopy_2x2_a'));
+    {
+      // txStart: Kamera bei tx0=6; Anker bei tx=4 = tx0-(maxSpanW-1)-1 -> nur mit
+      // der GP5-Erweiterung im Fenster.
+      const drawnL = drawKeys(tmM, { x: 6 * 16, y: AY * 16 }, 0, 'over', 32, 32);
+      check('Anker-Offset §4.C2 Culling: txStart eine Spalte weiter links (dx>0 zieht von links herein)',
+        drawnL.includes('tree_canopy_2x2_a'));
+      // tyEnd: Kamera so, dass ty1 = AY-1 ist; nur mit tyEnd+1 wird der Anker erfasst.
+      const drawnD = drawKeys(tmM, { x: AX * 16, y: (AY - 2) * 16 + 8 }, 0, 'over', 32, 24);
+      check('Anker-Offset §4.C2 Culling: tyEnd +1 (dy<0 zieht von unten herein)',
+        drawnD.includes('tree_canopy_2x2_a'));
+      // Klammerung: Kamera am rechten/unteren Rand darf NICHT ueber cells[hTiles]
+      // laufen (der Ground-Zweig teilt die Schleife) — ungeklammert = Absturz.
+      let crashed = null;
+      try {
+        drawKeys(tmM, { x: (N - 2) * 16, y: (N - 2) * 16 }, 0, 'over', 320, 180);
+        drawKeys(tmM, { x: (N - 2) * 16, y: (N - 2) * 16 }, 0, 'ground', 320, 180);
+      } catch (e) { crashed = e.message; }
+      check('Anker-Offset §4.C2 Culling: Grenzen bleiben geklammert (kein Zugriff ausserhalb der Map)',
+        crashed === null, crashed || '');
+    }
   }
 }
 
@@ -1955,30 +2079,55 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   const b = litDitherCells(lights, camera, 1.234, 320, 180);
   check('§5#5b litDither: gleiche Args -> identische Liste (deterministisch)',
     JSON.stringify(a) === JSON.stringify(b) && a.length > 0);
-  // Stufen-Radien: eine Zelle im Kern (dist < r*0.45) ist Stufe 2, eine im
-  // Aussenring (r*0.45 <= dist < r*0.75) ist Stufe 1. Einzelne ruhige Fackel
-  // (flicker 0) fuer exakte Radien.
+  // (erlaubte Alt-Test-Aenderung #2, GP5-§6): Stufen-Radien 0.45/0.75 -> 0.40/0.70
+  // (§5.D2 Stufen-Vereinheitlichung). Eine Zelle im Kern (dist < r*0.40) ist
+  // Stufe 2, eine im Aussenring (r*0.40 <= dist < r*0.70) ist Stufe 1. Einzelne
+  // ruhige Fackel (flicker 0) fuer exakte Radien. Die DIREKTAUFRUFE bleiben
+  // FUENFARGUMENTIG — der isLit-Filter aus §1.7 ist optional (Regression).
   const one = [{ x: 40, y: 40, radius: 40, flicker: 0 }];
   const cells = litDitherCells(one, { x: 0, y: 0 }, 0, 320, 180);
   const at = (tx, ty) => cells.find((c) => c.tx === tx && c.ty === ty);
-  // Tile (2,2) Zentrum (40,40) == Fackel -> dist 0 < 18 -> Stufe 2.
-  check('§5#5b litDither: Zellzentrum auf der Fackel -> Stufe 2 (dist < r*0.45)',
+  // Tile (2,2) Zentrum (40,40) == Fackel -> dist 0 < 16 -> Stufe 2.
+  check('§5#5b litDither: Zellzentrum auf der Fackel -> Stufe 2 (dist < r*0.40)',
     !!at(2, 2) && at(2, 2).stufe === 2);
-  // r*0.45 = 18, r*0.75 = 30. Tile (0,2): Zentrum (8,40), dist=32 >= 30 -> keine
-  // Zelle. Tile (1,2): Zentrum (24,40), dist=16 < 18 -> Stufe 2. Tile (2,0):
-  // Zentrum (40,8), dist=32 -> keine. Suche eine Stufe-1-Zelle (18<=dist<30):
+  // r*0.40 = 16, r*0.70 = 28. Tile (1,2): Zentrum (24,40), dist=16 -> NICHT < 16
+  // -> Stufe 1. Tile (0,2): Zentrum (8,40), dist=32 >= 28 -> keine Zelle.
   const stufe1 = cells.find((c) => c.stufe === 1);
-  check('§5#5b litDither: Aussenring liefert Stufe-1-Zellen (r*0.45 <= dist < r*0.75)',
+  check('§5#5b litDither: Aussenring liefert Stufe-1-Zellen (r*0.40 <= dist < r*0.70)',
     !!stufe1);
-  // keine Zelle ausserhalb r*0.75.
+  // keine Zelle ausserhalb r*0.70.
   const anyBadRadius = cells.some((c) => {
     const cx = c.tx * 16 + 8, cy = c.ty * 16 + 8;
     const d = Math.hypot(cx - 40, cy - 40);
-    return d >= 40 * 0.75 + 1e-9;
+    return d >= 40 * 0.70 + 1e-9;
   });
-  check('§5#5b litDither: keine Zelle jenseits r*0.75', !anyBadRadius);
+  check('§5#5b litDither: keine Zelle jenseits r*0.70', !anyBadRadius);
   check('§5#5b litDither: key via variantIndex(tx,ty,2) -> licht_dither_1/_2',
     cells.every((c) => c.key === (variantIndex(c.tx, c.ty, 2) === 0 ? 'licht_dither_1' : 'licht_dither_2')));
+  // ADDITIV (erlaubte Alt-Test-Aenderung #2, GP5-§6): §1.7 WASSER-FILTER. Der
+  // OPTIONALE 6. Parameter isLit(tx,ty) schliesst Zellen aus; fehlt er, ist das
+  // Verhalten byte-gleich zu oben. Geprueft am echten Gruft-Kanal (Wasser =
+  // shorePrefix/depthOverlays — dieselbe Wahrheit wie main.js litFilter).
+  {
+    const tmW = createTilemap(FLUESTERGRUFT.rows, FLUESTERGRUFT.legend);
+    const isWaterCell = (tx, ty) => {
+      const d = tmW.defAt(tx, ty);
+      return !!d && !!(d.shorePrefix || d.depthOverlays);
+    };
+    const camW = { x: 14 * 16, y: 6 * 16 };
+    const lightsW = [{ x: 20 * 16 + 8, y: 12 * 16 + 8, radius: 72, flicker: 1 }];
+    const unfiltered = litDitherCells(lightsW, camW, 0.4, 320, 180);
+    const filtered = litDitherCells(lightsW, camW, 0.4, 320, 180, (tx, ty) => !isWaterCell(tx, ty));
+    check('§1.7 litDither-Filter: OHNE Filter liegen Wasser-Zellen im Kegel (Ausgangslage)',
+      unfiltered.some((c) => isWaterCell(c.tx, c.ty)), `zellen=${unfiltered.length}`);
+    check('§1.7 litDither-Filter: MIT Filter keine einzige Wasser-Zelle',
+      filtered.length > 0 && !filtered.some((c) => isWaterCell(c.tx, c.ty)),
+      `zellen=${filtered.length}`);
+    check('§1.7 litDither-Filter: entfernt nur, fuegt nie hinzu (Teilmenge, Stufen unveraendert)',
+      filtered.every((c) => unfiltered.some((u) => u.tx === c.tx && u.ty === c.ty && u.stufe === c.stufe && u.key === c.key)));
+    check('§1.7 litDither-Filter: Direktaufruf mit 5 Argumenten unveraendert (Parameter optional)',
+      JSON.stringify(litDitherCells(lightsW, camW, 0.4, 320, 180)) === JSON.stringify(unfiltered));
+  }
 
   // (c) Back-Kronen-Z-Ordnung: Back-Anker (Y) EINE Zeile ueber dem Front-Anker (M)
   // muss VOR ihm gezeichnet werden (frueheres ty -> frueher im Draw-Loop -> Front
@@ -2002,6 +2151,295 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     const iFront = order.indexOf('F');
     check('§5#5c Back-Kronen: Back-Anker zeichnet VOR dem Front-Anker (Z-Ordnung)',
       iBack >= 0 && iFront >= 0 && iBack < iFront, `back=${iBack} front=${iFront}`);
+  }
+}
+
+// ===========================================================================
+// (erlaubte Alt-Test-Aenderung #4, GP5-§6): sechs ADDITIVE NEUE Smoke-Tests
+// (a)-(f) laut Spec §6.4. Kein Bestandstest wird dabei angefasst.
+// ===========================================================================
+{
+  // Lokale Helfer (die gleichnamigen aus Abschnitt 35 sind dort block-scoped).
+  const anyTiles5 = new Proxy({}, { get: (_, k) => k });
+  const drawKeys5 = (tm, cam, timeSec, layer, cw = 320, ch = 180) => {
+    const out = [];
+    tm.draw({ canvas: { width: cw, height: ch }, drawImage: (img) => out.push(img) }, cam, anyTiles5, timeSec, layer);
+    return out;
+  };
+  // --- (a) shoreEdges-KOMPLEMENT (§3.B1) + Diagonal-Kappen (§3.B3) ----------
+  // shoreEdges emittiert NUR fuer Kanten, die fringeOverlays NICHT bedient:
+  // orthogonale Nachbarn, die WEDER Wasser sind NOCH fringeSource tragen.
+  {
+    const WATER = { art: 'water', solid: false, fringeTarget: true, shorePrefix: 'shore' };
+    const GRASS = { art: 'grass', solid: false, fringeSource: true, fringeSet: 'grass' };
+    const STONE = { art: 'stone_floor', solid: false, fringeTarget: true }; // rohe Kante
+    // Nachbarschaft synthetisch: cells = { 'dx,dy': def }, Ziel-Tile (0,0) = Wasser.
+    const emitS = (cells) => {
+      const getDef = (tx, ty) => (tx === 0 && ty === 0 ? WATER : (cells[`${tx},${ty}`] || null));
+      return shoreEdges(getDef, 0, 0);
+    };
+    check('§6#4a shoreEdges: fringeSource-Nachbar (Gras) -> KEINE Emission (Komplement-Regel)',
+      JSON.stringify(emitS({ '0,-1': GRASS })) === '[]', JSON.stringify(emitS({ '0,-1': GRASS })));
+    check('§6#4a shoreEdges: Steinboden-Nachbar (rohe Kante) -> shore_n',
+      JSON.stringify(emitS({ '0,-1': STONE })) === '["shore_n"]', JSON.stringify(emitS({ '0,-1': STONE })));
+    check('§6#4a shoreEdges: Wasser-Nachbar -> keine Kante',
+      JSON.stringify(emitS({ '0,-1': WATER })) === '[]');
+    check('§6#4a shoreEdges: ausserhalb der Map (null) -> keine Kante',
+      JSON.stringify(emitS({})) === '[]');
+    check('§6#4a shoreEdges: Nicht-Wasser-Kachel liefert nie etwas',
+      JSON.stringify(shoreEdges(() => STONE, 0, 0)) === '[]');
+    // DIAGONAL-FALL (§3.B3): Nordkante liegt an Land, Westen UND Nordwesten sind
+    // Wasser -> die gerade Nordkante laeuft diagonal weiter: shore_cap_nw.
+    const capOut = emitS({ '0,-1': STONE, '-1,0': WATER, '-1,-1': WATER });
+    check('§6#4a shoreEdges: Diagonal-Fall liefert ZUSAETZLICH den Cap-Key shore_cap_nw',
+      capOut.includes('shore_n') && capOut.includes('shore_cap_nw'), JSON.stringify(capOut));
+    // Ohne Wasser-Diagonale KEIN Cap (nur die gerade Kante).
+    const noCap = emitS({ '0,-1': STONE, '-1,0': WATER, '-1,-1': STONE });
+    check('§6#4a shoreEdges: ohne Wasser-Diagonale KEIN Cap-Key',
+      !noCap.some((k) => k.startsWith('shore_cap_')), JSON.stringify(noCap));
+    // Der Cap kommt auch, wenn die gerade Kante von fringeOverlays gezeichnet wird
+    // (Gras-Nachbar): additiv, kein Ersetzen.
+    const capG = emitS({ '0,-1': GRASS, '-1,0': WATER, '-1,-1': WATER });
+    check('§6#4a shoreEdges: Cap ist additiv auch ueber einer fringeOverlays-Kante',
+      JSON.stringify(capG) === '["shore_cap_nw"]', JSON.stringify(capG));
+    // Realbezug: der Friedhofsteich hat an der Weg-Kante eine rohe Kante.
+    const tmG = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend);
+    let rawEdges = 0;
+    for (let ty = 0; ty < GRAVEYARD.rows.length; ty++) {
+      for (let tx = 0; tx < GRAVEYARD.rows[0].length; tx++) {
+        rawEdges += shoreEdges(tmG.defAt, tx, ty).filter((k) => /^shore_[nesw]$/.test(k)).length;
+      }
+    }
+    check('§6#4a shoreEdges: der Friedhofsteich hat rohe Kanten (> 0 Emissionen auf der echten Map)',
+      rawEdges > 0, `rohe Kanten=${rawEdges}`);
+  }
+
+  // --- (b) bankOverlays (§3.B2): bankSet-Logik, Wand ohne Flag -> leer -------
+  {
+    const WATER = { art: 'water', solid: false, shorePrefix: 'shore' };
+    const GRASS = { art: 'grass', solid: false, bankSet: 'g' };
+    const STONE = { art: 'stone_floor', solid: false, bankSet: 's' };
+    const WALL = { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss' }; // KEIN bankSet
+    const emitB = (self, cells) => {
+      const getDef = (tx, ty) => (tx === 0 && ty === 0 ? self : (cells[`${tx},${ty}`] || null));
+      return bankOverlays(getDef, 0, 0);
+    };
+    check('§6#4b bankOverlays: Gras-Land mit Wasser im Osten -> bank_e_g',
+      JSON.stringify(emitB(GRASS, { '1,0': WATER })) === '["bank_e_g"]',
+      JSON.stringify(emitB(GRASS, { '1,0': WATER })));
+    check('§6#4b bankOverlays: Steinboden-Land -> _s-Satz (kein Schlamm auf Stein)',
+      JSON.stringify(emitB(STONE, { '0,1': WATER })) === '["bank_s_s"]',
+      JSON.stringify(emitB(STONE, { '0,1': WATER })));
+    check('§6#4b bankOverlays: ZIEGELWAND ohne bankSet-Flag -> LEER (kein Band auf Waenden)',
+      JSON.stringify(emitB(WALL, { '1,0': WATER, '0,1': WATER })) === '[]',
+      JSON.stringify(emitB(WALL, { '1,0': WATER, '0,1': WATER })));
+    check('§6#4b bankOverlays: Wasser-Kachel selbst -> LEER (nur LAND-Kacheln)',
+      JSON.stringify(emitB(WATER, { '1,0': WATER })) === '[]');
+    check('§6#4b bankOverlays: Land ohne Wasser-Nachbarn -> LEER',
+      JSON.stringify(emitB(GRASS, {})) === '[]');
+    // Ecke nur, wenn KEINE der beiden angrenzenden Orthogonalen Wasser ist.
+    check('§6#4b bankOverlays: reine Diagonal-Nachbarschaft -> Eckstueck bank_ne_g',
+      JSON.stringify(emitB(GRASS, { '1,-1': WATER })) === '["bank_ne_g"]',
+      JSON.stringify(emitB(GRASS, { '1,-1': WATER })));
+    check('§6#4b bankOverlays: Ecke entfaellt, wenn eine Orthogonale das Band schon traegt',
+      JSON.stringify(emitB(GRASS, { '1,0': WATER, '1,-1': WATER })) === '["bank_e_g"]',
+      JSON.stringify(emitB(GRASS, { '1,0': WATER, '1,-1': WATER })));
+    // Realbezug beider Maps: Gras am Teich traegt 'g', Steinboden am Kanal 's',
+    // die Gruft-ZIEGELWAND am Kanal traegt nichts.
+    const tmG = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend);
+    const tmF = createTilemap(FLUESTERGRUFT.rows, FLUESTERGRUFT.legend);
+    const collect = (tm, def) => {
+      const out = [];
+      for (let ty = 0; ty < def.rows.length; ty++) {
+        for (let tx = 0; tx < def.rows[0].length; tx++) out.push(...bankOverlays(tm.defAt, tx, ty));
+      }
+      return out;
+    };
+    const bg = collect(tmG, GRAVEYARD);
+    const bf = collect(tmF, FLUESTERGRUFT);
+    check('§6#4b bankOverlays: GRAVEYARD liefert NUR _g-Keys (> 0)',
+      bg.length > 0 && bg.every((k) => k.endsWith('_g')), `n=${bg.length}`);
+    check('§6#4b bankOverlays: FLUESTERGRUFT liefert NUR _s-Keys (> 0)',
+      bf.length > 0 && bf.every((k) => k.endsWith('_s')), `n=${bf.length}`);
+    check('§6#4b bankOverlays: alle emittierten Keys existieren in TILE_ART',
+      [...new Set([...bg, ...bf])].every((k) => !!TILE_ART[k]),
+      [...new Set([...bg, ...bf])].filter((k) => !TILE_ART[k]).join(','));
+    // Ziegelwaende der Gruft grenzen an den Kanal — duerfen aber nie emittieren.
+    let wallEmits = 0;
+    for (let ty = 0; ty < FLUESTERGRUFT.rows.length; ty++) {
+      for (let tx = 0; tx < FLUESTERGRUFT.rows[0].length; tx++) {
+        if (FLUESTERGRUFT.rows[ty][tx] !== '#') continue;
+        wallEmits += bankOverlays(tmF.defAt, tx, ty).length;
+      }
+    }
+    check('§6#4b bankOverlays: keine einzige Emission auf einer Ziegelwand', wallEmits === 0, `n=${wallEmits}`);
+  }
+
+  // --- (c) waterReflections (§3.B4): Determinismus + NUR Wasser -------------
+  {
+    const tmF = createTilemap(FLUESTERGRUFT.rows, FLUESTERGRUFT.legend);
+    const torches = tmF.findTiles('W').map((t) => ({ x: t.x, y: t.y, radius: 72, flicker: 1 }));
+    const cam = { x: 0, y: 0 };
+    const r1 = waterReflections(torches, tmF.defAt, cam, 1.25);
+    const r2 = waterReflections(torches, tmF.defAt, cam, 1.25);
+    check('§6#4c waterReflections: gleiche Argumente -> identische Liste (deterministisch)',
+      JSON.stringify(r1) === JSON.stringify(r2) && r1.length > 0, `n=${r1.length}`);
+    const isWaterD = (d) => !!d && !!(d.shorePrefix || d.depthOverlays);
+    check('§6#4c waterReflections: jede Zelle ist eine WASSER-Kachel',
+      r1.every((c) => isWaterD(tmF.defAt(c.tx, c.ty))));
+    check('§6#4c waterReflections: jede Zelle nur EINMAL (kein Doppel-Draw)',
+      new Set(r1.map((c) => `${c.tx},${c.ty}`)).size === r1.length);
+    check('§6#4c waterReflections: Keys sind water_reflect_0/_1',
+      r1.every((c) => c.key === 'water_reflect_0' || c.key === 'water_reflect_1'));
+    check('§6#4c waterReflections: Wackeln ganzzahlig -1..+1, Screen-Koordinaten ganzzahlig',
+      r1.every((c) => Number.isInteger(c.wob) && c.wob >= -1 && c.wob <= 1
+        && Number.isInteger(c.sx) && Number.isInteger(c.sy)));
+    // Fuell-Lichter (§5.D4, flicker 0.5) liegen UNTER der 0.8-Schwelle -> keine
+    // Reflexion. Ebenso Spieler-/Drop-Lichter (0.3).
+    const soft = torches.map((l) => ({ ...l, flicker: 0.5 }));
+    check('§6#4c waterReflections: Lichter mit flicker < 0.8 werfen KEINE Reflexion',
+      waterReflections(soft, tmF.defAt, cam, 1.25).length === 0);
+    check('§6#4c waterReflections: ohne Lichter/ohne defAt -> leere Liste',
+      waterReflections([], tmF.defAt, cam, 1.25).length === 0
+      && waterReflections(torches, null, cam, 1.25).length === 0);
+    // Der Friedhofsteich hat geometrisch KEINE orthogonal benachbarte Fackel
+    // (Jury-Deklaration "Reflexion nur im Kanal") — Gegenprobe auf der echten Map.
+    const tmG = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend);
+    const gTorch = tmG.findTiles('F').map((t) => ({ x: t.x, y: t.y, radius: 72, flicker: 1 }));
+    check('§6#4c waterReflections: GRAVEYARD-Teich liefert 0 Zellen (Geometrie-Deklaration)',
+      waterReflections(gTorch, tmG.defAt, cam, 1.25).length === 0);
+  }
+
+  // --- (d) SWAY-CLUSTER-GLEICHPHASE (§4.C4) ---------------------------------
+  // Der Positions-Offset nicht-synchroner anim-Kacheln kommt aus dem 2x2-Block-
+  // Hash variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7): ein 2x2-Cluster
+  // schwingt GLEICHSINNIG, benachbarte Cluster stehen gegeneinander versetzt.
+  {
+    const N = 8;
+    const rowsSw = Array.from({ length: N }, () => 'w'.repeat(N));
+    const legSw = { w: { art: 'sway_0', solid: false, anim: ['sway_0', 'sway_1'], animRate: 0.8 } };
+    const tmSw = createTilemap(rowsSw, legSw);
+    const keysAt = (t) => {
+      const grid = [];
+      const ctxSw = {
+        canvas: { width: N * 16, height: N * 16 },
+        drawImage: (img, sx, sy) => { grid.push({ tx: sx / 16, ty: sy / 16, img }); },
+      };
+      tmSw.draw(ctxSw, { x: 0, y: 0 }, anyTiles5, t, 'ground');
+      const map = new Map();
+      for (const g of grid) map.set(`${g.tx},${g.ty}`, g.img);
+      return map;
+    };
+    const g0 = keysAt(0);
+    let clusterOk = true;
+    let clusterKeys = new Set();
+    for (let cy = 0; cy < N; cy += 2) {
+      for (let cx = 0; cx < N; cx += 2) {
+        const v = g0.get(`${cx},${cy}`);
+        clusterKeys.add(v);
+        for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) {
+          if (g0.get(`${cx + dx},${cy + dy}`) !== v) clusterOk = false;
+        }
+      }
+    }
+    check('§6#4d Sway: jedes 2x2-Cluster zeigt denselben Frame (GLEICHSINNIG)', clusterOk);
+    check('§6#4d Sway: benachbarte Cluster stehen versetzt (mehr als ein Frame im Bild)',
+      clusterKeys.size > 1, `frames=${[...clusterKeys].join(',')}`);
+    // Formel woertlich gespiegelt (§4.C4): Offset haengt NUR vom 2x2-Block ab.
+    let formulaOk = true;
+    for (let ty = 0; ty < N; ty++) {
+      for (let tx = 0; tx < N; tx++) {
+        const off = variantIndex(Math.floor(tx / 2) + 331, Math.floor(ty / 2) + 733, 7);
+        const want = legSw.w.anim[(Math.floor(0 * 0.8) + off) % 2];
+        if (g0.get(`${tx},${ty}`) !== want) formulaOk = false;
+      }
+    }
+    check('§6#4d Sway: Frame = anim[(floor(t*rate) + variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7)) % n]',
+      formulaOk);
+    // Wasser (animSync) bleibt unberuehrt: alle Zellen im selben Frame.
+    const legSync = { '~': { art: 'w0', solid: false, anim: ['w0', 'w1', 'w2', 'w3'], animRate: 3, animSync: true } };
+    const tmSync = createTilemap(Array.from({ length: 4 }, () => '~~~~'), legSync);
+    const syncKeys = new Set(drawKeys5(tmSync, { x: 0, y: 0 }, 0.4, 'ground'));
+    check('§6#4d Sway: animSync-Kacheln (Wasser) bleiben synchron (ein Frame)', syncKeys.size === 1);
+  }
+
+  // --- (e) n-UNGERADE-WAECHTER ueber ALLE Legenden-variants (§2.A2) ---------
+  {
+    const evenN = [];
+    const headBad = [];
+    const missing = [];
+    for (const [name, def] of Object.entries(MAPS)) {
+      for (const [ch, cell] of Object.entries(def.legend)) {
+        if (!cell.variants) continue;
+        if (cell.variants.length % 2 === 0) evenN.push(`${name}:'${ch}'=${cell.variants.length}`);
+        if (cell.variants[0] !== cell.art) headBad.push(`${name}:'${ch}'`);
+        for (const k of cell.variants) if (!TILE_ART[k]) missing.push(`${name}:'${ch}':${k}`);
+      }
+    }
+    check('§6#4e n-UNGERADE-Waechter: KEINE Legenden-variants-Liste mit geradem n',
+      evenN.length === 0, evenN.join(' '));
+    check('§6#4e Varianten-Integritaet: variants[0] === art in allen vier Legenden',
+      headBad.length === 0, headBad.join(' '));
+    check('§6#4e Varianten-Keys existieren alle in TILE_ART', missing.length === 0, missing.join(' '));
+    // §6.5 Varianten-Integritaets-Regel: die '.'-Legende zieht den vollen Pool.
+    const dot = GRAVEYARD.legend['.'];
+    check("§6#4e Gras-Pool: '.'-art === grass_g5_00 === variants[0]",
+      dot.art === 'grass_g5_00' && dot.variants[0] === 'grass_g5_00', `art=${dot.art}`);
+    check("§6#4e Gras-Pool: '.'-variants sind genau die 47 Pool-Kacheln (keine Dublette)",
+      dot.variants.length === 47 && new Set(dot.variants).size === 47
+      && dot.variants.every((k) => /^grass_g5_\d\d$/.test(k)), `n=${dot.variants.length}`);
+    // ',' und 'e' ziehen UNGERADE TEIL-Pools (Dichte-Naht, §2.A1).
+    for (const ch of [',', 'e']) {
+      const cell = GRAVEYARD.legend[ch];
+      check(`§6#4e Teil-Pool '${ch}': ungerades n und mindestens eine Pool-Kachel`,
+        !!cell.variants && cell.variants.length % 2 === 1
+        && cell.variants.some((k) => /^grass_g5_\d\d$/.test(k)),
+        `n=${cell.variants ? cell.variants.length : 0}`);
+    }
+    // §3.B2 bankSet-Verdrahtung: Gras/Weg 'g', Gruft-Steinboden 's', Waende nichts.
+    check("§6#4e bankSet: GRAVEYARD '.'/'=' tragen 'g'",
+      GRAVEYARD.legend['.'].bankSet === 'g' && GRAVEYARD.legend['='].bankSet === 'g');
+    check("§6#4e bankSet: FLUESTERGRUFT '.' traegt 's'", FLUESTERGRUFT.legend['.'].bankSet === 's');
+    const flaggedWalls = [];
+    for (const [name, def] of Object.entries(MAPS)) {
+      for (const [ch, cell] of Object.entries(def.legend)) {
+        if (cell.solid && cell.bankSet) flaggedWalls.push(`${name}:'${ch}'`);
+        if (cell.bankSet && cell.bankSet !== 'g' && cell.bankSet !== 's') flaggedWalls.push(`${name}:'${ch}'=${cell.bankSet}`);
+      }
+    }
+    check('§6#4e bankSet: KEINE solide Kachel (Wand/Baum/Grabstein) traegt ein Flag',
+      flaggedWalls.length === 0, flaggedWalls.join(' '));
+    // §5.D4 extraLights: nur BOSS_KAMMER, flicker unter der 0.8-Fackel-Schwelle.
+    check('§6#4e extraLights: BOSS_KAMMER hat genau 1 Fuell-Licht mit flicker 0.5',
+      Array.isArray(BOSS_KAMMER.extraLights) && BOSS_KAMMER.extraLights.length === 1
+      && BOSS_KAMMER.extraLights[0].flicker === 0.5
+      && BOSS_KAMMER.extraLights[0].radius > 0,
+      JSON.stringify(BOSS_KAMMER.extraLights));
+    check('§6#4e extraLights: alle Fuell-Lichter liegen UNTER der 0.8-Schwelle (kein Warm-Glow/Lit-Dither)',
+      Object.values(MAPS).every((d) => (d.extraLights || []).every((l) => (l.flicker || 0) < 0.8)));
+    // §1.8: alle vier Maps fahren jetzt 3-Frame-Fackeln.
+    const torch2 = [];
+    for (const [name, def] of Object.entries(MAPS)) {
+      for (const ch of def.torchChars) {
+        const cell = def.legend[ch];
+        if (!cell.anim || cell.anim.length !== 3) torch2.push(`${name}:'${ch}'=${cell.anim ? cell.anim.length : 0}`);
+      }
+    }
+    check('§6#4e §1.8: alle Fackel-Legenden laufen auf 3 Frames', torch2.length === 0, torch2.join(' '));
+  }
+
+  // --- (f) defAt-EXPORT (§1.7 additive API) ---------------------------------
+  {
+    const tmD = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, GRAVEYARD.overRows);
+    check('§6#4f createTilemap exportiert defAt', typeof tmD.defAt === 'function');
+    check('§6#4f defAt liefert den GROUND-Legendeneintrag der Zelle',
+      tmD.defAt(0, 0) === GRAVEYARD.legend['#'] && tmD.defAt(3, 12) === GRAVEYARD.legend['=']);
+    check('§6#4f defAt liefert ausserhalb der Map null',
+      tmD.defAt(-1, 0) === null && tmD.defAt(0, -1) === null
+      && tmD.defAt(GRAVEYARD.rows[0].length, 0) === null
+      && tmD.defAt(0, GRAVEYARD.rows.length) === null);
+    check('§6#4f defAt ist GROUND-only (kein Over-Layer-Eintrag)',
+      tmD.defAt(37, 0) === GRAVEYARD.legend[GRAVEYARD.rows[0][37]]);
   }
 }
 

@@ -112,8 +112,41 @@ const GRAVEYARD_LEGEND = {
   // Variante (grass_dark_earth) ANGEHAENGT. variantIndex(tx,ty,8) streut jetzt ueber
   // 8 statt 4 Grids -> bricht das uniforme Grundraster. variants[0] === grass_dark
   // bleibt (Engine-Assert); Reihenfolge 0-3 unveraendert, nur ergaenzt.
-  '.': { art: 'grass_dark', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark', 'grass_dark_v1', 'grass_dark_v2', 'grass_dark_v3', 'grass_dark_v4', 'grass_dark_v5', 'grass_dark_v6', 'grass_dark_earth'] },
-  ',': { art: 'grass_detail', solid: false, fringeSource: true, fringeSet: 'grass' },
+  // Grafikpass 5 §2.A1 GRAS-POOL (Wurzel-Fix "Gras-Tapete"): die '.'-Legende
+  // zieht jetzt den KOMPLETTEN 47er-Pool grass_g5_00..46 (erzeugt in PHASE 0 von
+  // .tmp/gen_grass_gp5.mjs, eingesetzt von Art). 47 ist PRIM und damit teilerfremd
+  // zu jedem anderen n am selben Ort (§0.4); variantIndex(tx,ty,47) streut die
+  // Kacheln dekorreliert. variants[0] === art === grass_g5_00 (Engine-Assert).
+  // Die alten Basis-Grids grass_dark* bleiben in TILE_ART erhalten (kein Art-
+  // Besitz hier), sind aber nicht mehr verdrahtet — Ersatz ist der Pool.
+  // §3.B2 bankSet 'g': Gras ist LANDkachel am Teich -> Schlamm-Uferband.
+  '.': {
+    art: 'grass_g5_00', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: [
+      'grass_g5_00', 'grass_g5_01', 'grass_g5_02', 'grass_g5_03', 'grass_g5_04', 'grass_g5_05',
+      'grass_g5_06', 'grass_g5_07', 'grass_g5_08', 'grass_g5_09', 'grass_g5_10', 'grass_g5_11',
+      'grass_g5_12', 'grass_g5_13', 'grass_g5_14', 'grass_g5_15', 'grass_g5_16', 'grass_g5_17',
+      'grass_g5_18', 'grass_g5_19', 'grass_g5_20', 'grass_g5_21', 'grass_g5_22', 'grass_g5_23',
+      'grass_g5_24', 'grass_g5_25', 'grass_g5_26', 'grass_g5_27', 'grass_g5_28', 'grass_g5_29',
+      'grass_g5_30', 'grass_g5_31', 'grass_g5_32', 'grass_g5_33', 'grass_g5_34', 'grass_g5_35',
+      'grass_g5_36', 'grass_g5_37', 'grass_g5_38', 'grass_g5_39', 'grass_g5_40', 'grass_g5_41',
+      'grass_g5_42', 'grass_g5_43', 'grass_g5_44', 'grass_g5_45', 'grass_g5_46',
+    ],
+  },
+  // §2.A1 TEIL-POOL ',' (Gras-Detail, 13 = ungerade, kein Faktor 5): die
+  // ','-Zellen liegen MITTEN im '.'-Feld — bliebe hier eine einzige feste Kachel,
+  // entstuende genau die Dichte-Naht, die der Pool beseitigen soll. Der Teil-Pool
+  // ist die MITTEL-Dichteklasse des 47er-Pools (Deckung 6,6-10,2 % Glyph-Pixel,
+  // gemessen ueber die Nicht-'e'-Pixel) plus das alte grass_detail-Grid, das
+  // damit noch auf 1/13 der Zellen sichtbar bleibt. variants[0] === art.
+  ',': {
+    art: 'grass_g5_46', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: [
+      'grass_g5_46', 'grass_detail', 'grass_g5_09', 'grass_g5_34', 'grass_g5_28',
+      'grass_g5_35', 'grass_g5_30', 'grass_g5_33', 'grass_g5_37', 'grass_g5_42',
+      'grass_g5_20', 'grass_g5_10', 'grass_g5_44',
+    ],
+  },
   // Grafikpass 3 §3.3/§4.1/§4.3 + GP3-R3 K-K1a/b/H-K1: begehbare Gras-Deko,
   // deterministisch per Hash-Noise gestreut (.tmp/gen_deco3.mjs, Details <1/9,
   // Makro-Patches ueber 2x2..3x3). ALLE wie '.'-Gras behandelt: solid:false UND
@@ -123,20 +156,22 @@ const GRAVEYARD_LEGEND = {
   // Grafikpass 4 §2.7b: die drei Deko-Glyphen tragen jetzt zusaetzlich ihre
   // 90-Grad-Rotationsvariante (_r1) als weitere variants — deterministische
   // variantIndex-Wahl streut die Ausrichtung, ohne Laufzeit-Flip.
-  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_tuft', 'grass_tuft_r1'] },
-  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_blade', 'grass_blade_v1', 'grass_blade_r1'] },
-  'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_speck', 'grass_speck_v1', 'grass_speck_r1'] },
+  // §2.A2 UNGERADE-n-SWEEP: 'u' hatte n=2 (gerade) — die dritte Variante
+  // grass_tuft_v1 (Art, §2.A2) macht daraus n=3.
+  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_tuft', 'grass_tuft_r1', 'grass_tuft_v1'] },
+  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_blade', 'grass_blade_v1', 'grass_blade_r1'] },
+  'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_speck', 'grass_speck_v1', 'grass_speck_r1'] },
   // Grafikpass 4 §3.8b/§4 Gras-Sway: zwei animierte Deko-Glyphen (Halme wiegen
   // sich, zweiter Frame _f1). Eigene Zeichen, weil variants UND anim an EINEM
   // Legendeneintrag verboten sind (createTilemap wirft). animRate langsam (0.8),
   // KEIN animSync -> die Positions-Offset-Mechanik staffelt die Halme (Bestand).
-  'w': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', anim: ['grass_tuft', 'grass_tuft_f1'], animRate: 0.8 },
-  'y': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', anim: ['grass_blade', 'grass_blade_f1'], animRate: 0.8 },
+  'w': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_tuft', 'grass_tuft_f1'], animRate: 0.8 },
+  'y': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_blade', 'grass_blade_f1'], animRate: 0.8 },
   // Grafikpass 4 §2.7b Wiesenlicht-Makro: hellere/dunklere nahtlose Gras-Basis
   // in unregelmaessigen Patches (48-64px). Begehbar, WIE '.'-Gras (fringeSource/
   // fringeSet 'grass'), sonst entstuenden 1-Tile-Fringe-Loecher an den Patch-Raendern.
-  'H': { art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'L': { art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'H': { art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  'L': { art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   // Grafikpass 4 RUNDE 2 (§2.7b, Jury-Mandat d.1): MIX-Rand-Tiles der Wiesenlicht-
   // Patches. Orientierungs-agnostisches 2x2-Schachbrett Luma<->Grundgras, das die
   // Patch-Silhouette 4-6px in den Grundton ueberblendet (statt scharfe Rechteck-
@@ -145,8 +180,8 @@ const GRAVEYARD_LEGEND = {
   // '.'-Gras: begehbar (solid:false) UND fringeSource/fringeSet 'grass' — sonst
   // 1-Tile-Fringe-Loecher an den Patch-Raendern. Der Generator (.tmp/gen_gfx4.mjs)
   // setzt sie deterministisch auf alle Blob-Randzellen.
-  'I': { art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'J': { art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'I': { art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  'J': { art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   // §PRIO2 [GP4 R3] (Jury K1 "Patch-Kante Rampe"): ZWEITES Mix-Tile je Patchfarbe =
   // 75%-Dither ('i' = grass_lumahi_mix75, 'x' = grass_lumalo_mix75) fuer den INNEREN
   // Rand-Ring. Zusammen mit dem bestehenden 50%-_mix (I/J, aeusserer Ring) ergibt
@@ -154,19 +189,37 @@ const GRAVEYARD_LEGEND = {
   // (H/L). Legende-Namespace, getrennt von Palette-Tonen. WIE '.'-Gras: begehbar
   // (solid:false) UND fringeSource/fringeSet 'grass'. Der Ring wird deterministisch
   // per Distanz-Band gesetzt (.tmp/gen_grass_r3.mjs, laeuft NACH gen_gfx4).
-  'i': { art: 'grass_lumahi_mix75', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'x': { art: 'grass_lumalo_mix75', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass' },
-  'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass' },
+  'i': { art: 'grass_lumahi_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  'x': { art: 'grass_lumalo_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
-  'r': { art: 'dirt_patch_v1', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['dirt_patch_v1', 'dirt_patch'] },
+  // §2.A2 UNGERADE-n-SWEEP: n war 2 (gerade) und stand NICHT auf der Spec-Liste —
+  // der Sweep gilt aber fuer JEDE Liste (§2.A2 "KEINE variants-Liste mit geradem n").
+  // Es gibt kein drittes Erdfleck-Grid (Art liefert in GP5 keins), deshalb loest der
+  // Sweep hier ueber eine GEWICHTUNG: dirt_patch_v1 doppelt -> n=3, Mischung 2:1
+  // zugunsten des kraeftigeren Grossdetails (Praezedenz: CATACOMBS 'S', GP4 R2).
+  'r': { art: 'dirt_patch_v1', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['dirt_patch_v1', 'dirt_patch', 'dirt_patch_v1'] },
   // Makro-Patch (K-K1b): unregelmaessige dunklere Gras-Cluster. Das Asset-Set hat
   // keinen dunkler-gruenen Vollton als das Basisgras ('.' == grass_dark, #19241d,
   // bereits der dunkelste Gruenton), daher nutzt der Makro-Layer die erdig/moosige
   // grass_dark_v3-Konzentration als verfuegbare 2. Makro-Textur (keine neuen Art-
   // Grids). variants[0] === art (Engine-Assert). WIE '.'-Gras: begehbar, Gras-Fringe.
-  'e': { art: 'grass_dark_v3', solid: false, fringeSource: true, fringeSet: 'grass', variants: ['grass_dark_v3', 'dirt_patch', 'grass_dark_v3'] },
-  '=': { art: 'path', solid: false, fringeTarget: true, variants: ['path', 'path_v1', 'path_v2', 'path_v3'] },
+  // §2.A1 TEIL-POOL 'e' (9 = ungerade, kein Faktor 5): der Makro-Patch behaelt
+  // seinen Charakter (grass_dark_v3 4x + dirt_patch 1x = 5/9), bekommt aber 4/9
+  // aus der DICHTE-Klasse des 47er-Pools (Deckung 12,5-17,6 %) — die Patch-Naht
+  // zum neuen '.'-Feld verschwindet, ohne dass der dunkle Cluster zerfaellt.
+  // variants[0] === art (Engine-Assert), Reihenfolge bewusst verzahnt.
+  'e': {
+    art: 'grass_dark_v3', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: [
+      'grass_dark_v3', 'dirt_patch', 'grass_dark_v3', 'grass_g5_41', 'grass_dark_v3',
+      'grass_g5_01', 'grass_dark_v3', 'grass_g5_24', 'grass_g5_16',
+    ],
+  },
+  // §2.A2: '=' hatte n=4 (gerade) -> path_v6 (Art: ausgefahrene Senke) haengt an, n=5.
+  // §3.B2 bankSet 'g': der Weg ist am Teichsuedrand LANDkachel (Schlamm-Uferband).
+  '=': { art: 'path', solid: false, fringeTarget: true, bankSet: 'g', variants: ['path', 'path_v1', 'path_v2', 'path_v3', 'path_v6'] },
   'G': { art: 'gravestone', solid: true },
   'g': { art: 'gravestone_2', solid: true },
   'h': { art: 'gravestone_3', solid: true },
@@ -192,35 +245,51 @@ const GRAVEYARD_LEGEND = {
 // decken je einen Stamm in der Unterzeile — Wurzeln bleiben sichtbar) fuer die
 // Baumreihen/Cluster, 16x16-Fueller ('B' canopy_bottom auf dem Stamm, 'K'
 // canopy_top darueber) fuer isolierte Einzelstaemme. Man laeuft unter allen
-// Kronen durch. Deterministisch erzeugt (.tmp/gen_overrows2.mjs, Regeln 1-6 dort
-// verifiziert); '.' = leere Zelle. §3.2/§4.1: die Rotation nutzt jetzt SECHS
+// Kronen durch. '.' = leere Zelle. §3.2/§4.1: die Rotation nutzt SECHS
 // Silhouetten — M/N/O plus die gespiegelten Q/V/X (nie gleiche Silhouette
-// benachbart, nicht strikt alternierend). Anker-Jitter (-2..+2 px) kommt zur
-// Laufzeit aus tilemap.js (§2.1).
+// benachbart, nicht strikt alternierend).
+//
+// GRAFIKPASS 5 §4.C3 (NEU ERZEUGT, .tmp/gen_crowns_gp5.mjs --apply):
+// Die GP3/GP4-Setzung war eine dichte Saeule je Baumreihe (ein Anker pro Zeile,
+// feste Spalte) — im Bild las sich das als senkrechtes Raster. Das neue Raster:
+//  * SPALTEN-ALTERNATION: die Ankerspalte wechselt je Schritt zwischen tx und
+//    tx-1, die Saeule steht nicht mehr im Lot.
+//  * ZEILENSCHRITT {2,3} GEMISCHT statt "jede Zeile ein Anker" — die Luecken
+//    lassen die Back-Kuppen (Y/Z/A) und den Himmel wieder durch; die
+//    Schritt-3-Luecken tragen 16x16-Fueller ('B').
+//  * NIE ZWEI SCHMALE Silhouetten (O/X = _c/_cm) benachbart, nie zwei gleiche.
+//  * DRITTES CLUSTER in der Kartenmitte (ty >= 13): zwei 2x2-Anker auf den
+//    isolierten Mittel-Staemmen plus sechs 'C'-Mittel-Fueller ueber begehbarem
+//    Grund, jeder auf der Kachel UEBER einer Standkachel — der Spieler laeuft
+//    mit dem KOPF durch die Krone (Beweis-Szene g5_10_unter_kronen).
+//  * GUARDS: Zeile 12 und Spalte 21 des Smoke-Fensters (smoke:651-656) bleiben
+//    LEER — das §4.C2-Culling zieht tyEnd um +1 und txStart um 1 nach links.
+// Anker-Offset kommt zur Laufzeit aus tilemap.js (§4.C2: dx pro Anker-Klasse
+// bis ±14, dy -4..+4; der canopy_shadow wandert mit).
 const GRAVEYARD_OVER_ROWS = [
-  '.O.......K...........................VZ.',
-  '.V.......B...........................ZN.',
-  '.....................................QA.',
-  '.....................................AM.',
-  '.....................................OZ.',
-  '...................................A.ZV.',
-  '...................................V.MA.',
-  'A....................................YQ.',
-  'MY..............................K....XY.',
-  'ZX.............................KB....ZV.',
-  'Q..............................B.....OY.',
-  '.....................................ZM.',
-  '.....................................NA.',
-  '.....................................AX.',
-  '.....................................MZ.',
-  '.....................................AO.',
-  '.....................................NY.',
-  'Z....................................AM.',
-  'VA.................................Y.Q..',
-  '.M.................................Q.M..',
-  '.QY................................Z.N..',
-  '.XX..........K............K........N.O..',
-  '.............B............B.............',
+  'MO......X............................V..',
+  '......................................Y.',
+  '.B....................................N.',
+  '........................................',
+  '.....................................AB.',
+  '.....................................O..',
+  '.....................................A..',
+  'Z..............................Y......Q.',
+  'M............................Y.M........',
+  '..............................O......YB.',
+  '.B...................................V..',
+  '.B....................................Z.',
+  '......................................N.',
+  '......................................Y.',
+  '.....................................X..',
+  '........................................',
+  '..................C...C..............AB.',
+  'Y...................C.................N.',
+  'V....................................Z..',
+  '..Y.................C.C..............Q..',
+  '.QYY........Y..........CY.........A.....',
+  '.MX.........V............X.........N.BB.',
+  '.....................................BB.',
   '........................................',
 ];
 
@@ -278,8 +347,15 @@ const CATACOMBS_LEGEND = {
   // Positions-Hash-Streuung kann "nie zwei identische horizontal benachbart" fuer
   // durchgehende Wandreihen NICHT garantieren (das forderte die Jury nur fuer die
   // Plaketten, s.u.) — hier zaehlt der 40/30/30-Mix.
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_br', 'brick_moss_br', 'brick_moss_br'] },
-  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
+  // Grafikpass 5 §2.A2 UNGERADE-n-SWEEP: n war 10 (gerade) — brick_wall_v4
+  // (Art: abgeplatzter Ziegel mit dunkler Kaverne) haengt an -> n=11 (prim).
+  // Der Mix verschiebt sich von 40/30/30 auf ~45/27/27 (5 kahle Texturen,
+  // 3x Moos-oben-links, 3x Moos-unten-rechts) — der Jury-Mix bleibt gewahrt.
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_br', 'brick_moss_br', 'brick_moss_br', 'brick_wall_v4'] },
+  // §2.A2: n war 4 (gerade) -> stone_floor_v4/_v5/_v6 (Art: Kiesel-/Kratzer-
+  // Programm) haengen an, n=7 (prim). Der Katakomben-Boden ist die groesste
+  // zusammenhaengende Wiederholungsflaeche der Ebene.
+  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3', 'stone_floor_v4', 'stone_floor_v5', 'stone_floor_v6'] },
   // Grafikpass 3 §3.3/§4.1: drei Riss-Motive statt eines "7"-Stempels
   // (variants[0] === art). Die ','-Dichte wurde zugleich ausgeduennt (§4.3,
   // .tmp/gen_deco3.mjs) — Soliditaet/Begehbarkeit bleiben byte-identisch ('.'
@@ -295,7 +371,14 @@ const CATACOMBS_LEGEND = {
   // horizontal benachbart. n=4 (nicht 3) ist noetig, weil bei n=3 das Paar
   // (32,12)/(33,12) kollidiert; der 4. Slot dupliziert sarcophagus_v1. variants[0]
   // === art (Engine-Assert), solid unveraendert (§36 sol/geo halten).
-  'S': { art: 'sarcophagus', solid: true, variants: ['sarcophagus', 'sarcophagus_v1', 'sarcophagus_v2', 'sarcophagus_v1'] },
+  // Grafikpass 5 §2.A2: n war 4 (gerade) — der Sweep gilt fuer JEDE Liste, auch
+  // wenn 'S' nicht auf der Spec-Aufzaehlung stand. Neue Laenge 5 (ungerade, kein
+  // Faktor... 5 ist die von §2.A2 selbst gesetzte Ziel-Laenge fuer die 4er-Listen).
+  // Die Jury-Auflage "nie zwei identische Plaketten horizontal benachbart" bleibt
+  // NACHGERECHNET erfuellt: variantIndex(x,y,5) liefert fuer (32,12)/(33,12) die
+  // Indizes 0/4 (sarcophagus / sarcophagus_v2) und fuer (5,15)/(6,15) die Indizes
+  // 1/4 (sarcophagus_v1 / sarcophagus_v2) — beide Paare zeigen verschiedene Grids.
+  'S': { art: 'sarcophagus', solid: true, variants: ['sarcophagus', 'sarcophagus_v1', 'sarcophagus_v2', 'sarcophagus_v1', 'sarcophagus_v2'] },
   // Grafikpass 4 §3.8a/§4: Wandfackel jetzt 3-Frame-Zyklus (torch_wall_2).
   'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false },

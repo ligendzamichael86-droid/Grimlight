@@ -34,8 +34,12 @@ const BOSS_KAMMER_LEGEND = {
   // gleichzeitig sichtbare Wiederholungsfläche im Spiel).
   // Grafikpass 2 R3 (§8b.3): brick_wall_v3/stone_floor_v3 als vierte Varianten
   // (der Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche).
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3'] },
-  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3'] },
+  // Grafikpass 5 §2.A2 UNGERADE-n-SWEEP: n war 4 (gerade) -> brick_wall_v6
+  // (Art: Russfleck) haengt an, n=5. Kein bankSet-Flag (kein Wasser in der Arena).
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v6'] },
+  // §2.A2: n war 4 -> stone_floor_v8 (Art: Brandfleck) haengt an, n=5. Der
+  // Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche.
+  '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3', 'stone_floor_v8'] },
   // Grafikpass 4 §3.8a/§4: Wandfackel jetzt 3-Frame-Zyklus (torch_wall_2).
   'W': { art: 'torch_wall_0', solid: true, anim: ['torch_wall_0', 'torch_wall_1', 'torch_wall_2'] },
   'U': { art: 'stairs_up', solid: false }, // Rueck-Portal FLUESTERGRUFT
@@ -74,4 +78,20 @@ export const BOSS_KAMMER = {
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],
+  // Grafikpass 5 §5.D4 BOSS-ARENA-LICHT (Jury STRUKTUR-6a): die sechs Wand-
+  // fackeln sitzen ausschliesslich am Rand — die Arena-MITTE, in der der Kampf
+  // stattfindet, war der dunkelste Punkt des Raums. EIN statisches Fuell-Licht
+  // im Zentrum der 20x12-Arena (Weltmitte 320/2 = 160, 192/2 = 96) hebt den
+  // Boden dort an.
+  // flicker BEWUSST 0.5, also UNTER der 0.8-Schwelle: main.js/lighting.js
+  // behandeln nur >= 0.8 als Fackel — dieses Licht erzeugt deshalb KEINEN
+  // Warm-Glow, KEIN Lit-Dither, KEINE Funken und KEINE Wasser-Reflexion, es
+  // stanzt nur weicher in das Dunkel-Overlay. Radius 88 (zwischen Fackel 72 und
+  // halber Arena-Diagonale) laesst die Ecken bewusst dunkel.
+  // main.js haengt mapDef.extraLights rein additiv an frameLights an (§5.D4);
+  // fehlt das Feld, passiert nichts. geoHash-frei: der §36-Fingerprint hasht
+  // playerSpawn/Spawns/Portale/torchChars-findTiles, NICHT extraLights.
+  extraLights: [
+    { x: 160, y: 96, radius: 88, flicker: 0.5 },
+  ],
 };

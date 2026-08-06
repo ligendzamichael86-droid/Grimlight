@@ -109,9 +109,34 @@ export function createParticles() {
     }
   }
 
+  // Grafikpass 5 §5.D3: Lichtfaktor eines Staub-Motes an seiner WELTposition.
+  // Motes sind passiver Staub — sie duerfen in der Finsternis nicht so hell
+  // stehen wie im Fackelkegel. Faktor = staerkste normierte Naehe zu einer
+  // Lichtquelle (1 im Zentrum, 0 am Radius), FLOOR 0.25 (ganz unsichtbar
+  // sollen sie nie werden). Ohne Lichtliste oder auf hellen Maps (ambient
+  // fehlt/0) bleibt der Faktor 1 -> Bestandsverhalten.
+  // Funken (Glut) sind hiervon BEWUSST ausgenommen: sie leuchten selbst
+  // (Deklaration §5.D3).
+  function moteLight(px, py, frameLights, ambient) {
+    if (!frameLights || frameLights.length === 0 || !(ambient > 0)) return 1;
+    let best = 0;
+    for (const l of frameLights) {
+      const r = l.radius || 0;
+      if (r <= 0) continue;
+      const d = Math.hypot(px - l.x, py - l.y);
+      if (d >= r) continue;
+      const f = 1 - d / r;
+      if (f > best) best = f;
+    }
+    return Math.max(0.25, best);
+  }
+
   // Selbstleuchtende Deko: wird in main.js NACH dem Dunkel-Overlay und VOR der
   // Vignette gezeichnet (§2.4), also NICHT vom Licht-Overlay abgedunkelt.
-  function draw(ctx, camera) {
+  // Grafikpass 5 §5.D3: Signatur um frameLights + ambient ERWEITERT (beide
+  // optional — ohne sie zeichnet draw exakt wie bisher; der Smoke-Test §36 ruft
+  // draw nie auf, die Erweiterung ist testneutral).
+  function draw(ctx, camera, frameLights, ambient) {
     if (list.length === 0) return;
     ctx.save();
     for (const p of list) {
@@ -135,8 +160,10 @@ export function createParticles() {
       // blinken. Kein timeSec noetig -> draw(ctx,camera)-Signatur unveraendert.
       if (p.kind === 'mote') {
         const twinkle = Math.floor((p.age + p.phase) / 0.12) % 2 === 0 ? 1 : 0.5;
+        // §5.D3: zusaetzlich der Lichtfaktor an der Mote-Weltposition (Floor 0.25).
+        const lf = moteLight(p.x, p.y, frameLights, ambient);
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = alpha * 0.5 * twinkle;
+        ctx.globalAlpha = alpha * 0.5 * twinkle * lf;
         ctx.fillStyle = MOTE_HEX;
         ctx.fillRect(sx, sy, 2, 2);
         continue;
@@ -150,14 +177,22 @@ export function createParticles() {
       // Blende — faedet mit dem Kern aus). fillRect-only (strokeRect ist §0.3-verboten);
       // kein gefuellter Kasten mehr -> der Funke gluehht, ohne zur weichen Wolke zu
       // werden.
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = alpha * 0.35;
-      ctx.fillStyle = HALO_HEX;
+      // Grafikpass 5 §1.2 (Jury: 'Funken lesen als Quadrate'): die Ring-Ecken
+      // bleiben FREI — oben/unten laufen nur noch ueber die Kernbreite (rs statt
+      // rs+2, ohne den -1-Vorlauf), links/rechts unveraendert ueber die Kernhoehe.
+      // Aus dem geschlossenen 3x3-Kasten wird ein Plus-Umriss. ZUSAETZLICH traegt
+      // NUR der 1-px-Funke ueberhaupt einen Ring: bei size===2 ist der Kern
+      // gross genug, der Ring machte daraus den fetten 4x4-Block.
       const rs = p.size;                          // Kerngroesse (1 o. 2 px)
-      ctx.fillRect(sx - 1, sy - 1, rs + 2, 1);    // Ring oben
-      ctx.fillRect(sx - 1, sy + rs, rs + 2, 1);   // Ring unten
-      ctx.fillRect(sx - 1, sy, 1, rs);            // Ring links
-      ctx.fillRect(sx + rs, sy, 1, rs);           // Ring rechts
+      if (rs === 1) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.fillStyle = HALO_HEX;
+        ctx.fillRect(sx, sy - 1, rs, 1);          // Ring oben (Ecken frei)
+        ctx.fillRect(sx, sy + rs, rs, 1);         // Ring unten (Ecken frei)
+        ctx.fillRect(sx - 1, sy, 1, rs);          // Ring links
+        ctx.fillRect(sx + rs, sy, 1, rs);         // Ring rechts
+      }
       // Grafikpass 4 R3 §(b): warmer KOPF + NACHZIEHER als 3 diskrete Pixel
       // abnehmender Helligkeit (100/60/30 % der Blende) statt des frueheren weichen
       // 2-px-Schweifs (Juror H: 'Nachzieher als 3 Pixel 100/60/30 %'). Der Funke
@@ -167,10 +202,22 @@ export function createParticles() {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.hex;
       ctx.fillRect(sx, sy, rs, rs);               // Kopf (100 %)
+      // Grafikpass 5 §1.2: der Nachzieher liegt jetzt entlang des GESCHWINDIG-
+      // KEITSVEKTORS hinter dem Kopf (bisher stur senkrecht darunter — bei
+      // seitlich driftenden Funken sah das aus wie ein abgerissener Tropfen).
+      // vx ist die Ableitung der Sinus-Drift (x = baseX + sin(age*freq+phase)*amp),
+      // vy die Steiggeschwindigkeit. Der Schweif laeuft GEGEN diese Richtung;
+      // bei rein senkrechtem Aufstieg (ux=0, uy=-1) ergibt das exakt die alten
+      // Positionen sy+rs+ti. Ganzzahlig gerundet -> pixelrein.
+      const vx = Math.cos(p.age * p.freq + p.phase) * p.amp * p.freq;
+      const vlen = Math.hypot(vx, p.vy) || 1;
+      const ux = vx / vlen;
+      const uy = p.vy / vlen;
       const TRAIL = [1, 0.6, 0.3];                // 3-Pixel-Schweif, abnehmend
       for (let ti = 0; ti < TRAIL.length; ti++) {
+        const d = rs + ti;                        // Abstand hinter dem Kopf
         ctx.globalAlpha = alpha * TRAIL[ti];
-        ctx.fillRect(sx, sy + rs + ti, rs, 1);    // je 1 px tiefer, dunkler
+        ctx.fillRect(sx - Math.round(ux * d), sy - Math.round(uy * d), rs, 1);
       }
       // Grafikpass 4 R2 §(b): 1-px weiss-gelber KERN (#ffe9b0) obenauf — der heisse
       // Funkenkopf, der in Standbildern klar aus dem warmen Schweif heraussticht.

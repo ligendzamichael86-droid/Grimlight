@@ -40,15 +40,23 @@ export function variantIndex(tx, ty, n) {
 
 // Grafikpass 4 §2.2a Lit-Dither-Pass — REINE, Node-importierbare Funktion.
 // Liefert fuer jedes sichtbare Boden-Tile, dessen ZENTRUM im Fackelkegel liegt,
-// einen Eintrag {tx, ty, stufe, key}: Stufe 2 bei Distanz < r*0.45, Stufe 1 bei
-// < r*0.75. r enthaelt den deterministischen Doppel-Sinus-Flicker — die Formel
+// einen Eintrag {tx, ty, stufe, key}: Stufe 2 bei Distanz < r*0.40, Stufe 1 bei
+// < r*0.70. r enthaelt den deterministischen Doppel-Sinus-Flicker — die Formel
 // aus lighting.js:57-60 ist hierher DUPLIZIERT (Spec §2.2a erlaubt Duplikat),
 // damit der Kegel deckungsgleich mit dem gestanzten Lichtkreis pulst und die
 // Funktion headless (ohne core/lighting.js) baubar bleibt. key via
 // variantIndex(tx,ty,2) -> licht_dither_1/_2. Kein Zufall/Zeitstempel (world/).
 // lights: [{x,y,radius,flicker}] in Weltpixeln; camera {x,y}; timeSec Sekunden.
 // Deterministisch: gleiche Argumente -> identische Liste (Smoke §5#5b).
-export function litDitherCells(lights, camera, timeSec, viewW, viewH) {
+//
+// Grafikpass 5 §5.D2: Stufen-Radien 0.45/0.75 -> 0.40/0.70 (Vereinheitlichung
+// mit der Kegel-Sprache der Vignette/Lit-Stufen).
+// Grafikpass 5 §1.7: OPTIONALER 6. Parameter isLit(tx,ty) — ein Praedikat, das
+// eine Zelle vom Dither AUSSCHLIESST, wenn es false liefert (main.js schliesst
+// damit Wasser- und anim-Kacheln aus: gedithertes Licht auf laufenden Wellen
+// schmiert). FEHLT der Parameter, ist das Verhalten EXAKT wie bisher — die
+// Smoke-Direktaufrufe mit 5 Argumenten bleiben unveraendert gruen.
+export function litDitherCells(lights, camera, timeSec, viewW, viewH, isLit) {
   const out = [];
   const tx0 = Math.max(0, Math.floor(camera.x / TILE));
   const ty0 = Math.max(0, Math.floor(camera.y / TILE));
@@ -56,6 +64,8 @@ export function litDitherCells(lights, camera, timeSec, viewW, viewH) {
   const ty1 = Math.floor((camera.y + viewH) / TILE);
   for (let ty = ty0; ty <= ty1; ty++) {
     for (let tx = tx0; tx <= tx1; tx++) {
+      // §1.7: Filter zuerst (billigster Ausschluss, spart die Licht-Schleife).
+      if (isLit && !isLit(tx, ty)) continue;
       const cx = tx * TILE + TILE / 2;
       const cy = ty * TILE + TILE / 2;
       let stufe = 0;
@@ -68,8 +78,8 @@ export function litDitherCells(lights, camera, timeSec, viewW, viewH) {
         const dx = cx - light.x;
         const dy = cy - light.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < r * 0.45) { stufe = 2; break; } // hoechste Stufe -> fertig
-        if (dist < r * 0.75 && stufe < 1) stufe = 1;
+        if (dist < r * 0.40) { stufe = 2; break; } // hoechste Stufe -> fertig
+        if (dist < r * 0.70 && stufe < 1) stufe = 1;
       }
       if (stufe > 0) {
         const key = variantIndex(tx, ty, 2) === 0 ? 'licht_dither_1' : 'licht_dither_2';
@@ -158,6 +168,202 @@ export function fringeOverlays(getDef, tx, ty) {
     if (w === 'moss') out.push(`${def.shorePrefix}_w`);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Grafikpass 5 Paket B — Ufer/Uferband/Reflexion. ALLE Neuerungen leben in
+// NEUEN reinen Funktionen; fringeOverlays bleibt byte-eingefroren (§0.2).
+// ---------------------------------------------------------------------------
+
+// Wasser-Erkennung fuer Paket B (modul-intern, eine einzige Wahrheit):
+// eine Kachel gilt als WASSER, wenn sie shorePrefix ODER depthOverlays traegt.
+// Beide Felder sitzen ausschliesslich auf Wasser-Legenden (GRAVEYARD '~' =
+// shorePrefix 'shore' + depthOverlays, FLUESTERGRUFT '~' = shorePrefix 'wet').
+// Ausserhalb der Map (getDef -> null) ist NICHTS Wasser.
+function isWaterDef(d) {
+  return !!(d && (d.shorePrefix || d.depthOverlays));
+}
+
+// §3.B1 shoreEdges(getDef, tx, ty) — REINE Funktion (Node-testbar).
+// Ufer-Keys fuer die ROHEN Wasserkanten: orthogonale Nachbarn, die WEDER
+// Wasser sind NOCH fringeSource tragen (Steinboden, Weg, Stamm, Fackelfuss).
+// Das ist exakt das KOMPLEMENT zu fringeOverlays: dort wird jede Kante mit
+// fringeSource-Nachbar bedient (fringe_*/moss_fringe_*/shore_*), hier NUR die
+// Kanten, die dort leer ausgehen — nie eine Doppel-Emission, der GP4-Konkav-Fix
+// bleibt unberuehrt.
+// Emissions-Familie ist IMMER 'shore_*' (unabhaengig vom shorePrefix der
+// Kachel): die shore-Kacheln sind material-agnostisch/rein wasserseitig, und
+// der wet_-Regex des Smoke-Tests (§3-Nassrand) bleibt unberuehrt.
+// ZUSAETZLICH §3.B3 Diagonal-Kappen shore_cap_<Seite><Richtung>: dort, wo eine
+// GERADE Landkante (Seite A, gleich ob sie von fringeOverlays oder von hier
+// gezeichnet wird) endet, weil der Nachbar in der Querrichtung B UND die
+// Diagonale A+B Wasser sind, laeuft die Uferlinie diagonal weiter. 8 Faelle:
+// nw/ne/sw/se (Nord-/Suedkante endet nach West/Ost) und wn/ws/en/es (West-/
+// Ostkante endet nach Nord/Sued). Rein additiv, kein Ersetzen, kein Doppel-Key.
+// Aufruf im Ground-Pass NACH fringeOverlays; fehlt ein Art-Key, wird still
+// nichts gezeichnet.
+const SHORE_SIDES = [['n', 0, -1], ['e', 1, 0], ['s', 0, 1], ['w', -1, 0]];
+const SHORE_PERP = {
+  n: [['w', -1, 0], ['e', 1, 0]],
+  s: [['w', -1, 0], ['e', 1, 0]],
+  w: [['n', 0, -1], ['s', 0, 1]],
+  e: [['n', 0, -1], ['s', 0, 1]],
+};
+
+export function shoreEdges(getDef, tx, ty) {
+  const def = getDef(tx, ty);
+  if (!def || !def.shorePrefix) return []; // frueher Abbruch: nur Wasser-Kacheln
+  const out = [];
+  const at = (dx, dy) => getDef(tx + dx, ty + dy);
+  for (const [name, dx, dy] of SHORE_SIDES) {
+    const d = at(dx, dy);
+    if (!d) continue;              // ausserhalb der Map = keine Kante
+    if (isWaterDef(d)) continue;   // Wasser-Nachbar = keine Kante
+    if (d.fringeSource) continue;  // KOMPLEMENT-Regel: das bedient fringeOverlays
+    out.push(`shore_${name}`);
+  }
+  for (const [name, dx, dy] of SHORE_SIDES) {
+    const dLand = at(dx, dy);
+    if (!dLand || isWaterDef(dLand)) continue; // gerade Kante nur gegen LAND
+    for (const [pname, pdx, pdy] of SHORE_PERP[name]) {
+      if (!isWaterDef(at(pdx, pdy))) continue;             // Querrichtung Wasser
+      if (!isWaterDef(at(dx + pdx, dy + pdy))) continue;    // Diagonale Wasser
+      out.push(`shore_cap_${name}${pname}`);
+    }
+  }
+  return out;
+}
+
+// §3.B2 bankOverlays(getDef, tx, ty) — REINE Funktion.
+// Uferband auf der LANDSEITE: 3 px Uferschatten + 2 px Material-Rampe, gedithert.
+// Material kommt aus dem NEUEN Legenden-Flag `bankSet` der LANDKACHEL:
+//   'g' = Schlamm/Gras-Ufer (GRAVEYARD Gras/Weg), 's' = nasse Steinkante
+//   (FLUESTERGRUFT Steinboden). Ziegel-WAENDE tragen KEIN Flag -> kein Band.
+// Kein Flag (oder fehlender Art-Key) -> still nichts.
+// Keys: bank_n/e/s/w + bank_ne/nw/se/sw, jeweils mit _g/_s-Suffix.
+// Ecken nur, wenn die diagonale Wasserzelle NICHT schon von einem geraden Band
+// derselben Kachel abgedeckt ist (beide angrenzenden Orthogonalen kein Wasser)
+// — sonst laege das Eckstueck doppelt auf dem Band.
+export function bankOverlays(getDef, tx, ty) {
+  const def = getDef(tx, ty);
+  // Frueher Abbruch in zwei Stufen: (1) das Flag (die mit Abstand billigste
+  // Pruefung, sie wirft praktisch alle Kacheln raus), (2) danach erst die
+  // Nachbarschaft — geprueft wird also NUR an Kacheln, die ueberhaupt ein
+  // Uferband tragen koennen.
+  if (!def || isWaterDef(def)) return [];              // nur LAND-Kacheln
+  const set = def.bankSet;
+  if (set !== 'g' && set !== 's') return [];           // kein Flag -> nichts
+  const w = (dx, dy) => isWaterDef(getDef(tx + dx, ty + dy));
+  const n = w(0, -1);
+  const e = w(1, 0);
+  const s = w(0, 1);
+  const west = w(-1, 0);
+  const out = [];
+  if (n) out.push(`bank_n_${set}`);
+  if (e) out.push(`bank_e_${set}`);
+  if (s) out.push(`bank_s_${set}`);
+  if (west) out.push(`bank_w_${set}`);
+  if (!n && !e && w(1, -1)) out.push(`bank_ne_${set}`);
+  if (!n && !west && w(-1, -1)) out.push(`bank_nw_${set}`);
+  if (!s && !e && w(1, 1)) out.push(`bank_se_${set}`);
+  if (!s && !west && w(-1, 1)) out.push(`bank_sw_${set}`);
+  return out;
+}
+
+// §3.B4 waterReflections(lights, defAt, cam, timeSec) — REINE Funktion.
+// Liefert die WASSER-Zellen, die orthogonal an einer FACKEL liegen (Fackel =
+// flicker >= 0.8, dieselbe Schwelle wie Warm-Glow/Lit-Dither/Funken; die
+// Fuell-Lichter aus §5.D4 liegen bei 0.5 und werfen bewusst KEINE Reflexion,
+// Spieler/Drops/Eliten bei 0.3). Geometrisch existiert das nur im Gruft-KANAL
+// (Jury-Deklaration: die einzige Teich-Fackel liegt nur diagonal am Wasser).
+// Rueckgabe je Zelle: { tx, ty, key, wob, sx, sy } —
+//   key  water_reflect_0/_1 (zwei Intensitaeten, deterministisch aus Zeit+Ort),
+//   wob  ganzzahliges Wackeln -1/0/+1 px aus Math.round(Math.sin(...)),
+//   sx/sy fertige, GANZZAHLIGE Screen-Koordinaten inkl. Wackeln (main.js
+//        zeichnet sie per 3-Argument-drawImage mit 'lighter').
+// Deterministisch: gleiche Argumente -> identische Liste (weder Zufall noch
+// Zeitstempel, §0.4). Jede Zelle nur EINMAL (zwei Fackeln am selben
+// Kanalstueck erzeugen kein Doppel-Draw).
+export function waterReflections(lights, defAt, cam, timeSec) {
+  const out = [];
+  if (!lights || !defAt) return out;
+  const camX = cam ? cam.x : 0;
+  const camY = cam ? cam.y : 0;
+  const seen = new Set();
+  for (const light of lights) {
+    if ((light.flicker || 0) < 0.8) continue;
+    const lx = Math.floor(light.x / TILE);
+    const ly = Math.floor(light.y / TILE);
+    for (const [, dx, dy] of SHORE_SIDES) {
+      const tx = lx + dx;
+      const ty = ly + dy;
+      if (!isWaterDef(defAt(tx, ty))) continue;
+      const id = `${tx},${ty}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const wob = Math.round(Math.sin(timeSec * 2.3 + light.x * 0.7 + tx * 1.1));
+      const lvl = Math.sin(timeSec * 3.7 + light.y * 0.5 + ty * 0.9) >= 0 ? 1 : 0;
+      out.push({
+        tx,
+        ty,
+        key: `water_reflect_${lvl}`,
+        wob,
+        sx: Math.round(tx * TILE - camX) + wob,
+        sy: Math.round(ty * TILE - camY),
+      });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Grafikpass 5 §4.C2 ANKER-OFFSET (Kronen) — Formeln WOERTLICH aus der Spec.
+// Ersetzt den GP3-Anker-Jitter (vertikal ±2 px, variantIndex(tx,ty,5)-2): der
+// Versatz ist jetzt ZWEIDIMENSIONAL und pro Anker-Klasse begrenzt, damit die
+// Baumreihen ihr Spaltenraster verlieren, ohne dass eine Krone von ihrem Stamm
+// abreisst. Zwei VERSETZTE Hashes mit UNGERADEN, zu 5 teilerfremden n (29/17,
+// beide prim) — weder Zufall noch Zeitstempel (§0.4).
+//   dxRaw = variantIndex(tx + 1013, ty + 571, 29)
+//   dx0   = dxRaw - 14                       // -14..+14
+//   dx    = clamp(dx0, -W, +W)               // W je ANKER-KLASSE
+//   dyRaw = variantIndex(tx + 421, ty + 907, 17)
+//   dy    = dyRaw % 9 - 4                    // -4..+4
+// ANKER-KLASSEN-TABELLE (Zuordnung ueber das Anker-Zeichen der Legende, hier
+// ueber dessen Art-Key gefuehrt, weil derselbe Key in mehreren Legenden unter
+// verschiedenen Zeichen stehen kann):
+//   Back-Kuppen  Y/Z/A  (tree_canopy_back_a/_b/_c)          -> W = 14
+//   Front _b/_bm N/V    (tree_canopy_2x2_b/_bm)             -> W =  6
+//   Front _a/_am/_c/_cm M/Q/O/X (tree_canopy_2x2_a/_am/_c/_cm) -> W = 2
+//   Front OHNE Stammdeckung (jeder sonstige Anker)          -> W = 14
+// Der DEFAULT ist damit die stammlose Front (W=14).
+const ANCHOR_CLAMP = {
+  tree_canopy_back_a: 14,
+  tree_canopy_back_b: 14,
+  tree_canopy_back_c: 14,
+  tree_canopy_2x2_b: 6,
+  tree_canopy_2x2_bm: 6,
+  tree_canopy_2x2_a: 2,
+  tree_canopy_2x2_am: 2,
+  tree_canopy_2x2_c: 2,
+  tree_canopy_2x2_cm: 2,
+};
+const ANCHOR_CLAMP_DEFAULT = 14; // Front ohne Stammdeckung
+
+// Reiner Anker-Versatz in PIXELN (ganzzahlig) fuer den Anker (tx,ty) mit dem
+// Legendeneintrag def. Wird sowohl vom Over-Zeichenpfad als auch vom
+// canopy_shadow-Pfad genutzt (identischer Versatz = der Schatten bleibt unter
+// der Krone).
+export function anchorOffset(def, tx, ty) {
+  const dxRaw = variantIndex(tx + 1013, ty + 571, 29);
+  const dx0 = dxRaw - 14;
+  const key = def && def.art;
+  const W = Object.prototype.hasOwnProperty.call(ANCHOR_CLAMP, key)
+    ? ANCHOR_CLAMP[key]
+    : ANCHOR_CLAMP_DEFAULT;
+  const dx = Math.max(-W, Math.min(W, dx0));
+  const dyRaw = variantIndex(tx + 421, ty + 907, 17);
+  const dy = (dyRaw % 9) - 4;
+  return { dx, dy };
 }
 
 export function createTilemap(rows, legend, overRows = null) {
@@ -292,7 +498,13 @@ export function createTilemap(rows, legend, overRows = null) {
   // ax..ax+sw-1, Zeile ay+sh; bei 2×2-Kronen also ax/ax+1 in ay+2). Außerhalb
   // der Map: überspringen. Gezeichnet wird der Key 'canopy_shadow' im GROUND-
   // Pass (unter den Entities), NACH Tile+Fringes.
-  const shadowCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(false));
+  // Grafikpass 5 §4.C2: die Schattenzelle merkt sich jetzt den ANKER-OFFSET
+  // {dx,dy} ihres Ankers statt eines blossen true — der Schatten wandert exakt
+  // mit der Krone (sonst risse er bei bis zu ±14/±4 px sichtbar ab). Ueberlappen
+  // sich zwei Anker auf derselben Schattenzelle, gewinnt der spaeter gelesene
+  // (Zeilen-/Spaltenreihenfolge, deterministisch) — wie bisher beim booleschen
+  // Raster, das nur EINEN Schatten pro Zelle kannte.
+  const shadowCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
   for (let ty = 0; ty < overCells.length; ty++) {
     for (let tx = 0; tx < wTiles; tx++) {
       const def = overCells[ty][tx];
@@ -300,10 +512,11 @@ export function createTilemap(rows, legend, overRows = null) {
       const [sw, sh] = def.span;
       const shy = ty + sh;
       if (shy < 0 || shy >= hTiles) continue;
+      const off = anchorOffset(def, tx, ty);
       for (let dx = 0; dx < sw; dx++) {
         const shx = tx + dx;
         if (shx < 0 || shx >= wTiles) continue;
-        shadowCells[shy][shx] = true;
+        shadowCells[shy][shx] = off;
       }
     }
   }
@@ -355,8 +568,19 @@ export function createTilemap(rows, legend, overRows = null) {
       // animRate Frames/s (Default 6). Positions-Offset entsynchronisiert
       // Fackeln (lebendigeres Flackern); animSync schaltet ihn ab (Wasserwellen
       // laufen synchron).
+      // Grafikpass 5 §4.C4 SWAY-PHASE: der Positions-Offset kommt fuer
+      // NICHT-synchrone anim-Kacheln jetzt aus einem 2x2-BLOCK-Hash
+      // variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7) statt aus
+      // (tx*13 + ty*7). Grund (Review): die alte Formel erzeugte in den
+      // 2x2-Sway-Clustern perfekte ANTIPHASE (Nachbarkacheln landeten bei
+      // 2-Frame-Anims immer im Gegenframe) — im Strip war deshalb nichts zu
+      // sehen. Jetzt schwingt ein 2x2-Cluster GLEICHSINNIG, benachbarte
+      // Cluster gegeneinander versetzt. n=7 ist ungerade und teilerfremd zu
+      // 5 (Anker) sowie zu 29/17 (§0.4). Wasser (animSync) bleibt unberuehrt.
       const rate = def.animRate || 6;
-      const offset = def.animSync ? 0 : tx * 13 + ty * 7;
+      const offset = def.animSync
+        ? 0
+        : variantIndex(Math.floor(tx / 2) + 331, Math.floor(ty / 2) + 733, 7);
       const frame = (Math.floor(timeSec * rate) + offset) % def.anim.length;
       return def.anim[frame];
     }
@@ -387,27 +611,57 @@ export function createTilemap(rows, legend, overRows = null) {
     // Anker knapp außerhalb ihre in den Viewport ragenden Kronen zeichnen
     // (§2.3). Der Ground-Layer bleibt strikt 1x1.
     // Grafikpass 3 §2.1: das obere Kronen-Culling um 1 Tile ZUSAETZLICH weiten —
-    // der Anker-Jitter (bis +2 px nach unten) kann einen Anker eine Zeile ueber
-    // dem Viewport knapp in ihn hineinschieben.
+    // der Anker-Versatz (GP5: bis +4 px nach unten) kann einen Anker eine Zeile
+    // ueber dem Viewport knapp in ihn hineinschieben.
+    // Grafikpass 5 §4.C2 CULLING (NUR der Over-Zweig, der Ground-Zweig teilt die
+    // Schleife und bleibt UNVERAENDERT — ungeklammert waere cells[hTiles] ein
+    // Absturz): der Anker-Offset kann Kronen von aussen in den Viewport ziehen.
+    // dx > 0 schiebt eine Krone nach rechts, ihr Anker kann also EINE Spalte
+    // weiter links stehen -> txStart 1 weiter links. dy < 0 schiebt eine Krone
+    // nach oben, ihr Anker kann eine Zeile UNTER dem Fenster stehen -> tyEnd +1.
+    // Nach oben deckt das bestehende -1 (GP3) das dy bis +4 px weiterhin ab.
+    // Beide Grenzen bleiben auf 0..wTiles-1 / 0..hTiles-1 geklammert.
     const tyStart = over ? Math.max(0, ty0 - (maxSpanH - 1) - 1) : ty0;
-    const txStart = over ? Math.max(0, tx0 - (maxSpanW - 1)) : tx0;
-    for (let ty = tyStart; ty <= ty1; ty++) {
+    const txStart = over ? Math.max(0, tx0 - (maxSpanW - 1) - 1) : tx0;
+    const tyEnd = over ? Math.min(hTiles - 1, ty1 + 1) : ty1;
+    for (let ty = tyStart; ty <= tyEnd; ty++) {
       for (let tx = txStart; tx <= tx1; tx++) {
         const def = over ? overCells[ty][tx] : cells[ty][tx];
         if (!def) continue;
         const sx = Math.round(tx * TILE - camX);
-        let sy = Math.round(ty * TILE - camY);
-        // Grafikpass 3 §2.1 Anker-Jitter: Span-Anker (Kronen) im Over-Layer
-        // bekommen einen deterministischen vertikalen Pixel-Versatz -2..+2, damit
-        // Baumreihen als Einzelbaeume lesen und nicht auf einer Linie sitzen.
-        // Rein deterministisch (variantIndex), Ground-Layer unberuehrt.
-        if (over && def.span) sy += variantIndex(tx, ty, 5) - 2;
+        const sy = Math.round(ty * TILE - camY);
+        // Grafikpass 5 §4.C2 Anker-Offset: Span-Anker (Kronen) im Over-Layer
+        // bekommen einen deterministischen 2D-Pixel-Versatz (dx nach Anker-
+        // Klasse geklammert, dy -4..+4). Ganzzahlig und NACH der Rundung addiert
+        // -> die Krone bleibt pixelgenau. Ground-Layer unberuehrt.
+        let ax = sx;
+        let ay = sy;
+        if (over && def.span) {
+          const off = anchorOffset(def, tx, ty);
+          ax += off.dx;
+          ay += off.dy;
+        }
         const img = tileCanvases[artFor(def, tx, ty, timeSec)];
-        if (img) ctx.drawImage(img, sx, sy);
+        if (img) ctx.drawImage(img, ax, ay);
         if (!over && def.fringeTarget) {
           for (const key of fringeOverlays(defAt, tx, ty)) {
             const fimg = tileCanvases[key];
             if (fimg) ctx.drawImage(fimg, sx, sy);
+          }
+        }
+        // Grafikpass 5 §3.B1/§3.B3: Ufer-Keys der ROHEN Kanten + Diagonal-Kappen,
+        // im Ground-Pass NACH fringeOverlays, rein ADDITIV (Komplement-Regel —
+        // nie dieselbe Kante zweimal). Fehlt ein Art-Key, wird still nichts
+        // gezeichnet.
+        if (!over) {
+          for (const key of shoreEdges(defAt, tx, ty)) {
+            const simg = tileCanvases[key];
+            if (simg) ctx.drawImage(simg, sx, sy);
+          }
+          // §3.B2: Uferband auf der LANDSEITE (bankSet-Flag der Landkachel).
+          for (const key of bankOverlays(defAt, tx, ty)) {
+            const bimg = tileCanvases[key];
+            if (bimg) ctx.drawImage(bimg, sx, sy);
           }
         }
         // Grafikpass 2 §8b.1: Wasser-Tiefen-Overlay im GROUND-Pass NACH
@@ -420,9 +674,12 @@ export function createTilemap(rows, legend, overRows = null) {
         // Grafikpass 2 §8a.4: Kronen-Schlagschatten im GROUND-Pass NACH
         // Tile+Fringes (unter den Entities), auf den aus overCells abgeleiteten
         // Zellen. Fehlt der Art-Key noch, wird still nichts gezeichnet.
+        // Grafikpass 5 §4.C2: DERSELBE Anker-Offset wie die Krone (der Schatten
+        // bleibt unter ihr stehen).
         if (!over && shadowCells[ty][tx]) {
           const shimg = tileCanvases['canopy_shadow'];
-          if (shimg) ctx.drawImage(shimg, sx, sy);
+          const soff = shadowCells[ty][tx];
+          if (shimg) ctx.drawImage(shimg, sx + soff.dx, sy + soff.dy);
         }
       }
     }
@@ -437,5 +694,9 @@ export function createTilemap(rows, legend, overRows = null) {
     rectCollides,
     findTiles,
     draw,
+    // Grafikpass 5 §1.7 (ADDITIVE API): der Legenden-Zugriff je Tile-Koordinate
+    // (ausserhalb der Map -> null). main.js baut damit den Lit-Dither-Filter
+    // (keine Wasser-/anim-Kacheln) und die Reflexions-Zellen (§3.B4).
+    defAt,
   };
 }
