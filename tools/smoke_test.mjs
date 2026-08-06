@@ -2314,6 +2314,20 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   // Der Positions-Offset nicht-synchroner anim-Kacheln kommt aus dem 2x2-Block-
   // Hash variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7): ein 2x2-Cluster
   // schwingt GLEICHSINNIG, benachbarte Cluster stehen gegeneinander versetzt.
+  //
+  // (erlaubte Alt-Test-Aenderung, GP5 RUNDE 2 — Engine-A, gemeldet):
+  // Der R1-Test bildete den DEFEKT ab, den die Jury gemessen hat. Er verlangte
+  // "mehr als ein Frame im Bild" AUSGERECHNET bei t = 0 — bei anim.length = 2
+  // ist jeder ungerade Cluster-Versatz aber exakt eine ANTIPHASE (Juror M:
+  // "+7 px oben, -7 px unten", "exakt 2 Zustaende"). Der R2-Fix (tilemap.js,
+  // swayPhase) ersetzt den Frame-Umlauf durch eine 4-Phasen-Welle
+  // SWAY_DX = [0,+1,0,-1], deren Cluster-Versatz ein BRUCHTEIL EINES SCHRITTES
+  // ist (shift/7 < 1) — dadurch liegen zwei Cluster nie mehr als einen Schritt
+  // auseinander und +1 kann NIE gegen -1 stehen. Bei t = 0 ruht das ganze Feld
+  // (Schritt 0) — die Versatz-Pruefung wandert deshalb auf t = 0.4 (dort stehen
+  // im 8x8-Fenster beide Frames), die Gleichphasen-Pruefung bleibt bei t = 0 und
+  // wird bei t = 0.4 WIEDERHOLT. NEU dazu: die harte Vorzeichen-Pruefung, die
+  // dem R1-Gate gefehlt hat.
   {
     const N = 8;
     const rowsSw = Array.from({ length: N }, () => 'w'.repeat(N));
@@ -2330,32 +2344,63 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       for (const g of grid) map.set(`${g.tx},${g.ty}`, g.img);
       return map;
     };
+    // Gleichphase je 2x2-Cluster — bei t = 0 (Ruhelage) UND bei t = 0.4 (Boe).
+    const clusterFrames = (g) => {
+      let ok = true;
+      const seen = new Set();
+      for (let cy = 0; cy < N; cy += 2) {
+        for (let cx = 0; cx < N; cx += 2) {
+          const v = g.get(`${cx},${cy}`);
+          seen.add(v);
+          for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) {
+            if (g.get(`${cx + dx},${cy + dy}`) !== v) ok = false;
+          }
+        }
+      }
+      return { ok, seen };
+    };
     const g0 = keysAt(0);
-    let clusterOk = true;
-    let clusterKeys = new Set();
-    for (let cy = 0; cy < N; cy += 2) {
-      for (let cx = 0; cx < N; cx += 2) {
-        const v = g0.get(`${cx},${cy}`);
-        clusterKeys.add(v);
-        for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) {
-          if (g0.get(`${cx + dx},${cy + dy}`) !== v) clusterOk = false;
+    const g4 = keysAt(0.4);
+    const c0 = clusterFrames(g0);
+    const c4 = clusterFrames(g4);
+    check('§6#4d Sway: jedes 2x2-Cluster zeigt denselben Frame (GLEICHSINNIG)', c0.ok && c4.ok);
+    check('§6#4d Sway: benachbarte Cluster stehen versetzt (mehr als ein Frame im Bild, t=0.4)',
+      c4.seen.size > 1, `frames=${[...c4.seen].join(',')}`);
+    check('§6#4d Sway: bei t=0 ruht das ganze Feld auf anim[0] (definierte Ruhelage)',
+      c0.seen.size === 1 && c0.seen.has('sway_0'), `frames=${[...c0.seen].join(',')}`);
+    // Formel woertlich gespiegelt (§4.C4 R2): 4-Phasen-Welle SWAY_DX=[0,1,0,-1],
+    // Schrittrate = animRate*2, Cluster-Versatz = BRUCHTEIL eines Schrittes.
+    const SWAY_DX_T = [0, 1, 0, -1];
+    const stepAt = (tx, ty, t) => {
+      const shift = variantIndex(Math.floor(tx / 2) + 331, Math.floor(ty / 2) + 733, 7);
+      return ((Math.floor(t * (0.8 * 2) + shift / 7) % 4) + 4) % 4;
+    };
+    let formulaOk = true;
+    for (const [t, g] of [[0, g0], [0.4, g4]]) {
+      for (let ty = 0; ty < N; ty++) {
+        for (let tx = 0; tx < N; tx++) {
+          const dx = SWAY_DX_T[stepAt(tx, ty, t)];
+          const want = legSw.w.anim[dx > 0 ? 1 : 0]; // n=2: kein Links-Frame vorhanden
+          if (g.get(`${tx},${ty}`) !== want) formulaOk = false;
         }
       }
     }
-    check('§6#4d Sway: jedes 2x2-Cluster zeigt denselben Frame (GLEICHSINNIG)', clusterOk);
-    check('§6#4d Sway: benachbarte Cluster stehen versetzt (mehr als ein Frame im Bild)',
-      clusterKeys.size > 1, `frames=${[...clusterKeys].join(',')}`);
-    // Formel woertlich gespiegelt (§4.C4): Offset haengt NUR vom 2x2-Block ab.
-    let formulaOk = true;
-    for (let ty = 0; ty < N; ty++) {
-      for (let tx = 0; tx < N; tx++) {
-        const off = variantIndex(Math.floor(tx / 2) + 331, Math.floor(ty / 2) + 733, 7);
-        const want = legSw.w.anim[(Math.floor(0 * 0.8) + off) % 2];
-        if (g0.get(`${tx},${ty}`) !== want) formulaOk = false;
-      }
-    }
-    check('§6#4d Sway: Frame = anim[(floor(t*rate) + variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7)) % n]',
+    check('§6#4d Sway: Frame folgt SWAY_DX[(floor(t*rate*2 + variantIndex(floor(tx/2)+331, floor(ty/2)+733, 7)/7)) % 4]',
       formulaOk);
+    // HARTE VORZEICHEN-PRUEFUNG (das fehlende R1-Gate): ueber einen ganzen
+    // Zyklus darf NIE ein Cluster nach links auslenken, waehrend ein anderer
+    // nach rechts auslenkt.
+    let signClash = 0;
+    for (let i = 0; i < 40; i++) {
+      const t = i * 0.0625;
+      const signs = new Set();
+      for (let ty = 0; ty < N; ty++) {
+        for (let tx = 0; tx < N; tx++) signs.add(Math.sign(SWAY_DX_T[stepAt(tx, ty, t)]));
+      }
+      if (signs.has(1) && signs.has(-1)) signClash++;
+    }
+    check('§6#4d Sway: NIE Gegenphase im Bild (+1 und -1 nie gleichzeitig, 40 Ticks)',
+      signClash === 0, `ticks mit Gegenphase=${signClash}`);
     // Wasser (animSync) bleibt unberuehrt: alle Zellen im selben Frame.
     const legSync = { '~': { art: 'w0', solid: false, anim: ['w0', 'w1', 'w2', 'w3'], animRate: 3, animSync: true } };
     const tmSync = createTilemap(Array.from({ length: 4 }, () => '~~~~'), legSync);

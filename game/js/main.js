@@ -126,6 +126,13 @@ let runFlags = { bossDead: false };   // Reset in resetRun
 let lastSpawn = null;                 // fuer den Respawn (§2.6): letzter Eintritts-Spawn
 let currentMapKey = null;             // aktuelle Map (Respawn zielt hierauf)
 let levelupTimer = 0;                 // Ring-Effekt levelup_0/1, 0,5 s ueber dem Spieler
+// Grafikpass 5 RUNDE 2: Damage-Lag des Boss-Balkens (rein visuell).
+// BOSS_BAR_IW spiegelt die Innenbreite des Balkens aus ui/hud.js (bw 80 - 4).
+// hud.js klammert den Wert zusaetzlich auf 0..iw, ein Auseinanderlaufen der
+// beiden Konstanten kann also nichts kaputt machen.
+const BOSS_BAR_IW = 76;
+let bossLagW = null;                  // nachlaufende ANZEIGE-Breite in px
+let bossLagFrames = 0;                // Frame-Zaehler (1 px je 2 Frames)
 let portalToastTimer = 0;             // Drossel fuer den VERSCHLOSSEN/VERSIEGELT-Toast (1x/s)
 
 function pushToast(text, color, prio) {
@@ -339,8 +346,30 @@ function update(dt) {
 
       // Boss-HP-Balken pro Frame spiegeln (Muster zeldaState): lebt ein
       // Grabwaechter, traegt player.bossBar seine HP, sonst null.
+      // Grafikpass 5 RUNDE 2 — DAMAGE-LAG (rein VISUELL, kein Gameplay-Wert):
+      // bossLagW ist die ANZEIGE-Breite der Fuellung in Balken-Pixeln. Sie
+      // springt bei Treffern NICHT sofort auf den neuen Wert, sondern laeuft
+      // ihm mit ~1 px je 2 Frames nach (~30 px/s). hud.js zeichnet die Strecke
+      // zwischen echter und nachlaufender Breite als entsaettigt hellen
+      // Streifen HINTER der Fuellung — der Spieler SIEHT, wie viel ein Treffer
+      // gekostet hat. Steigt die HP (Heilung/neuer Kampf), rastet die Anzeige
+      // sofort ein. Kein Einfluss auf boss.hp oder irgendeine Logik.
       const boss = enemies.find((e) => e.kind === 'graveward' && e.state !== 'die');
-      player.bossBar = boss ? { hp: boss.hp, maxHp: boss.maxHp } : null;
+      if (boss) {
+        const bossFw = Math.max(0, Math.round((BOSS_BAR_IW * boss.hp) / boss.maxHp));
+        if (bossLagW === null || bossFw >= bossLagW) {
+          bossLagW = bossFw;                 // Heilung/erster Frame: sofort
+          bossLagFrames = 0;
+        } else if (++bossLagFrames >= 2) {   // ~1 px je 2 Frames
+          bossLagFrames = 0;
+          bossLagW -= 1;
+        }
+        player.bossBar = { hp: boss.hp, maxHp: boss.maxHp, lagW: bossLagW };
+      } else {
+        bossLagW = null;
+        bossLagFrames = 0;
+        player.bossBar = null;
+      }
 
       // Prüfreihenfolge (Spec-Review-Klärung): 1. Tod hat IMMER Vorrang
       // (verwirft laufenden Victory-Countdown) → 2. Portal → 3. Truhe/Sieg

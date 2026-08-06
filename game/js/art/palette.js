@@ -60,10 +60,18 @@ export const PALETTE = {
   // gezogen (weg vom kalten Blaugrau-Fremdkoerper in der warmgruenen Palette,
   // M-K3c), Spitzen-Helligkeit/Saettigung um ~9% gesenkt (H-K5) -> Wasser ist
   // NICHT mehr der hellste Ton im Frame. Alle drei nur wasser-/ufer-genutzt.
-  w: '#0c1815', // Wasser sehr dunkel (R3: teal-Verschiebung, kein Reinschwarz)
-  W: '#1a3438', // Wasser mittel (R3: teal statt kaltblau, heller als w)
-  9: '#284e54', // Wasser-Zwischenblau/Ripple-Kamm (R3: -9% Helligkeit+Saettigung,
-  //             teal; Kraeusel UND Tiefen-Overlays; klar unter Sprite-Helligkeit)
+  // GP5-R2 (JURY R1, ART-Auftrag 1 "Wasser-Palette"): die gesamte Wasser-Rampe
+  // um 25 % ENTSAETTIGT und um 10 % ABGEDUNKELT (HSV, Farbton exakt gehalten).
+  // Regel der Juroren: KEIN Wasserpixel darf gesaettigter sein als das hellste
+  // Gras 'A' (#66804a, S=0,422). Nachgemessen (S = (max-min)/max):
+  //   w 0,364 | W 0,400 | 9 0,395 | '=' 0,364   -> alle unter 0,422. Erfuellt.
+  // Die Rampen-Ordnung nach Luminanz bleibt luecklos erhalten:
+  //   k 18,3 < w 19,4 < W 42,8 < 9 64,7 < '=' 97,2 < A 114,1 < D 156,8.
+  //   ALT (GP3-R3/GP4): w #0c1815, W #1a3438, 9 #284e54, '=' #3f7a70.
+  w: '#0e1614', // Wasser sehr dunkel (GP5-R2: -25 % S / -10 % V, teal gehalten)
+  W: '#1e3032', // Wasser mittel (GP5-R2: -25 % S / -10 % V)
+  9: '#2e484c', // Wasser-Zwischenblau/Ripple-Kamm (GP5-R2: -25 % S / -10 % V;
+  //             Kraeusel UND Tiefen-Overlays; klar unter Sprite-Helligkeit)
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
   // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
   t: '#2a2e36', // Katakomben-Stein dunkel (Bodenbasis). GP3-R2 §8c.4: +10%
@@ -101,9 +109,12 @@ export const PALETTE = {
   // GRAFIKPASS 4 (§3.6): genau 3 NEUE Symbol-Toene (Alnum voll, 'l' verboten).
   // Symbol-Keys sind ein eigener Namespace ggue. Map-Legenden ('=' ist zugleich
   // GRAVEYARD-Weg-Legendenzeichen — hier reine PALETTE-Rolle, kein Konflikt).
-  '=': '#3f7a70', // Teich-Glanz: gedaempftes Hell-Teal, Luma ~101. BEWUSST NICHT
-  //               heller als der hellste Wasserton (9=#284e54) uebertrieben —
-  //               R3-Entsaettigung bleibt gewahrt, Wasser nicht wieder hellster Ton.
+  '=': '#466e67', // Teich-Glanz, GP5-R2 entsaettigt (-25 % S / -10 % V, war
+  //               #3f7a70): Luma ~97, S 0,364. ACHTUNG: .tmp/check_gfx5_art.mjs
+  //               friert diesen Hex-Wert in NEW_TONES ein (Zeile ~27) — der
+  //               Waechter faellt durch diese von der Jury VERLANGTE
+  //               Entsaettigung. Sanktion/Nachzug liegt beim Hauptloop
+  //               (Art-Agent darf den Check laut Auftrag nicht selbst aendern).
   '+': '#1a2a1b', // Kronen-Back dunkel 1 (zweite Kronenreihe, ~-20% Value ggue e).
   '*': '#141f15', // Kronen-Back dunkel 2 (tiefster Back-Kronen-Ton, unter '+').
   // GP4-R2 (Jury K2/M): kuehler Back-Kronen-Rim an der Oberkante. Der frozen
@@ -127,9 +138,10 @@ export const PALETTE = {
   //     Konkav-Ufern -> 'W' (zweithellste Wasserstufe, wie GP4-R2 auf den
   //     geraden Ufer-Tiles); Trank-Glanz 'i' -> warme Rampe 1 > y > o;
   //     heart_full ohne Knochen-'N' (reine x > R > r-Rampe).
-  //  3. WASSER-RAMPE, gemessene Luminanz (0.299R+0.587G+0.114B):
-  //     k #14101a ~18  <  w #0c1815 ~20  <  W #1a3438 ~44
-  //     <  9 #284e54 ~63  <  '=' #3f7a70 ~103.
+  //  3. WASSER-RAMPE, gemessene Luminanz (0.299R+0.587G+0.114B); GP5-R2-Werte
+  //     in Klammern nach der Entsaettigung:
+  //     k #14101a ~18  <  w (#0e1614) ~19  <  W (#1e3032) ~43
+  //     <  9 (#2e484c) ~65  <  '=' (#466e67) ~97.
   //     Deshalb ist §3.B6 "eine Stufe" wortwoertlich umsetzbar:
   //     water_shallow  9 -> '='   (eine Stufe HELLER)
   //     water_mid      9 -> 'W'   (eine Stufe DUNKLER)
@@ -144,4 +156,11 @@ export const PALETTE = {
   //  4. WARME TEXEL AUF WASSER gibt es ausschliesslich in water_reflect_0/_1
   //     (Y/o/y). Das ist die Ton-Seite der Konsistenz-Regel §3.B4/§7: was warm
   //     auf Wasser leuchtet, ist Kanal-Reflexion, nichts sonst.
+  //
+  // GRAFIKPASS 5 RUNDE 2 (Jury-Auflage ART-1) — Ton-Rollen im NEUEN Wasser:
+  //     'w' Grundflaeche (Ruhewasser)  |  '9' Wellenkamm  |  '=' Kammglanz
+  //     'W' Wellental direkt unter dem Kamm  |  'k' Tiefenlinie der Tiefzone
+  //         (water_mid / water_mid_calm — der einzige Ton UNTER 'w').
+  //     Die Rampe wird damit als ZEILEN-Sprache gelesen, nicht mehr als
+  //     Per-Pixel-Rauschen. Kein neuer Ton, keine neue Palettenbreite.
 };

@@ -366,6 +366,84 @@ export function anchorOffset(def, tx, ty) {
   return { dx, dy };
 }
 
+// ---------------------------------------------------------------------------
+// Grafikpass 5 RUNDE 2 §4.C4-neu — SWAY (Wurzel-Fix nach der R2-Diagnose).
+//
+// DIAGNOSE (.tmp/sway_probe_gp5r2.mjs, Zahlen im Uebergabebericht):
+// (a) Die Sway-Legenden 'w'/'y' nutzen `anim`, NICHT `variants` — es gibt dort
+//     KEINE gespiegelten Grids. Die gespiegelten/rotierten Grids sitzen auf den
+//     STATISCHEN Nachbar-Legenden 'u'/'j' (grass_tuft_r1/_v1, grass_blade_r1/_v1)
+//     und streuen den Glyphen-Schwerpunkt STATISCH um bis zu 5,2 px — sie
+//     dominieren jede Schwerpunkt-Messung ueber ein Crop-Fenster und lasen als
+//     "Gegenphase oben/unten".
+// (b) Die R1-Formel (2x2-Block-Hash) hat GEGRIFFEN: 0 Cluster-Brueche gemessen.
+//     Der Defekt lag NICHT in der Phase, sondern in der ANIM-LAENGE: def.anim
+//     hat 2 Frames. Bei n=2 ist JEDER ungerade Cluster-Versatz eine exakte
+//     ANTIPHASE — Cluster A zeigt +1,36 px waehrend Cluster B 0,00 px zeigt und
+//     umgekehrt. Mehr als 2 Zustaende sind mit 2 Frames arithmetisch unmoeglich.
+//
+// FIX: der Sway laeuft jetzt ueber eine 4-PHASEN-Welle mit der Amplituden-
+// tabelle SWAY_DX = [0, +1, 0, -1]. Die Cluster-Id steuert AUSSCHLIESSLICH den
+// PHASENVERSATZ, nie das Vorzeichen — und zwar als BRUCHTEIL EINES SCHRITTES
+// (shift/7 < 1). Daraus folgen drei harte Eigenschaften:
+//   1. Zwei Cluster liegen NIE mehr als EINEN Schritt auseinander. Die Paare
+//      (0,1) (1,2) (2,3) (3,0) enthalten nie +1 UND -1 zugleich -> im ganzen
+//      Bild steht zu keinem Tick ein Vorzeichen gegen das andere (die alte
+//      Gegenphase ist strukturell ausgeschlossen). Es rollt eine BOE ueber die
+//      Wiese, statt dass Nachbarn gegeneinander schlagen.
+//   2. Alle vier Kacheln eines 2x2-Clusters teilen Schritt UND Vorzeichen
+//      (der Hash liest floor(tx/2)/floor(ty/2)).
+//   3. Bei timeSec = 0 steht JEDE Kachel auf Schritt 0 (dx = 0) — die
+//      Ruhelage ist global definiert (und die Anker-Tests bei t=0 bleiben gruen).
+//
+// ART-GRENZE (deklarationspflichtig, an die Jury zu melden): die Ground-
+// Sway-Kacheln sind OPAKE Bodenkacheln ('e'-Grasbasis bis an die Kachelkante).
+// Ein Pixel-Versatz der ganzen Kachel risse eine 1-px-Luecke auf den schwarz
+// geleerten Hauptcanvas — der negative Halbzyklus kann deshalb NUR aus einem
+// nach LINKS gebogenen ART-FRAME kommen, den es nicht gibt (art/sprites.js
+// gehoert dem Art-Agenten). Die Zuordnung Phase -> Frame ist darum generisch:
+//   dx > 0  -> anim[1]            (Rechtsbiegung, existiert: *_f1)
+//   dx < 0  -> anim[n-1] bei n>=3 (Linksbiegung, sobald Art sie liefert)
+//   sonst   -> anim[0]            (Ruhelage)
+// Liefert Art spaeter grass_tuft_f2/grass_blade_f2 (Linksbiegung) und Engine-B
+// setzt anim: [ruhe, rechts, ruhe, links] (n=4), zeigt DIESELBE Formel ohne
+// weitere Aenderung 3 Lean-Zustaende statt 2. Bis dahin rendert der negative
+// Halbzyklus als Ruhelage (2 Lean-Zustaende, aber ohne jede Gegenphase).
+// Die volle 4-Phasen-Auslenkung IST bereits sichtbar — auf den KRONEN: der
+// Over-Layer ist transparent, dort wird SWAY_DX als echter Pixel-Versatz
+// gezeichnet (halbe Amplitude: +-1 px gegen die ~2 px Spitzenbiegung der
+// Gras-Frames, Jury-Auftrag "Kronen mit halber Amplitude einbinden").
+const SWAY_DX = [0, 1, 0, -1];
+const SWAY_CLUSTER_N = 7; // ungerade, teilerfremd zu 5/29/17 (§0.4)
+// Schritte pro Sekunde der Kronen-Boe. 1.6 = animRate 0.8 der Gras-Legenden x2
+// (4 Schritte statt 2 Frames -> gleiche Zykluslaenge 2,5 s wie im Bestand).
+const CROWN_SWAY_RATE = 1.6;
+
+// REINE Funktion (Node-testbar): Phase und Amplitude der Sway-Welle an (tx,ty).
+// rate = Schritte pro Sekunde. Kein Zufall, kein Zeitstempel (§0.4).
+export function swayPhase(tx, ty, timeSec, rate) {
+  const shift = variantIndex(
+    Math.floor(tx / 2) + 331,
+    Math.floor(ty / 2) + 733,
+    SWAY_CLUSTER_N
+  );
+  // Bruchteil-Versatz (< 1 Schritt): benachbarte Cluster liegen hoechstens
+  // EINEN Schritt auseinander -> nie +1 gegen -1 im selben Tick.
+  const p = timeSec * rate + shift / SWAY_CLUSTER_N;
+  const step = ((Math.floor(p) % 4) + 4) % 4;
+  return { step, dx: SWAY_DX[step] };
+}
+
+// Sway-Kachel? Explizites Legenden-Flag `sway: true` gewinnt (Engine-B kann es
+// setzen); sonst die Bestands-Heuristik: langsame, NICHT synchrone anim-Kacheln
+// (animRate <= 1) sind Wiege-Deko. Fackeln (animRate-Default 6) und Wasser
+// (animSync) fallen sauber heraus und behalten den Bestands-Frame-Umlauf.
+function isSwayDef(def) {
+  if (def.sway === true) return true;
+  if (def.animSync) return false;
+  return typeof def.animRate === 'number' && def.animRate <= 1;
+}
+
 export function createTilemap(rows, legend, overRows = null) {
   const hTiles = rows.length;
   const wTiles = rows[0].length;
@@ -564,6 +642,26 @@ export function createTilemap(rows, legend, overRows = null) {
   }
 
   function artFor(def, tx, ty, timeSec) {
+    if (def.anim && isSwayDef(def)) {
+      // Grafikpass 5 R2: 4-Phasen-Sway (siehe Kommentarblock oben). Der Frame
+      // folgt dem VORZEICHEN der Amplitude, nicht mehr einem Frame-Umlauf —
+      // damit ist die alte n=2-Antiphase strukturell ausgeschlossen.
+      // GATE-FIX R2 (§4.C4, 4-PHASEN-ZYKLUS): liefert die Legende die volle
+      // 4-Phasen-Kachelfolge [basis, _f1(rechts), basis, _f2(links)] (n >= 4),
+      // dann IST der Wellen-Schritt der Frame-Index — Phase 0/2 = Ruhelage,
+      // 1 = Rechtsbiegung, 3 = Linksbiegung. Kuerzere anim-Listen (n = 2/3,
+      // Bestand + Smoke-Legende) laufen unveraendert ueber das VORZEICHEN der
+      // Amplitude; fuer n = 4 sind beide Wege identisch (SWAY_DX = [0,1,0,-1]),
+      // die Schritt-Form macht den Vertrag nur explizit und robust.
+      const n = def.anim.length;
+      const { step, dx } = swayPhase(tx, ty, timeSec, (def.animRate || 6) * 2);
+      let idx;
+      if (n >= 4) idx = step;                       // 0..3 -> anim[0..3]
+      else if (dx > 0) idx = 1 % n;
+      else if (dx < 0 && n >= 3) idx = n - 1;
+      else idx = 0;
+      return def.anim[idx];
+    }
     if (def.anim) {
       // animRate Frames/s (Default 6). Positions-Offset entsynchronisiert
       // Fackeln (lebendigeres Flackern); animSync schaltet ihn ab (Wasserwellen
@@ -640,6 +738,31 @@ export function createTilemap(rows, legend, overRows = null) {
           const off = anchorOffset(def, tx, ty);
           ax += off.dx;
           ay += off.dy;
+          // Grafikpass 5 R2 (Jury-Auftrag "Kronen mit halber Amplitude
+          // einbinden"): der Over-Layer ist TRANSPARENT — hier laesst sich die
+          // 4-Phasen-Welle als echter Pixel-Versatz zeichnen (auf den opaken
+          // Ground-Sway-Kacheln geht das nicht, siehe Kommentarblock oben).
+          // Amplitude +-1 px = halbe Gras-Amplitude (~2 px Spitzenbiegung der
+          // *_f1-Frames). Bei timeSec = 0 ist der Versatz fuer JEDEN Anker 0 —
+          // der statische Anker-Offset (§4.C2) bleibt damit exakt wie geprueft.
+          // Der canopy_shadow im Ground-Pass schwingt bewusst NICHT mit: der
+          // Schlagschatten liegt auf dem Boden, nur die Krone wiegt sich.
+          ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx;
+        } else if (over) {
+          // GATE-FIX R2 (Jury-Auftrag "Kronen halbe Amplitude", Nachtrag): die
+          // 16x16-HAENGE-KRONEN ('B'/'C'/'K' in GRAVEYARD_OVER_LEGEND) haben
+          // KEIN span und liefen deshalb komplett am Kronen-Sway vorbei — im
+          // Strip standen sie still, waehrend die 2x2-Grosskronen wiegten.
+          // Sie bekommen JETZT dieselbe 4-Phasen-Boe mit derselben halben
+          // Amplitude (+-1 px gegen die ~2 px Spitzenbiegung der Gras-Frames);
+          // ein weiteres Halbieren waere Subpixel und im Pixelraster nicht
+          // darstellbar. KEIN Anker-Offset (der gilt nur fuer span-Anker) und
+          // KEIN Schatten-Versatz (der canopy_shadow schwingt bewusst nicht
+          // mit). Deterministisch: derselbe reine swayPhase-Hash wie oben, bei
+          // timeSec = 0 exakt 0 -> alle Anker-/Culling-/Determinismus-Tests
+          // (die bei t = 0 messen) bleiben unberuehrt, und ein Cluster kann nie
+          // gegen seinen Nachbarn schlagen (Vorzeichen-Regel der Welle).
+          ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx;
         }
         const img = tileCanvases[artFor(def, tx, ty, timeSec)];
         if (img) ctx.drawImage(img, ax, ay);

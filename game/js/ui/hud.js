@@ -5,6 +5,22 @@ import { XP_THRESHOLDS, LEVEL_CAP } from '../items/progression.js';
 const VIEW_W = 320;
 const VIEW_H = 180;
 
+// Grafikpass 5 RUNDE 2 (Jury K6.3, H-Rezept): Fuellrampe des Boss-Balkens —
+// EIN Ton je Innenzeile ueber die 8 Zeilen der Innenflaeche, von der hellen
+// Lichtkante oben zur tiefen Kante unten. Der R1-Balken bestand zu 93 % aus
+// einem einzigen Rotton; keine Zeile dieser Rampe stellt mehr als ~13 % der
+// Flaeche. Reihenfolge = Zeile 0 (oben) .. Zeile 7 (unten).
+const BOSS_FILL_RAMP = [
+  '#e87a66', // 0 Lichtkante
+  '#d75c4c',
+  '#c9463b',
+  '#bb3a31',
+  '#ae2f2a', // 4 Grundton
+  '#9b2925',
+  '#872420',
+  '#6d1c19', // 7 Tiefkante
+];
+
 export function drawHUD(ctx, player, input, gfx) {
   // Grafikpass 3 §2.6: dezentes Panel HINTER dem bestehenden HUD-Block oben links
   // (Herzen, GOLD, Trank, XP-Balken). AUSSCHLIESSLICH aus fillRect (kein
@@ -191,11 +207,13 @@ export function drawHUD(ctx, player, input, gfx) {
   }
 
   // Boss-HP-Balken (§3, aus player.bossBar gespiegelt): 80x12 bei (120,7)
-  // (Grafikpass 5 §1.5, vorher 80x8). 2-px Rahmen im Mittelton mit freien
-  // Eckpixeln, 1-px Innenbevel (hell oben-links, dunkel unten-rechts),
-  // Vertikal-Gradient aus 3 fillRect-Baendern (helleres oberes Band), KEINE
-  // Segment-Ticks mehr und eine entsaettigte 'verlorene HP'-Rinne hinter der
-  // aktuellen Fuellung. AUSSCHLIESSLICH fillRect
+  // (Grafikpass 5 §1.5, vorher 80x8).
+  // RUNDE 2 (Jury K6.3: "weiterhin flach, 93 % ein Rotton, Glanz auf Zeile 2
+  // statt 1"): 12-px-Rahmen mit ZEILENGENAUER Rollenverteilung — aeussere
+  // Kontur / Rahmenlicht / 8 Zeilen Fuellrampe / Rahmenschatten / Kontur —,
+  // 16-px-Teilstriche, 2-px-Glanz an der LINKEN Innenkante (Zeile 1 des
+  // Fuellbereichs ist der hellste Rampenton) und eine Damage-Lag-Schicht
+  // (main.js fuehrt die Anzeige-Breite rein visuell nach). AUSSCHLIESSLICH fillRect
   // (keine strokeRect/arc/Gradient-Objekte). Bar bleibt in drawHUD NACH
   // lighting.draw, damit der ambientAlpha-Detektor der Boss-Flusstests (erstes
   // Teilalpha-fillRect auf dem Lighting-Offscreen, NICHT auf dem Haupt-Canvas)
@@ -209,43 +227,77 @@ export function drawHUD(ctx, player, input, gfx) {
     const bx = 120, by = 7, bw = 80, bh = 12;             // Aussenmasse
     const ix = bx + 2, iy = by + 2, iw = bw - 4, ih = bh - 4; // Innenflaeche 122,9,76,8
     ctx.save();
-    // 2-px Rahmen in lesbarem MITTELTON (§1.5: #575061 statt des frueheren
-    // #14101a, das vor dunklem Hintergrund unsichtbar war). Wie am HUD-Panel
-    // bleiben die vier ECKPIXEL FREI (3 fillRects statt einer Vollflaeche =
-    // abgeschraegte Ecken); die Innenflaeche wird darueber neu gefuellt.
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#575061';
-    ctx.fillRect(bx, by + 1, bw, bh - 2);        // Mittelband (volle Breite)
-    ctx.fillRect(bx + 1, by, bw - 2, 1);         // obere Zeile (Ecken frei)
-    ctx.fillRect(bx + 1, by + bh - 1, bw - 2, 1); // untere Zeile (Ecken frei)
-    // entsaettigte 'verlorene HP'-Rinne ueber die volle Innenbreite (dahinter)
-    ctx.fillStyle = '#5a3936';
+    // --- RAHMEN: Kontur / Rahmenlicht / Rahmenschatten (Runde 2, H-Rezept) ---
+    // Der R1-Balken las flach, weil sein 2-px-Rahmen EIN einziger Mittelton war
+    // (#575061 rundum) — ohne Lichtrichtung ist er eine Umrandung, kein Metall.
+    // Jetzt tragen die 12 Zeilen eine Rolle je Zeile:
+    //   by+0    aeussere KONTUR (dunkelster Ton, Ecken frei)
+    //   by+1    RAHMENLICHT oben (und Spalte bx+1 links) — Licht von oben-links
+    //   by+2..9 FUELLRAMPE (8 Zeilen, siehe unten)
+    //   by+10   RAHMENSCHATTEN unten (und Spalte bx+bw-2 rechts)
+    //   by+11   aeussere KONTUR
+    ctx.fillStyle = '#0d0a12';                   // Kontur (Ecken bleiben frei)
+    ctx.fillRect(bx, by + 1, bw, bh - 2);
+    ctx.fillRect(bx + 1, by, bw - 2, 1);
+    ctx.fillRect(bx + 1, by + bh - 1, bw - 2, 1);
+    ctx.fillStyle = '#6f6879';                   // Rahmenlicht oben + links
+    ctx.fillRect(bx + 1, by + 1, bw - 2, 1);
+    ctx.fillRect(bx + 1, by + 1, 1, bh - 2);
+    ctx.fillStyle = '#2a2632';                   // Rahmenschatten unten + rechts
+    ctx.fillRect(bx + 1, by + bh - 2, bw - 2, 1);
+    ctx.fillRect(bx + bw - 2, by + 1, 1, bh - 2);
+    // --- RINNE: leerer Teil der Leiste (dunkel, entsaettigt) ---
+    ctx.fillStyle = '#3a2320';
     ctx.fillRect(ix, iy, iw, ih);
-    // aktuelle HP-Fuellung als 3-Band-Vertikal-Gradient (oberes Band heller).
-    // §1.5: bei ih 8 traegt das Lichtband 2 px (statt 1 px bei ih 4), damit das
-    // Verhaeltnis der drei Baender das alte Bild behaelt.
     const fw = Math.max(0, Math.round((iw * bb.hp) / bb.maxHp));
-    if (fw > 0) {
-      ctx.fillStyle = '#c9463b';                 // oberes Band: heller
-      ctx.fillRect(ix, iy, fw, 2);
-      ctx.fillStyle = '#ae2f2a';                 // Mitte: Grundton
-      ctx.fillRect(ix, iy + 2, fw, ih - 3);
-      ctx.fillStyle = '#872420';                 // unten: dunkler
-      ctx.fillRect(ix, iy + ih - 1, fw, 1);
+    // --- DAMAGE-LAG-SCHICHT (Runde 2): die Anzeige-Breite laeuft der echten
+    // Fuellung NACH (main.js fuehrt sie rein visuell nach, ~1 px je 2 Frames).
+    // Sie liegt HINTER der aktuellen Fuellung — sichtbar bleibt genau das
+    // Stueck, das der Boss gerade verloren hat: ein entsaettigt HELLER Streifen,
+    // der binnen Sekundenbruchteilen einlaeuft. Fehlt bb.lagW (Alt-Aufrufer),
+    // faellt die Schicht still weg.
+    const lagW = Math.max(fw, Math.min(iw, Math.round(bb.lagW ?? fw)));
+    if (lagW > fw) {
+      ctx.fillStyle = '#b8a09c';                 // entsaettigt hell
+      ctx.fillRect(ix, iy, lagW, ih);
+      ctx.fillStyle = '#7d6a67';                 // Unterkante des Lag-Streifens
+      ctx.fillRect(ix, iy + ih - 1, lagW, 1);
     }
-    // Grafikpass 5 §1.5: die Segment-Ticks (25/50/75 %) sind GESTRICHEN — sie
-    // zerhackten die ohnehin knappe Fuellflaeche in Kaestchen und lasen als
-    // Ladebalken statt als Lebensleiste.
-    // 1-px Innenbevel: hell oben+links (Lichtkante)
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#575061';
-    ctx.fillRect(ix, iy, iw, 1);                 // oben (hell)
-    ctx.fillRect(ix, iy, 1, ih);                 // links (hell)
-    // 1-px Innenbevel: dunkel unten+rechts (§1.4-Mittelton #3a3542)
-    ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#3a3542';
-    ctx.fillRect(ix, iy + ih - 1, iw, 1);        // unten (dunkel)
-    ctx.fillRect(ix + iw - 1, iy, 1, ih);        // rechts (dunkel)
+    // --- FUELLRAMPE ueber 8 ZEILEN (Runde 2): der R1-Balken war zu 93 % EIN
+    // Rotton (3 Baender, davon eines 6 px hoch). Jetzt traegt JEDE der 8
+    // Innenzeilen ihren eigenen Ton — hell oben (Lichtkante), Grundton in der
+    // Mitte, tief unten. Keine Zeile stellt mehr als ~13 % der Flaeche.
+    if (fw > 0) {
+      for (let r = 0; r < ih; r++) {
+        ctx.fillStyle = BOSS_FILL_RAMP[r];
+        ctx.fillRect(ix, iy + r, fw, 1);
+      }
+      // 2-px GLANZ LINKS (Runde 2, H): der Balken bekommt einen Lichtanschlag
+      // an der linken Innenkante — zwei Spalten, aussen am hellsten. Das ist
+      // die Stelle, an der das Licht (oben-links) auf die Fuellung trifft.
+      if (fw >= 1) {
+        ctx.fillStyle = '#f6c9bc';
+        ctx.fillRect(ix, iy, 1, ih);
+      }
+      if (fw >= 2) {
+        // Zweite Glanzspalte laeuft 2 Zeilen frueher aus — der Anschlag bekommt
+        // eine Form statt eines flachen 2-px-Blocks (die Tiefkante der Rampe
+        // laeuft unter ihm durch).
+        ctx.fillStyle = '#dd8878';
+        ctx.fillRect(ix + 1, iy, 1, ih - 2);
+      }
+    }
+    // --- 16-px-TEILSTRICHE (Runde 2, H): alle 16 px eine 1-px-Marke ueber die
+    // Innenhoehe MINUS je 1 px oben/unten (die Licht- und die Tiefzeile der
+    // Rampe bleiben durchgehend — sonst zerhacken die Striche den Balken zu
+    // Kaestchen, die R1-Klage "liest als Ladebalken"). Gedaempft ueber
+    // globalAlpha, damit sie Skala geben statt Segmente zu bauen.
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#14101a';
+    for (let t = 16; t < iw; t += 16) {
+      ctx.fillRect(ix + t, iy + 1, 1, ih - 2);
+    }
     ctx.restore();
   }
 

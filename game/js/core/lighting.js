@@ -18,6 +18,50 @@
 // 0.30 -> 0.15 -> 0 — benachbarte Baender liegen nur ~0.15-0.18 auseinander
 // (max ~1 Palettenstufe, Wirbel-Kontrast gedeckelt). rf = Radius-Faktor,
 // a = destination-out-Alpha des Rings.
+// ---------------------------------------------------------------------------
+// Grafikpass 5 RUNDE 2 — BAENDERUNG DER WARMEN GLOWS (Juror H mass 30
+// Einzelschritte in den Fackel-Bodenpfuetzen: "der letzte Airbrush im Bild").
+//
+// BEFUND: der stufenlose Verlauf entsteht NICHT im Kegel-Punch (der laeuft seit
+// GP4 R2 ueber 6 diskrete Ringe auf dem Offscreen), sondern in den DREI
+// createRadialGradient-Fuellungen des additiven Warm-Pass auf dem HAUPT-ctx:
+// Warm-Glow, Boden-Glow, Flammen-Hotspot. Ein Canvas-Radialgradient
+// interpoliert per Pixel — auf 320x180 sind das die gemessenen ~30 Stufen.
+//
+// FIX: jeder der drei Glows wird als 4-6 KONZENTRISCHE Ringe mit FESTEN Alphas
+// gezeichnet (aussen nach innen, additiv 'lighter' — die Deckungen summieren
+// sich zum bisherigen Spitzenwert). Das Intensitaets-PROFIL bleibt damit
+// erhalten, nur die Zwischenwerte rasten auf wenige Stufen ein.
+// DETEKTOR-SICHERHEIT: alles laeuft wie bisher ueber arc/fill auf dem HAUPT-ctx
+// mit rgba-fillStyle bei globalAlpha = 1 — der ambientAlpha-Detektor der
+// Boss-Flusstests sucht TEILALPHA-fillRects auf NICHT-Main-Canvas (lighting.js
+// Zeile ~66 bleibt der einzige) und wird nicht beruehrt. Die Flusstest-Stubs
+// brauchen createRadialGradient/addColorStop jetzt gar nicht mehr.
+// NICHT umgesetzt (deklariert): der optionale Bayer-Rand per drawImage-Sprite —
+// dafuer braeuchte es eine Dither-Kachel in art/sprites.js (Art-Besitz).
+//
+// Format je Eintrag: { rf: Radius-Faktor, a: additive Deckung DIESES Rings,
+// c: 'r,g,b' }. Kumulierte Deckung = Summe aller Ringe ab dem aeussersten.
+const GLOW_RINGS = [        // Warm-Glow (Radius r*0.48), Spitze ~0.13 wie GP4
+  { rf: 1.00, a: 0.010, c: '150,82,70' },   // aussen: entsaettigt rosabraun
+  { rf: 0.82, a: 0.010, c: '150,82,70' },
+  { rf: 0.66, a: 0.012, c: '198,96,54' },   // Uebergang
+  { rf: 0.50, a: 0.016, c: '216,114,42' },  // Kern: warmorange
+  { rf: 0.34, a: 0.030, c: '216,114,42' },
+  { rf: 0.18, a: 0.052, c: '216,114,42' },
+];
+const FLOOR_RINGS = [       // Boden-Glow (Radius 8 px), Spitze 0.15 * pulse
+  { rf: 1.00, a: 0.03, c: '158,88,72' },
+  { rf: 0.72, a: 0.04, c: '178,104,74' },
+  { rf: 0.46, a: 0.04, c: '216,150,70' },
+  { rf: 0.22, a: 0.04, c: '216,150,70' },
+];
+const HOT_RINGS = [         // Flammen-Hotspot (Radius 2.25 px), Spitze 0.5 * pulse
+  { rf: 1.00, a: 0.15, c: '255,240,200' },
+  { rf: 0.66, a: 0.17, c: '255,240,200' },
+  { rf: 0.33, a: 0.18, c: '255,240,200' },
+];
+
 const PUNCH_RINGS = [
   { rf: 1.00, a: 0.18 },
   { rf: 0.85, a: 0.22 },
@@ -143,15 +187,20 @@ export function createLighting(viewW, viewH) {
       // ~30 % (ab Stop 0.7) Richtung entsaettigt rosabraun/orange-rot (150,82,70).
       // Das Intensitaets-Profil (0.13 -> 0.04 -> ~0 zum Rand) bleibt wie im R3-
       // Anti-Schmier-Fix, nur der Farbton wandert. Stub-sicher (addColorStop no-op).
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
-      grad.addColorStop(0, 'rgba(216,114,42,0.13)');    // Kern: warmorange
-      grad.addColorStop(0.4, 'rgba(198,96,54,0.04)');   // Uebergang
-      grad.addColorStop(0.7, 'rgba(150,82,70,0.015)');  // aeussere ~30 %: entsaettigt rosabraun
-      grad.addColorStop(1, 'rgba(150,82,70,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, gr, 0, Math.PI * 2);
-      ctx.fill();
+      // Grafikpass 5 R2: 6 gestufte Ringe statt des Radialgradienten (siehe
+      // Kommentarblock oben). Die Ringradien tragen denselben deterministischen
+      // Sinus-Jitter wie die Punch-Ringe — sonst rasten die konzentrischen
+      // Kanten mehrerer Fackeln aufeinander ein ("Kornkreise", GP4-Lehre).
+      const glowSeed = light.x * 0.9 + light.y * 1.7;
+      ctx.globalAlpha = 1;
+      for (let k = 0; k < GLOW_RINGS.length; k++) {
+        const ring = GLOW_RINGS[k];
+        const rWob = k === GLOW_RINGS.length - 1 ? 0 : Math.sin(glowSeed + k * 2.399) * 0.03;
+        ctx.fillStyle = `rgba(${ring.c},${ring.a})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, gr * (ring.rf + rWob), 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Grafikpass 4 §2.3: (a) flacher Boden-Glow an der Fackelbasis (EIN kleiner
       // ~10 px Kreis leicht unter dem Fackelzentrum — die Draufsicht liest ihn
@@ -165,14 +214,16 @@ export function createLighting(viewW, viewH) {
       // Grafikpass 4 R2 §(a) GLOW-FARBVERLAUF: auch der Boden-Glow bekommt den
       // 2-Stufen-Farb-Verlauf — Kern warm-amber, aeusserer Rand Richtung
       // entsaettigt rosabraun (158,88,72). Spitzen-Alpha wie bisher (0.15*pulse).
-      const bg = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, bgR);
-      bg.addColorStop(0, `rgba(216,150,70,${(0.15 * pulse).toFixed(3)})`);   // Kern: warm-amber
-      bg.addColorStop(0.7, `rgba(178,104,74,${(0.05 * pulse).toFixed(3)})`); // Uebergang
-      bg.addColorStop(1, 'rgba(158,88,72,0)');                               // Rand: entsaettigt rosabraun
-      ctx.fillStyle = bg;
-      ctx.beginPath();
-      ctx.arc(cx, baseY, bgR, 0, Math.PI * 2);
-      ctx.fill();
+      // Grafikpass 5 R2: 4 gestufte Ringe statt des Radialgradienten. DAS hier
+      // war die von Juror H vermessene Stelle (30 Einzelschritte in der
+      // Bodenpfuetze); der Pool liest jetzt als 4 klare Lichtstufen.
+      for (let k = 0; k < FLOOR_RINGS.length; k++) {
+        const ring = FLOOR_RINGS[k];
+        ctx.fillStyle = `rgba(${ring.c},${(ring.a * pulse).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(cx, baseY, bgR * ring.rf, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // (b) 2-3 px weiss-gelber Flammenkern-Hotspot (Radial, Stops ~0.5->0),
       // pulsierend wie der Boden-Glow. Sitzt knapp ueber dem Zentrum (Flammenkern).
@@ -180,13 +231,14 @@ export function createLighting(viewW, viewH) {
       // damit der weiss-gelbe Kern straffer sitzt (begleitet die Funken-Straffung).
       const hotY = cy - 3;
       const hsR = 2.25;
-      const hs = ctx.createRadialGradient(cx, hotY, 0, cx, hotY, hsR);
-      hs.addColorStop(0, `rgba(255,240,200,${(0.5 * pulse).toFixed(3)})`);
-      hs.addColorStop(1, 'rgba(255,240,200,0)');
-      ctx.fillStyle = hs;
-      ctx.beginPath();
-      ctx.arc(cx, hotY, hsR, 0, Math.PI * 2);
-      ctx.fill();
+      // Grafikpass 5 R2: 3 gestufte Ringe statt des Radialgradienten.
+      for (let k = 0; k < HOT_RINGS.length; k++) {
+        const ring = HOT_RINGS[k];
+        ctx.fillStyle = `rgba(${ring.c},${(ring.a * pulse).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(cx, hotY, hsR * ring.rf, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
     // §0.5 Composite-Hygiene PFLICHT: gco/globalAlpha explizit zuruecksetzen

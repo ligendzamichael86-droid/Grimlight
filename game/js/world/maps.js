@@ -45,30 +45,48 @@ export { tc, tileRect };
 // (grass_dark_v3-Konzentration). Erzeugt/verifiziert via .tmp/gen_deco3.mjs
 // (Gameplay-Neutralitaet bewiesen: Soliditaets-Raster, Spawns, Portale, Fackel-
 // Positionen byte-identisch zu 204e28f; Span-Zeichen M/N/O/Q/V/X nur in overRows).
+//
+// GRAFIKPASS 5 RUNDE 2 — zwei NEUE Generatoren haben diese rows zuletzt
+// geschrieben (beide begehbar<->begehbar, sol/geo byte-identisch, idempotent):
+//  * .tmp/gen_wiesenlicht_gp5r2.mjs — Jury-Kernauftrag an Engine-B. Die
+//    Wiesenlicht-Klassen H/L/I/J/i/x lagen bis GP5 R1 in VIER handgezeichneten,
+//    achsparallelen Bloecken (.tmp/gen_gfx4.mjs PATCHES) — die Jury las das
+//    einstimmig als "GRAS-FLICKENTEPPICH ... RECHTECKE mit kerzengeraden
+//    Kanten". Jetzt faellt die Klasse jeder Kachel aus einem 2-Oktaven-
+//    VALUE-NOISE-Feld (Feature ~11 und ~5 Kacheln, deterministischer
+//    Koordinaten-Hash, bilinear/smoothstep interpoliert), die Klassengrenzen
+//    sind per BAYER-4x4 gedithert, und ein hartes Generator-Gate misst nach:
+//    KEINE gerade Klassenkante laenger als 3 Kacheln (gemessen 3 von 3, sowohl
+//    auf dem vollen Klassenfeld als auch auf dem gezeichneten Bild).
+//  * .tmp/gen_teich_gp5r2.mjs — Teich-Verankerung (Jury K5): 3-Kachel-Wegsporn
+//    (28,14)->(28,15)->(29,15) vom Hauptweg an die Westufer-Kachel, die letzten
+//    zwei Kacheln als Trittsteine ('p'), plus 5 sich wiegende Uferhalme (w/y)
+//    an dekorrelierten Uferkacheln (Anti-Ketten-Regel). Die Wasser-Silhouette
+//    ist unangetastet (SPEC §0 sperrt die Teich-rows-Umformung).
 const GRAVEYARD_ROWS = [
   '########################################',
-  '#TT.,.ebeT.....,......,..s.o..######..T#',
-  '#T.wyyo.e.,...,...b.eee...,...#.DD.#..T#',
-  '#..Gwg.he.,......G.geh.G...ww.#....#,.T#',
-  '#...o...............e.s....yb.##..##..T#',
-  '#..g.G.h..u....F.....G.h.g......o.....T#',
-  '#.,....bkIII...==....ffJJJff.........pT#',
-  '#..G.g.GIIpI,..==....gJhJGx.....G.gr..T#',
-  '#....o..III....==.....JxrxLx.........,T#',
-  '#T...,..I.i....==.....xLx,x.eee.T..b.kT#',
-  '#T.,..s..iH....==..,..,x.JJ.ee.T......T#',
-  '#T........iI...==....u.JJJ.oee,......kT#',
+  '#TT.,xebeTxJJJ.,JxJxxJ,xJsxo..######..T#',
+  '#T.wyyoxeJ,.J.,JxLbLeeeLxJ,J..#.DD.#..T#',
+  '#..Gwgxhe.,....JJGLgehLGJ..ww.#....#,.T#',
+  '#...oxJ.........JxLLeLsJ...yb.##..##..T#',
+  '#..g.G.h..u....F.JxLLGJh.g...J..o.....T#',
+  '#.,....bk......==.JxLff...ff..J......pT#',
+  '#..G.g.G..p.,..==..Jxgxh.G......G.gr..T#',
+  '#....o.........==..JxLxJr............,T#',
+  '#T...,......I.I==...JxxJ.,..eee.T..b.kT#',
+  '#T.,..s.....IIi==..,xL,xJ.J.ee.T......T#',
+  '#T..........IiH==..JxuxJ...oee,......kT#',
   '#=================================,...T#',
   '#=================================,...T#',
-  '#.,..b...F..f..f........,..s..d.~~....T#',
-  '#ee..Gkg.....Gjh.........I....~~~~~~..T#',
-  '#e.o....JxLxr.....e.....,i...~~~~~~~~~T#',
-  '#re,.G.h..uLxg.G..e...i.iHi..~~~~~~~~~T#',
-  '#e.e......LLx.b..,eeeiHiIi..F..~~...u.T#',
-  '#Te.ee,...Lx.....owy..iGpg.......d....T#',
-  '#Te.,..sJJx.g.G...wy...I.........,..bTT#',
-  '#TTeee..b.wy.........,....o...p.,....TT#',
-  '#TTTe..,..wy.T..s...d.....T........uTTT#',
+  '#I,..b...F..fiif........,..s=.dy~~....T#',
+  '#ee..Gkg....IGjhI.......III.pp~~~~~~w.T#',
+  '#eIo........rIiI..e.....,I...~~~~~~~~~T#',
+  '#re,IGIh..u..gIGI.e.....IIIIy~~~~~~~~~T#',
+  '#eIeiIiI......b..,eee...IiIIFI.~~y..u.T#',
+  '#Teiee,I.........owy...GpgiIIII.yd....T#',
+  '#TeI,iIs....g.G...wy...IIiIiII.I.,..bTT#',
+  '#TTeeeiIb.wy......I.I,IiiHoiIIp.,....TT#',
+  '#TTTeii,..wy.T.IsIIIdIiiIiTI.I.....uTTT#',
   '########################################',
 ];
 
@@ -81,9 +99,30 @@ const GRAVEYARD_LEGEND = {
   // Kronen-Zeichen (nur Over-Layer, nie solid): 'B' = canopy_bottom liegt AUF
   // der Stamm-Zelle (Wurzeln bleiben sichtbar), 'K' = canopy_top eine Zelle
   // darüber, 'C' = runde Einzel-/Cluster-Krone (Füller für Waldränder).
-  'B': { art: 'tree_canopy_bottom', solid: false },
+  // GRAFIKPASS 5 RUNDE 2 (Jury-Deckel 3 "HAENGE-KRONEN ... flache Ellipsen ohne
+  // Kontur/Innenleben/Stamm/Schatten — Seerosenblaetter auf Rasen", Auftrag ART
+  // (2) "3 Groessenklassen + Spiegel-Flag"): Art hat tree_canopy, _top und
+  // _bottom komplett neu gezeichnet (Kontur, Kerben, Lichtbogen, Stammstumpf,
+  // Kontaktschatten) und ZWEI Groessenklassen als NEUE Keys nachgelegt —
+  // tree_canopy_v1 (klein) und tree_canopy_v2 (breit). Engine-B verdrahtet sie:
+  //  * 'C' (Einzel-/Cluster-Krone, u. a. das dritte Mittel-Cluster) laeuft ueber
+  //    alle drei Groessen. n = 3 ist UNGERADE und teilerfremd zu den Hashes, die
+  //    am SELBEN Ort ziehen (Anker-Versatz 29 und 17 aus SPEC §4.C2, Jitter 5).
+  //  * 'B' (16x16-Fueller auf der Stammzelle) zieht zusaetzlich die beiden
+  //    anderen neu gezeichneten Silhouetten. Das ist zulaessig, weil ALLE DREI
+  //    Grids jetzt eigenstaendige Kronen MIT Stammstumpf sind (Art-Bericht) —
+  //    'tree_canopy_top' war bisher totes Art, seit GP5 R1 setzt kein
+  //    OVER_ROWS-Generator mehr ein 'K'.
+  // variants[0] === art in beiden Faellen (Engine-Assert, smoke §6#4e).
+  'B': {
+    art: 'tree_canopy_bottom', solid: false,
+    variants: ['tree_canopy_bottom', 'tree_canopy_top', 'tree_canopy'],
+  },
   'K': { art: 'tree_canopy_top', solid: false },
-  'C': { art: 'tree_canopy', solid: false },
+  'C': {
+    art: 'tree_canopy', solid: false,
+    variants: ['tree_canopy', 'tree_canopy_v1', 'tree_canopy_v2'],
+  },
   // Grafikpass 2: 2x2-Grosskronen im Over-Layer (Anker = obere linke Ecke,
   // Art-Canvas 32x32). Drei Silhouetten gegen sichtbare Alternation der nicht
   // spiegelbaren Ost-Baumreihe. Nie solid (Over-Layer), Setzung siehe
@@ -165,13 +204,49 @@ const GRAVEYARD_LEGEND = {
   // sich, zweiter Frame _f1). Eigene Zeichen, weil variants UND anim an EINEM
   // Legendeneintrag verboten sind (createTilemap wirft). animRate langsam (0.8),
   // KEIN animSync -> die Positions-Offset-Mechanik staffelt die Halme (Bestand).
-  'w': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_tuft', 'grass_tuft_f1'], animRate: 0.8 },
-  'y': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_blade', 'grass_blade_f1'], animRate: 0.8 },
+  // GRAFIKPASS 5 RUNDE 2 (Sway-Gate "4 Phasen"): die anim-Listen tragen jetzt
+  // den VOLLEN Zyklus [ruhe, rechts, ruhe, links] (n = 4). Die Linksbiegungen
+  // grass_tuft_f2/grass_blade_f2 liefert art/sprites.js (GP5-R2-Art-Fix 3);
+  // tilemap.js artFor() nimmt bei n >= 4 den Wellen-Schritt direkt als
+  // Frame-Index (SWAY_DX = [0,+1,0,-1]) -> 3 statt 2 Auslenkungs-Zustaende,
+  // Vorzeichen bleibt clusterweise gleichsinnig (Bruchteil-Phasenversatz).
+  'w': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_tuft', 'grass_tuft_f1', 'grass_tuft', 'grass_tuft_f2'], animRate: 0.8 },
+  'y': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', anim: ['grass_blade', 'grass_blade_f1', 'grass_blade', 'grass_blade_f2'], animRate: 0.8 },
   // Grafikpass 4 §2.7b Wiesenlicht-Makro: hellere/dunklere nahtlose Gras-Basis
   // in unregelmaessigen Patches (48-64px). Begehbar, WIE '.'-Gras (fringeSource/
   // fringeSet 'grass'), sonst entstuenden 1-Tile-Fringe-Loecher an den Patch-Raendern.
-  'H': { art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
-  'L': { art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  // GRAFIKPASS 5 RUNDE 2 (Jury-Deckel 2 "GRAS-FLICKENTEPPICH" + SPEC §2.A3
+  // "PATCH-RAENDER: Erosions-Varianten der MIX-Kacheln, ungerades n"):
+  // Die Wiesenlicht-Familie lief bis hierher auf GENAU EINEM Grid je Zeichen
+  // (n = 1). Solange die Klassen in 4 kleinen Rechtecken lagen (63 Kacheln) fiel
+  // das kaum auf; das neue Value-Noise-Feld (.tmp/gen_wiesenlicht_gp5r2.mjs)
+  // verteilt sie ueber ~190 Kacheln — ohne Varianten waere damit genau die
+  // 16px-Kachelwiederholung zurueck, die GP5 R1 als "Wurzel-Fix" beseitigt hat.
+  // Deshalb bekommt JEDES der sechs Zeichen eine variants-Liste mit n = 7:
+  //  * 7 ist UNGERADE und teilerfremd zu ALLEN anderen n am selben Ort
+  //    (Jitter 5, Gras-Pool 47, ','-Pool 13, 'e'-Pool 9, Deko 3) — §0.4.
+  //  * variants[0] === art (Engine-Assert, smoke §6#4e).
+  //  * Es entstehen KEINE neuen Art-Keys: gemischt wird ausschliesslich
+  //    INNERHALB der jeweiligen Luma-Rampe (100 % / 75 % / 50 %), plus je EINE
+  //    Erosions-Kachel aus dem Gras-Pool im aeusseren 50 %-Ring (§2.A3: der
+  //    Patch-Rand franst dadurch auf 1/7 der Randzellen ins Grundgras aus).
+  //  * Wirkung NACHGEMESSEN auf dem neuen Feld (151 Wiesenlicht-Kacheln):
+  //    gleiche GRID-Nachbarschaften 57 -> 40 Paare, laengster Lauf identischer
+  //    Grids 5 -> 3 Kacheln. Zum Vergleich der GP4-Stand: 63 Kacheln / 23 Paare
+  //    — die Flaeche waechst also um Faktor 2,4, die sichtbare Wiederholung nur
+  //    um Faktor 1,7, und die Laufgrenze 3 ist dieselbe wie beim Kanten-Gate.
+  // Die Rampen-Semantik bleibt: der Schwerpunkt jeder Liste ist die Stufe, fuer
+  // die das Zeichen steht (H 5/7 Voll-Luma, i 3/7 75 %, I 4/7 50 %).
+  'H': {
+    art: 'grass_lumahi', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumahi', 'grass_lumahi_mix75', 'grass_lumahi', 'grass_lumahi_mix',
+      'grass_lumahi', 'grass_lumahi_mix75', 'grass_lumahi'],
+  },
+  'L': {
+    art: 'grass_lumalo', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumalo', 'grass_lumalo_mix75', 'grass_lumalo', 'grass_lumalo_mix',
+      'grass_lumalo', 'grass_lumalo_mix75', 'grass_lumalo'],
+  },
   // Grafikpass 4 RUNDE 2 (§2.7b, Jury-Mandat d.1): MIX-Rand-Tiles der Wiesenlicht-
   // Patches. Orientierungs-agnostisches 2x2-Schachbrett Luma<->Grundgras, das die
   // Patch-Silhouette 4-6px in den Grundton ueberblendet (statt scharfe Rechteck-
@@ -180,8 +255,20 @@ const GRAVEYARD_LEGEND = {
   // '.'-Gras: begehbar (solid:false) UND fringeSource/fringeSet 'grass' — sonst
   // 1-Tile-Fringe-Loecher an den Patch-Raendern. Der Generator (.tmp/gen_gfx4.mjs)
   // setzt sie deterministisch auf alle Blob-Randzellen.
-  'I': { art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
-  'J': { art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  // GP5 R2: n = 7 laut §2.A3 (Begruendung oben bei 'H'/'L'). Der aeussere Ring
+  // traegt die EROSIONS-Kachel (ein mitteldichtes Gras-Pool-Grid) — genau dort
+  // gehoert sie hin: die Patch-Silhouette franst aus, statt eine geschlossene
+  // Linie zu ziehen.
+  'I': {
+    art: 'grass_lumahi_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumahi_mix', 'grass_lumahi_mix75', 'grass_g5_20', 'grass_lumahi_mix',
+      'grass_g5_34', 'grass_lumahi_mix75', 'grass_lumahi_mix'],
+  },
+  'J': {
+    art: 'grass_lumalo_mix', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumalo_mix', 'grass_lumalo_mix75', 'grass_g5_33', 'grass_lumalo_mix',
+      'grass_g5_28', 'grass_lumalo_mix75', 'grass_lumalo_mix'],
+  },
   // §PRIO2 [GP4 R3] (Jury K1 "Patch-Kante Rampe"): ZWEITES Mix-Tile je Patchfarbe =
   // 75%-Dither ('i' = grass_lumahi_mix75, 'x' = grass_lumalo_mix75) fuer den INNEREN
   // Rand-Ring. Zusammen mit dem bestehenden 50%-_mix (I/J, aeusserer Ring) ergibt
@@ -189,8 +276,19 @@ const GRAVEYARD_LEGEND = {
   // (H/L). Legende-Namespace, getrennt von Palette-Tonen. WIE '.'-Gras: begehbar
   // (solid:false) UND fringeSource/fringeSet 'grass'. Der Ring wird deterministisch
   // per Distanz-Band gesetzt (.tmp/gen_grass_r3.mjs, laeuft NACH gen_gfx4).
-  'i': { art: 'grass_lumahi_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
-  'x': { art: 'grass_lumalo_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  // GP5 R2: n = 7 laut §2.A3 (Begruendung oben bei 'H'/'L'). Der INNERE Ring
+  // mischt in beide Richtungen (Voll-Luma und 50 %-Mix) — er ist die Mitte der
+  // Rampe und darf nach oben wie nach unten dithern.
+  'i': {
+    art: 'grass_lumahi_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumahi_mix75', 'grass_lumahi', 'grass_lumahi_mix', 'grass_lumahi_mix75',
+      'grass_lumahi', 'grass_lumahi_mix', 'grass_lumahi_mix75'],
+  },
+  'x': {
+    art: 'grass_lumalo_mix75', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g',
+    variants: ['grass_lumalo_mix75', 'grass_lumalo', 'grass_lumalo_mix', 'grass_lumalo_mix75',
+      'grass_lumalo', 'grass_lumalo_mix', 'grass_lumalo_mix75'],
+  },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
@@ -225,7 +323,18 @@ const GRAVEYARD_LEGEND = {
   'h': { art: 'gravestone_3', solid: true },
   'b': { art: 'bush_dead', solid: true },
   'o': { art: 'bones', solid: false },
-  's': { art: 'skull', solid: false },
+  // GP5 R2 (Auftrag ART (5) "Props-Miniprogramm ... Schaedel-Varianten"): Art
+  // hat skull_v1 (gespiegelt, Kiefer offen) und skull_v2 (halb im Boden
+  // versunken) geliefert. Der Friedhof traegt SECHS 's'-Zellen — ohne Varianten
+  // stuende dort sechsmal exakt derselbe Schaedel. n = 7 statt 3 (beide
+  // ungerade und teilerfremd zu 5/47/13/9/3), weil variantIndex auf genau
+  // diesen sechs Koordinaten bei n = 3 nur die Reste 1 und 2 liefert — das
+  // Basis-Grid waere nie zu sehen gewesen. Mit n = 7 stehen 2x skull,
+  // 3x skull_v1, 1x skull_v2 (nachgerechnet). variants[0] === art.
+  's': {
+    art: 'skull', solid: false,
+    variants: ['skull', 'skull_v1', 'skull_v2', 'skull', 'skull_v2', 'skull_v1', 'skull'],
+  },
   'f': { art: 'fence', solid: true },
   // Grafikpass 3 §2.2: Wasser wird ein nahtloser 4-Frame-ZYKLUS (kein Ping-Pong
   // mehr): Baender wandern pro Frame 4 px nach unten, 4×4 = 16 px = Kachelhoehe →
