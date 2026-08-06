@@ -54,6 +54,39 @@ GP5-Planung; < 7,5 → Eskalation an Michael mit Analyse.
 
 Siehe `design/SPEC_GRAFIKPASS_4.md` §8. Übergabe in `uebergaben/`.
 
-## Erkenntnisse / Änderungen
+## Erkenntnisse / Änderungen (Lauf 12.-14.07.2026, 3 Runden)
 
-(wird nach dem Lauf ergänzt)
+Abgeschlossen, Übergabe: `uebergaben/2026-07-14_grafikpass4.md`.
+Notenverlauf Median 7,0 → 7,5 → 7,5 (GP3-final 6,5 → +1,0).
+Block-Ziel 8 nicht erreicht → laut Meilenstein-Logik: Abnahme + GP5.
+
+1. **Struktur-Grenze erreicht:** Die R3-Jury ist einstimmig — die
+   verbliebenen Deckel (Gras-Grundraster aus Musterfunktion,
+   Wasser-Rechteck-Silhouetten, Kronen-Perlenkette, ungerastertes
+   Licht) sind PIPELINE-/ENGINE-Themen; weitere Tile-Varianten heben
+   sie nicht. GP5 muss ein Struktur-Pass werden (Glyphen-Stempler,
+   Wasser-Bitmask-Autotiling, Anker-Layout, Licht-Quantisierung).
+2. **Bei 1x UND vergrößert prüfen:** Der Stahlblau-Balken-Defekt im
+   Kronenband überlebte zwei Runden, weil Proof+Jury nur 1x sahen.
+   Ab GP5: 4-6x-Crops (Baumspalte, Wasserkachel, HUD) im Pflichtpaket;
+   Frame-Strips mit 6-8 Frames.
+3. **Mikro-Fix-Muster bewährt:** Der Teich-Schimmer lag nur im
+   gespeicherten Render über der Untergrenze (1,69%), im Modus von 9
+   Läufen darunter (1,43%) — Robustheits-Sampling gehört in jeden
+   Bewegungs-Beweis. Der modellbasierte Mikro-Fix (Beweis-Crop
+   nachgebaut, beschränkte Suche) schlug Handentwürfe bei geringerer
+   Dichte.
+4. **Ausfall-Resilienz:** Monatslimit + zwei Prozess-Enden mitten in
+   R3 — kein Arbeitsverlust dank: Commit nach jedem grünen Stand,
+   Workflow-resumeFromRunId, SendMessage-Fortsetzung von Agenten,
+   Schadensbild-Erstauftrag an Nachfolger. Nachfolger verifizierten
+   statt neu zu bauen (korrekt: "nicht verschlimmbessern").
+5. **Kopplungs-Falle depthOverlays:** Die Teich-"Beruhigungsdecke"
+   dämpfte unbeabsichtigt das Kanal-Drift-Signal (geteilter
+   water_mid-Key) — Entkopplung via water_mid_calm. Lehre: geteilte
+   Overlay-Keys vor Änderungen auf ALLE Nutzer-Maps prüfen.
+6. **Juror-Widersprüche dokumentiert entscheiden** (Funken hart vs.
+   gelobt → Kompromiss) — aber Ergebnis nachprüfen: der Kompromiss-
+   Ring wurde als geschlossenes Rechteck implementiert und von allen
+   drei Juroren als Regression gemeldet (Eckpixel!). Lehre: Render-
+   Wirkung von Partikel-Änderungen im Proof mit Nahaufnahme belegen.
