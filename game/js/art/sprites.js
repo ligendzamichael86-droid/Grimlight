@@ -1873,49 +1873,50 @@ export const TILE_ART = {
   // frei ins Rauschen), Laenge moduliert weich ueber die 4 Frames (Twinkle),
   // Kaemme ortsfest (kein Drift) mit +-1-2px Laengen-Atmung. 1 'i'-Sparkle je
   // Frame gestaffelt. Frame 3->0 nahtlos (Glanz-Laengen stetig).
+  // GFX4-R3 MIKRO-FIX (Proof-Befund: Schimmer-Diff nur 1,43 % bei Untergrenze
+  // 1,5 %; Glanz-Texel je Frame [19,23,19] bei Schwelle 20): Schimmer-Amplitude
+  // angehoben, OHNE den Charakter (ruhige Spiegelflaeche) zu kippen.
+  //  (1) VIERTER kurzer Kamm auf Zeile 4/5. Die Zeilen 4-7 waren das einzige
+  //      voellig leere Band; der neue Kamm fuellt es mit einem 4-6px-Paar und
+  //      traegt zusaetzlichen Glanz. Kaemme jetzt Zeile 2/4/8/13, links/rechts
+  //      gestaffelt (keine vertikalen Saeulen).
+  //  (2) Der Schimmer kommt jetzt UEBERWIEGEND aus dem wandernden '='-Twinkle
+  //      (Farbwechsel '9'<->'=' auf der Kamm-Zeile, KEINE zusaetzliche Flaeche),
+  //      nur ergaenzt um +-1px Laengen-Atmung. Jedes Konsekutivpaar aendert so
+  //      15-19 Pixel/Tile statt bisher 4-15, ohne dass die Kaemme sichtbar
+  //      wandern (Anker bewegen sich hoechstens 1px, Laenge hoechstens 1px).
+  //  (3) Regel unveraendert: '=' liegt IMMER direkt ueber einem dunklen 'W' des
+  //      eigenen Kamms, nie frei im Rauschen; kein Salt-and-Pepper (Hell-Laeufe
+  //      immer >= 3px).
+  //  (4) Loop water_3->water bleibt stetig (Anker/Laengen aendern sich nur um 1).
+  //  Messung im Beweis-Fenster (.tmp/shot_gfx4.py g4_01): Peak-Diff 3,4-5,0 %
+  //  (vorher 1,4-2,3 % bei Untergrenze 1,5 -> 4 von 9 Laeufen ROT), Glanz-Texel
+  //  je Frame [22, 27, 25] statt [19, 23, 19] bei Schwelle 20.
   water: [
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www99===9wwwwwww',
-    'wwwWWWWWWwwwwwww',
+    'www99==9wwwwwwww',
+    'wwwWWWWWwwwwwwww',
+    'wwwwwwwwww99===9',
+    'wwwwwwwwwwWWWWWW',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwww9==9www',
+    'wwwwwwwwwWWWWwww',
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwww99==9www',
-    'wwwwwwwwWWWWWwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'ww9==99wwwwwwwww',
-    'wwWWWWWwwwwwwwww',
+    'wwww9==9wwwwwwww',
+    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
   ],
   water_1: [
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www9====9wwwwwww',
-    'wwwWWWWWWwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwww9===9www',
-    'wwwwwwwwWWWWWwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'ww99==9wwwwwwwww',
-    'wwWWWWWwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-  ],
-  water_2: [
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'www99=99wwwwwwww',
+    'www9===9wwwwwwww',
     'wwwWWWWWwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwww9==99w',
+    'wwwwwwwwwwWWWWWw',
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
     'wwwwwwww9=9wwwww',
@@ -1923,26 +1924,44 @@ export const TILE_ART = {
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'ww999wwwwwwwwwww',
-    'wwWWWwwwwwwwwwww',
+    'wwww9=99wwwwwwww',
+    'wwwwWWWWwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+  ],
+  water_2: [
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'ww9===9wwwwwwwww',
+    'wwWWWWWwwwwwwwww',
+    'wwwwwwwwwww99==9',
+    'wwwwwwwwwwwWWWWW',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwww9=9wwwww',
+    'wwwwwwwwWWWwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwww99==9wwwwwww',
+    'wwwwWWWWWwwwwwww',
     'wwwwwwwwwwwwwwww',
   ],
   water_3: [
     'wwwwwwwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www99==9wwwwwwww',
-    'wwwWWWWWwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwww99=99www',
-    'wwwwwwwwWWWWWwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
-    'wwwwwwwwwwwwwwww',
     'ww9=999wwwwwwwww',
     'wwWWWWWwwwwwwwww',
+    'wwwwwwwwww9===9w',
+    'wwwwwwwwwwWWWWWw',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwww9==9wwww',
+    'wwwwwwwwWWWWwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwwwwwwwwwwwwwww',
+    'wwww9==9wwwwwwww',
+    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
   ],
   // GFX3-R3 (M-K3a, NEUE KEYS; Engine verdrahtet die FLUESTERGRUFT-Legende):
