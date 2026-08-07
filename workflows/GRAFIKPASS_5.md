@@ -53,6 +53,11 @@ Entscheidung. Nach Runde 3 < 8 → Eskalations-Dossier an Michael
 
 Siehe `design/SPEC_GRAFIKPASS_5.md` §10. Übergabe in `uebergaben/`.
 
-## Erkenntnisse / Änderungen
+## Erkenntnisse / Änderungen (Lauf 15.07.-07.08.2026, 3 Runden)
 
-(wird nach dem Lauf ergänzt)
+Abgeschlossen: Median 7,0 → 7,0 → 7,0 (Block-Ziel 8 verfehlt →
+Eskalations-Dossier design/DOSSIER_GRAFIKBLOCK.md). Übergabe:
+uebergaben/2026-08-07_grafikpass5.md (dort die 5 bindenden
+Erkenntnisse: Ungerade-n-Gesetz, Mess-Disziplin mit Kontrollen,
+deklarierte Nicht-Umsetzung überlebt keine Jury, Staub nie additiv,
+Resilienz-Muster).
