@@ -10,15 +10,28 @@ const VIEW_H = 180;
 // Lichtkante oben zur tiefen Kante unten. Der R1-Balken bestand zu 93 % aus
 // einem einzigen Rotton; keine Zeile dieser Rampe stellt mehr als ~13 % der
 // Flaeche. Reihenfolge = Zeile 0 (oben) .. Zeile 7 (unten).
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 5 RUNDE 3 (konvergente Jury-Liste #6, "Boss-Balken-Feinschliff"):
+// die R2-Rampe hatte zwar 8 Toene, aber acht MINIMAL verschiedene — sie las
+// weiterhin als ein Rotverlauf ohne Bandstruktur. Die R3-Rampe fasst die
+// Fuellung in DREI klar getrennte Baender mit den vorgegebenen Ton-Werten:
+//   Zeile 1-2  (245,150,130) = #f59682   helles Band
+//   Zeile 3-5  (232,122,102) = #e87a66   Grundton
+//   Zeile 6-7  (185, 80, 66) = #b95042   Tiefband
+// Zeile 0 traegt den 1-px-GLANZ ENTLANG DER FUELLUNGS-OBERKANTE, der die
+// frueher 2 px breite weisse Saeule am linken Fuellrand ERSETZT (Jury: die
+// Saeule stand quer zur Balkenrichtung und las als Artefakt). Der Glanzton
+// #f6c9bc ist derselbe wie bei der abgeloesten Saeule — nur Lage und Breite
+// aendern sich, es kommt kein neuer Ton dazu.
 const BOSS_FILL_RAMP = [
-  '#e87a66', // 0 Lichtkante
-  '#d75c4c',
-  '#c9463b',
-  '#bb3a31',
-  '#ae2f2a', // 4 Grundton
-  '#9b2925',
-  '#872420',
-  '#6d1c19', // 7 Tiefkante
+  '#f6c9bc', // 0 1-px-Glanz auf der Fuellungs-OBERKANTE
+  '#f59682', // 1 (245,150,130)
+  '#f59682', // 2
+  '#e87a66', // 3 (232,122,102) Grundton
+  '#e87a66', // 4
+  '#e87a66', // 5
+  '#b95042', // 6 (185,80,66) Tiefband
+  '#b95042', // 7
 ];
 
 export function drawHUD(ctx, player, input, gfx) {
@@ -211,8 +224,8 @@ export function drawHUD(ctx, player, input, gfx) {
   // RUNDE 2 (Jury K6.3: "weiterhin flach, 93 % ein Rotton, Glanz auf Zeile 2
   // statt 1"): 12-px-Rahmen mit ZEILENGENAUER Rollenverteilung — aeussere
   // Kontur / Rahmenlicht / 8 Zeilen Fuellrampe / Rahmenschatten / Kontur —,
-  // 16-px-Teilstriche, 2-px-Glanz an der LINKEN Innenkante (Zeile 1 des
-  // Fuellbereichs ist der hellste Rampenton) und eine Damage-Lag-Schicht
+  // 16-px-Teilstriche, 1-px-Glanz auf der Fuellungs-OBERKANTE (Runde 3; die
+  // 2-px-Saeule am linken Fuellrand ist entfallen) und eine Damage-Lag-Schicht
   // (main.js fuehrt die Anzeige-Breite rein visuell nach). AUSSCHLIESSLICH fillRect
   // (keine strokeRect/arc/Gradient-Objekte). Bar bleibt in drawHUD NACH
   // lighting.draw, damit der ambientAlpha-Detektor der Boss-Flusstests (erstes
@@ -268,24 +281,15 @@ export function drawHUD(ctx, player, input, gfx) {
     // Rotton (3 Baender, davon eines 6 px hoch). Jetzt traegt JEDE der 8
     // Innenzeilen ihren eigenen Ton — hell oben (Lichtkante), Grundton in der
     // Mitte, tief unten. Keine Zeile stellt mehr als ~13 % der Flaeche.
+    // RUNDE 3: Zeile 0 der Rampe IST der 1-px-Glanz auf der Fuellungs-Oberkante
+    // (er laeuft ueber die ganze Fuellbreite mit, statt als 2-px-Saeule am
+    // linken Fuellrand zu stehen). Die frueheren zwei Glanzspalten sind damit
+    // ersatzlos entfallen — ein Zeichenblock weniger, kein Sonderfall fuer
+    // fw = 1 / fw >= 2 mehr.
     if (fw > 0) {
       for (let r = 0; r < ih; r++) {
         ctx.fillStyle = BOSS_FILL_RAMP[r];
         ctx.fillRect(ix, iy + r, fw, 1);
-      }
-      // 2-px GLANZ LINKS (Runde 2, H): der Balken bekommt einen Lichtanschlag
-      // an der linken Innenkante — zwei Spalten, aussen am hellsten. Das ist
-      // die Stelle, an der das Licht (oben-links) auf die Fuellung trifft.
-      if (fw >= 1) {
-        ctx.fillStyle = '#f6c9bc';
-        ctx.fillRect(ix, iy, 1, ih);
-      }
-      if (fw >= 2) {
-        // Zweite Glanzspalte laeuft 2 Zeilen frueher aus — der Anschlag bekommt
-        // eine Form statt eines flachen 2-px-Blocks (die Tiefkante der Rampe
-        // laeuft unter ihm durch).
-        ctx.fillStyle = '#dd8878';
-        ctx.fillRect(ix + 1, iy, 1, ih - 2);
       }
     }
     // --- 16-px-TEILSTRICHE (Runde 2, H): alle 16 px eine 1-px-Marke ueber die

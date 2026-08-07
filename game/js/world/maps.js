@@ -460,7 +460,14 @@ const CATACOMBS_LEGEND = {
   // (Art: abgeplatzter Ziegel mit dunkler Kaverne) haengt an -> n=11 (prim).
   // Der Mix verschiebt sich von 40/30/30 auf ~45/27/27 (5 kahle Texturen,
   // 3x Moos-oben-links, 3x Moos-unten-rechts) — der Jury-Mix bleibt gewahrt.
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_br', 'brick_moss_br', 'brick_moss_br', 'brick_wall_v4'] },
+  // GP5 RUNDE 3 VERDRAHTUNGS-NACHZUG (Jury R2, Auftrag 5 "Ziegel 4 Luminanz-
+  // Stufen"): brick_wall_l1..l4 lagen fertig in art/sprites.js, waren aber an
+  // KEINE Legende gehaengt und damit wirkungslos. Sie haengen hier an -> n = 15
+  // (UNGERADE, teilerfremd zu 5/7/17/29/47). Der Moos-Anteil sinkt von 6/11 auf
+  // 6/15, der kahle Texturanteil steigt entsprechend — genau die Streuung, die
+  // die dy-Autokorrelation der Wandflaeche druecken soll (gemessen in sprites.js:
+  // dy4 0,626 -> 0,452, dy8 0,967 -> 0,667).
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_tl', 'brick_moss_br', 'brick_moss_br', 'brick_moss_br', 'brick_wall_v4', 'brick_wall_l1', 'brick_wall_l2', 'brick_wall_l3', 'brick_wall_l4'] },
   // §2.A2: n war 4 (gerade) -> stone_floor_v4/_v5/_v6 (Art: Kiesel-/Kratzer-
   // Programm) haengen an, n=7 (prim). Der Katakomben-Boden ist die groesste
   // zusammenhaengende Wiederholungsflaeche der Ebene.

@@ -529,15 +529,52 @@ function litFilter(tx, ty) {
 // Art-Builder §3.5b). '#000', Unterkante y + h - 1.
 const SHADOW_W = [0.95, 0.7, 0.4];
 const SHADOW_A = [0.40, 0.20, 0.10];
+const SHADOW_DY = [0, 1, 2];          // Zeilen OBERHALB der Fusskante
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 5 RUNDE 3 — BOSS-KONTAKTSCHATTEN (Jury: "der BOSS hat keinen
+// sichtbaren Kontaktschatten; pruefen, warum er aus dem Weichschatten-Pass
+// ausgenommen ist").
+//
+// BEFUND (nachgemessen mit .tmp/probe_gp5r3_bossshadow.mjs, headless durch
+// main.js): Der Boss ist NICHT ausgenommen. Er steckt im enemies-Array (der
+// graveward wird ueber mapDef.enemySpawns erzeugt), und die Schleife
+// `for (const e of enemies) drawSoftShadow(e)` zeichnet ihm jeden Frame
+// ordnungsgemaess drei Zeilen: 19x1 / 14x1 / 8x1 bei Alpha 0,40 / 0,20 / 0,10.
+// Es gibt also keinen Boss-Sonderpfad, den man "anschliessen" muesste.
+//
+// Der Schatten ist UNSICHTBAR, und zwar aus Geometriegruenden: der Warden-
+// Sprite ist 24x32 px und wird mit den Fuessen auf der AABB-Unterkante
+// gezeichnet, die AABB selbst ist nur 20x24. Alle drei Schattenzeilen liegen
+// damit auf den Sprite-Zeilen 29-31 — also HINTER dem Sprite (der Schatten
+// wird vor den Entities gezeichnet), und schmaler als er. Uebrig bleiben ein
+// paar Restpixel neben dem Fuss-Cluster, auf dem ohnehin dunklen Boden der
+// Bosskammer (ambient 0,66) unter der Wahrnehmungsschwelle.
+//
+// FIX: GROSSE Entities bekommen ein eigenes Schattenprofil mit FUENF Zeilen
+// (max. 19 px breit = das geforderte "18x5-Aequivalent"), dessen unterste
+// Zeile EINE Zeile UNTER der Fusskante liegt — sie ist die einzige, die der
+// 24x32-Sprite nicht verdeckt, und sie gibt dem Boss den Bodenkontakt. Nach
+// oben laeuft das Profil wie gehabt aus.
+// Die Klassifizierung haengt an der Standflaeche, NICHT am kind: entities/
+// ist Tabu, und ein spaeterer zweiter Grossgegner soll den Schatten ohne
+// weitere Codeaenderung erben. Heute trifft die Schwelle genau den Boss
+// (20x24); Spieler (12x14), Skelett/Ghul/Hund und Props liegen darunter.
+const SHADOW_W_BIG = [0.90, 0.95, 0.85, 0.65, 0.40];  // x 20 px -> 18/19/17/13/8
+const SHADOW_A_BIG = [0.34, 0.44, 0.36, 0.24, 0.12];
+const SHADOW_DY_BIG = [-1, 0, 1, 2, 3];               // -1 = UNTER der Fusskante
 function drawSoftShadow(ent) {
+  const big = ent.w >= 18 && ent.h >= 20;
+  const ws = big ? SHADOW_W_BIG : SHADOW_W;
+  const as = big ? SHADOW_A_BIG : SHADOW_A;
+  const dys = big ? SHADOW_DY_BIG : SHADOW_DY;
   const cx = ent.x + ent.w / 2;
   const baseY = ent.y + ent.h - 1;
   ctx.save();
   ctx.fillStyle = '#000';
-  for (let i = 0; i < 3; i++) {
-    ctx.globalAlpha = SHADOW_A[i];
-    const w = Math.max(1, Math.round(ent.w * SHADOW_W[i]));
-    ctx.fillRect(Math.round(cx - w / 2 - camera.x), Math.round(baseY - camera.y) - i, w, 1);
+  for (let i = 0; i < ws.length; i++) {
+    ctx.globalAlpha = as[i];
+    const w = Math.max(1, Math.round(ent.w * ws[i]));
+    ctx.fillRect(Math.round(cx - w / 2 - camera.x), Math.round(baseY - camera.y) - dys[i], w, 1);
   }
   ctx.restore();
 }

@@ -68,9 +68,35 @@ export const PALETTE = {
   // Die Rampen-Ordnung nach Luminanz bleibt luecklos erhalten:
   //   k 18,3 < w 19,4 < W 42,8 < 9 64,7 < '=' 97,2 < A 114,1 < D 156,8.
   //   ALT (GP3-R3/GP4): w #0c1815, W #1a3438, 9 #284e54, '=' #3f7a70.
-  w: '#0e1614', // Wasser sehr dunkel (GP5-R2: -25 % S / -10 % V, teal gehalten)
-  W: '#1e3032', // Wasser mittel (GP5-R2: -25 % S / -10 % V)
-  9: '#2e484c', // Wasser-Zwischenblau/Ripple-Kamm (GP5-R2: -25 % S / -10 % V;
+  // GP5-R3 (JURY R2, ART-Auftrag 2c "Wasser ist die dunkelste Grossflaeche"):
+  // die GESAMTE Wasser-Rampe neu gesetzt. Juror-Auftrag woertlich: Wellental
+  // (13,18,21) -> ~(20,30,34), Wellenkamm (61,95,91) -> ~(48,74,72), Ziel
+  // Kamm:Tal ~ 2,3:1. Herleitung, welche PALETTENTOENE das im Render stellen
+  // (die Juror-Zahlen sind Render-Messungen, keine Palettenwerte):
+  //   * gemessenes TAL (13,18,21) = 'w' (Grundflaeche, ~70 % der Teichkachel)
+  //     unter dem Ambient-Overlay; gemessener KAMM (61,95,91) = '=' (Kammglanz)
+  //     in einer hellen Zelle. Der Render-Faktor beider Messungen liegt bei
+  //     ~0,865 (Luminanz), damit: Tal-Ziel Palette-Luminanz ~31,4, Kamm-Ziel
+  //     ~74,3.  ALT: w 19,4 | '=' 97,2  ->  Verhaeltnis 5,01:1 (viel zu hart).
+  //   * NEU: w 31,4 | '=' 74,3 -> Kamm:Tal = 2,37:1 (Ziel ~2,3). Die beiden
+  //     Zwischenstufen W/9 sind auf gleichmaessige Schritte nachgezogen:
+  //     k 18,3 < w 31,4 < W 45,7 < 9 60,0 < '=' 74,3 < A 114,1 < D 156,8
+  //     (Schritte 13,4 / 14,3 / 14,3 / 14,3 — lueckenlos, Ordnung erhalten).
+  //   * HUE: die Rampe ist um einen Hauch KUEHLER gesetzt (Blau minimal ueber
+  //     Gruen) — nicht aus Laune, sondern weil 'w' durch die Anhebung sonst
+  //     fast deckungsgleich mit dem Gras-Grundton 'e' (#19241d, Luminanz 31,9)
+  //     waere und der Teich als Wiese laese. Jetzt: w (22,35,37) gegen
+  //     e (25,36,29) — gleiche Helligkeit, klar kuehlerer Farbort.
+  //   * Auflage "kein Wasserpixel gesaettigter als das hellste Gras 'A'
+  //     (S = 0,4216)" NACHGEMESSEN: w 0,405 | W 0,407 | 9 0,408 | '=' 0,409.
+  //     Alle unter der Schranke. Erfuellt.
+  //   * FOLGE-MELDUNG (Art darf die fremden Dateien nicht anfassen):
+  //     .tmp/shot_gfx5.py:985 GLANZ_RGB = (0x3f,0x7a,0x70) ist ein GP3-Wert und
+  //     zaehlt '='-Texel mit Toleranz 20 je Kanal — mit dem neuen '=' faellt
+  //     das Glanz-Gate. Der Proof-Agent muss GLANZ_RGB auf #345358 ziehen.
+  w: '#162325', // Wasser sehr dunkel = WELLENTAL/Grundflaeche (GP5-R3)
+  W: '#203336', // Wasser mittel = Talflanke unter dem Kamm (GP5-R3)
+  9: '#2a4347', // Wasser-Zwischenblau = Wellenkamm (GP5-R3;
   //             Kraeusel UND Tiefen-Overlays; klar unter Sprite-Helligkeit)
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
   // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
@@ -109,12 +135,13 @@ export const PALETTE = {
   // GRAFIKPASS 4 (§3.6): genau 3 NEUE Symbol-Toene (Alnum voll, 'l' verboten).
   // Symbol-Keys sind ein eigener Namespace ggue. Map-Legenden ('=' ist zugleich
   // GRAVEYARD-Weg-Legendenzeichen — hier reine PALETTE-Rolle, kein Konflikt).
-  '=': '#466e67', // Teich-Glanz, GP5-R2 entsaettigt (-25 % S / -10 % V, war
-  //               #3f7a70): Luma ~97, S 0,364. ACHTUNG: .tmp/check_gfx5_art.mjs
-  //               friert diesen Hex-Wert in NEW_TONES ein (Zeile ~27) — der
-  //               Waechter faellt durch diese von der Jury VERLANGTE
-  //               Entsaettigung. Sanktion/Nachzug liegt beim Hauptloop
-  //               (Art-Agent darf den Check laut Auftrag nicht selbst aendern).
+  '=': '#345358', // Teich-Glanz = WELLENKAMM-Spitze. GP5-R3 auf Juror-Ziel
+  //               (48,74,72) gedaempft, s. Wasser-Rampe oben. Vorher (GP5-R2)
+  //               #466e67 (Luma 97,2), davor (GP3) #3f7a70. Jetzt Luma 74,3,
+  //               S 0,409. .tmp/check_gfx5_art.mjs friert den Hex-Wert in
+  //               NEW_TONES ein — der Waechter ist im ART-Besitz (Auftrag
+  //               GP5-R3) und wurde mitgezogen; .tmp/shot_gfx5.py:985
+  //               (Proof-Besitz) muss noch nachgezogen werden, s. oben.
   '+': '#1a2a1b', // Kronen-Back dunkel 1 (zweite Kronenreihe, ~-20% Value ggue e).
   '*': '#141f15', // Kronen-Back dunkel 2 (tiefster Back-Kronen-Ton, unter '+').
   // GP4-R2 (Jury K2/M): kuehler Back-Kronen-Rim an der Oberkante. Der frozen

@@ -71,7 +71,13 @@ const FLUESTERGRUFT_LEGEND = {
   // Grafikpass 5 §2.A2 UNGERADE-n-SWEEP: n war 4 (gerade) -> brick_wall_v5
   // (Art: Sickerspuren) haengt an, n=5. Ziegel-WAENDE bekommen bewusst KEIN
   // bankSet-Flag (§3.B2/Review): kein Uferband an senkrechten Waenden.
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v5'] },
+  // GP5 RUNDE 3 VERDRAHTUNGS-NACHZUG (Jury R2, Auftrag 5): brick_wall_l1..l4
+  // (vier Luminanz-Stufen der Ziegelgesichter) lagen fertig in art/sprites.js
+  // und hingen an KEINER Legende -> wirkungslos. Sie haengen hier an, n = 9
+  // (UNGERADE, teilerfremd zu 5/7/17/29/47). Erlaubt nach SPEC §0.5
+  // ("UNGERADE-n-Umbau der variants-Listen"); Spawns/Portale/Fackel-Zellen/
+  // solid/fringeSource dieser Datei bleiben unberuehrt.
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v5', 'brick_wall_l1', 'brick_wall_l2', 'brick_wall_l3', 'brick_wall_l4'] },
   // §2.A2: n war 4 -> stone_floor_v7 (Art: Sickerflecken) haengt an, n=5.
   // §3.B2 bankSet 's': der Steinboden ist die LANDkachel am Gruft-Kanal ->
   // nasse Steinkante (t/T + n/k), KEIN Schlamm auf Stein.

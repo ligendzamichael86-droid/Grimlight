@@ -21,15 +21,16 @@
 //   Schweif; weiss-gelber Kern bleibt.
 // - Obergrenze HART: 60 Partikel gesamt (Mobile-Budget).
 
-import { PALETTE } from '../art/palette.js';
+// (GP5 R3: der PALETTE-Import ist entfallen — der einzige Nutzer war der
+// Halo-Ton, der jetzt aus der modul-eigenen Glut-Rampe kommt.)
 
 const MAX_PARTICLES = 60;
 // Runde 2 (GP5): die frueheren Zufalls-Toene EMBER_TONES/EMBER_HEX ('o','y','1'
 // je Funke) sind ERSETZT durch die alters-gesteuerte EMBER_RAMP weiter unten
 // (Juror H: "die Funken brauchen eine eigene kleine Palette").
-// Warmes Orange fuer den additiven Glow-Halo (Runde 3, M-K6a). PALETTE['o'] =
-// Fackel-Orange (#d8722a), unabhaengig vom Kern-Ton des einzelnen Funkens.
-const HALO_HEX = PALETTE['o'] || '#d8722a';
+// Der additive Glow-Halo (Runde 3, M-K6a) hing bis GP5 R2 am Fackel-Orange
+// PALETTE['o'] (#d8722a); seit GP5 R3 kommt er aus der Glut-Rampe selbst
+// (HALO_HEX weiter unten, direkt nach EMBER_RAMP).
 // Runde 3 (M-K6a): Dichte ~2,7x der R2-Rate 3 -> ~6-9 Funken/s pro sichtbarer
 // Fackel. Der harte Deckel MAX_PARTICLES=60 bleibt unveraendert (Smoke §36 prueft
 // ihn spawnraten-unabhaengig ueber die length-Guard, nicht ueber diese Rate).
@@ -74,7 +75,29 @@ const EMBER_PER_TORCH = 8;   // gleichzeitig sichtbare Funken je Fackel
 const EMBER_COL_W = 4;       // Breite der Spawn-Spalte auf der Flammenachse (px)
 const EMBER_DRIFT = 3;       // max. seitliche Sinus-Drift (px) -> Wolke <= 10 px
 // Eigene kleine Funken-Palette (H): 4 Stufen ueber die Lebenszeit.
-const EMBER_RAMP = ['#ffe9b0', '#f0bf4e', '#d8722a', '#7d2a12'];
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 5 RUNDE 3 — GLUT-RAMPE AUF LUMINANZ-VERLUST (Jury: "graues
+// Konfetti"). Die R2-Rampe (#ffe9b0 -> #f0bf4e -> #d8722a -> #7d2a12) verlor
+// vor allem SAETTIGUNG: ihre Luminanzen lagen bei 232 / 191 / 132 / 62 —
+// die mittleren Stufen sind fast gleich hell, der Funke wechselt die FARBE,
+// ohne dunkler zu werden, und liest deshalb als buntes Flimmern statt als
+// verglimmende Glut. Die neue Rampe verliert in jeder Stufe LUMINANZ
+// (Rec.601: 238 -> 167 -> 95 -> 49 -> aus, je Schritt ~-42 %) und behaelt
+// dabei den Farbort im Feuerbogen:
+//   (255,240,180) -> (240,150,60) -> (170,70,25) -> (90,35,15) -> aus
+const EMBER_RAMP = ['#fff0b4', '#f0963c', '#aa4619', '#5a230f'];
+// GP5 R3 — GEBURTSWOLKE: der hellste Glutton (die "weisse" Stufe) steht NUR
+// noch im 3-px-Kernradius um den Geburtspunkt des Funkens. Verlaesst der Funke
+// diesen Radius, faellt er sofort auf die zweite Rampenstufe, auch wenn seine
+// Lebenszeit noch in der ersten steht. Vorher trugen ALLE frisch gespawnten
+// Funken der gesamten Spalte den hellsten Ton — an der Flammenbasis stand
+// dadurch eine weisse Wolke statt eines Glutkerns.
+const EMBER_CORE_R = 3;
+// GP5 R3 — AUSSENPIXEL der Geburtswolke: der 1-px-Glow-Ring um den juengsten
+// Funken traegt jetzt den DUNKELSTEN Glutton statt des hellen Fackel-Orange
+// (#d8722a). Alpha bleibt bei 35 % (Bestandswert). Der Ring saeumt den Kern,
+// statt ihn zu ueberstrahlen.
+const HALO_HEX = EMBER_RAMP[EMBER_RAMP.length - 1];
 
 // ---------------------------------------------------------------------------
 // GRAFIKPASS 5 RUNDE 2 — GATE-FIX "FUNKEN-STEIGHOEHE".
@@ -257,16 +280,34 @@ export function createParticles() {
       const sx = Math.round(p.x - camera.x);
       const sy = Math.round(p.y - camera.y);
 
-      // Grafikpass 4 R2 §(b): Staub-Mote — 2 px, dezent additiv, mit 2-Frame-
+      // Grafikpass 4 R2 §(b): Staub-Mote — 2 px, dezent deckend (R3: NICHT mehr
+      // additiv, s. Fix-Block direkt darunter), mit 2-Frame-
       // Twinkle (Alpha wechselt zwischen hell/matt). Der Twinkle laeuft aus
       // p.age (update() treibt ihn) + p.phase, damit die Motes NICHT synchron
       // blinken. Kein timeSec noetig -> draw(ctx,camera)-Signatur unveraendert.
+      // GRAFIKPASS 5 RUNDE 3 — FINALER PARTIKEL-FIX (Gate funken_warm).
+      // BEFUND (Proof, 8 Laeufe bei NULL Rig-Eingriff): in 4 von 8 Laeufen stand
+      // ueber der Fackel reines RGB-Weiss (255,255,255) ausserhalb des 3-px-
+      // Flammenkerns. Es verschwand restlos, sobald NUR die Motes entfernt
+      // wurden, und blieb unveraendert ohne die Flammenpartikel. Ursache war
+      // dieses 'lighter': mehrere Motes uebereinander ADDIEREN sich ueber der
+      // ohnehin hellen Flamme und saettigen die Summe auf 255/255/255.
+      // FIX: STAUB STREUT LICHT, ER EMITTIERT KEINS. Additives Blending ist
+      // physikalisch die falsche Wahl fuer Staub — es gehoert der selbst
+      // leuchtenden Glut. Motes zeichnen deshalb mit 'source-over': sie
+      // ueberdecken den Hintergrund anteilig, statt ihn aufzuaddieren, und
+      // koennen sich damit weder untereinander noch mit der Flamme zu Weiss
+      // aufsummieren. FUNKEN/GLUT bleiben UNVERAENDERT additiv (der Glutring
+      // weiter unten steht weiter auf 'lighter').
+      // Alpha 0,50 -> 0,55: 'source-over' liefert weniger Helligkeitsgewinn als
+      // die Addition, die leichte Anhebung haelt die Sichtbarkeit der Motes im
+      // Dunkeln auf dem Bestandsniveau.
       if (p.kind === 'mote') {
         const twinkle = Math.floor((p.age + p.phase) / 0.12) % 2 === 0 ? 1 : 0.5;
         // §5.D3: zusaetzlich der Lichtfaktor an der Mote-Weltposition (Floor 0.25).
         const lf = moteLight(p.x, p.y, frameLights, ambient);
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = alpha * 0.5 * twinkle * lf;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = alpha * 0.55 * twinkle * lf;
         ctx.fillStyle = MOTE_HEX;
         ctx.fillRect(sx, sy, 2, 2);
         continue;
@@ -284,6 +325,16 @@ export function createParticles() {
       // erst auf den letzten ~5 px in den Tiefstton.
       let ri = 0;
       while (ri < EMBER_RAMP_STOPS.length && t >= EMBER_RAMP_STOPS[ri]) ri++;
+      // GP5 RUNDE 3 — GEBURTSWOLKE: die hellste Stufe (255,240,180, die von der
+      // Jury als "weisse Geburtswolke" gelesene) gilt NUR im 3-px-Kernradius um
+      // den Geburtspunkt (baseX/baseY). Weiter draussen steht der Funke
+      // mindestens auf Stufe 1 — die Wolke an der Flammenbasis bekommt damit
+      // einen kleinen hellen Kern und einen orangen Saum, statt flaechig weiss
+      // zu stehen. Rein geometrisch, kein Zufall, keine Zusatzzustaende.
+      if (ri === 0 && p.baseY !== undefined
+        && Math.hypot(p.x - p.baseX, p.y - p.baseY) > EMBER_CORE_R) {
+        ri = 1;
+      }
       const hex = EMBER_RAMP[ri];
       const hot = youngest.get(p.src) === p;      // juengster Funke dieser Fackel
       const headW = hot ? 2 : 1;                  // 2x1 nur fuer den Juengsten
@@ -300,6 +351,9 @@ export function createParticles() {
       // gluehte jeder 1-px-Funke — bei bis zu 60 Partikeln war genau das K's
       // "Dauerexplosion, die die Fackel verschluckt". Ein einziger gluehender
       // Kopf je Fackel bleibt als Blickfang, der Rest sind harte Pixel.
+      // GP5 RUNDE 3: HALO_HEX ist der DUNKELSTE Glutton (90,35,15) statt des
+      // hellen Fackel-Orange — die "Aussenpixel" der Geburtswolke saeumen den
+      // Kern bei unveraenderten 35 % Deckung, statt ihn additiv aufzuhellen.
       if (hot) {
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = alpha * 0.35;
@@ -337,9 +391,12 @@ export function createParticles() {
         }
       }
     }
-    // §0.5 Composite-Hygiene: gco/globalAlpha explizit zuruecksetzen, falls der
-    // letzte Partikel ein Mote war (dann steht gco noch auf 'lighter'). Der Boss-
-    // Flusstest-Stub restauriert gco in restore() NICHT — ein Leak braeche dort.
+    // §0.5 Composite-Hygiene: gco/globalAlpha explizit zuruecksetzen — im Block
+    // steht mit dem Glutring des juengsten Funkens weiterhin ein 'lighter'. Der
+    // Boss-Flusstest-Stub restauriert gco in restore() NICHT, ein Leak braeche
+    // dort. (Seit dem R3-Fix zeichnen die Motes selbst schon mit 'source-over';
+    // der Reset bleibt trotzdem stehen — er ist die Absicherung des ganzen
+    // Blocks, nicht nur des Mote-Zweigs.)
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.restore();

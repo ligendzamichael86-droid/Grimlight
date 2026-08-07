@@ -36,7 +36,12 @@ const BOSS_KAMMER_LEGEND = {
   // (der Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche).
   // Grafikpass 5 §2.A2 UNGERADE-n-SWEEP: n war 4 (gerade) -> brick_wall_v6
   // (Art: Russfleck) haengt an, n=5. Kein bankSet-Flag (kein Wasser in der Arena).
-  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v6'] },
+  // GP5 RUNDE 3 VERDRAHTUNGS-NACHZUG (Jury R2, Auftrag 5): brick_wall_l1..l4
+  // (vier Luminanz-Stufen der Ziegelgesichter) lagen fertig in art/sprites.js
+  // und hingen an KEINER Legende -> wirkungslos. Sie haengen hier an, n = 9
+  // (UNGERADE, teilerfremd zu 5/7/17/29/47). NUR die variants-Liste ist
+  // angefasst; die map_bosskammer-ROWS bleiben tabu (SPEC §1.3).
+  '#': { art: 'brick_wall', solid: true, fringeSource: true, fringeSet: 'moss', variants: ['brick_wall', 'brick_wall_v1', 'brick_wall_v2', 'brick_wall_v3', 'brick_wall_v6', 'brick_wall_l1', 'brick_wall_l2', 'brick_wall_l3', 'brick_wall_l4'] },
   // §2.A2: n war 4 -> stone_floor_v8 (Art: Brandfleck) haengt an, n=5. Der
   // Arena-Boden ist die groesste gleichzeitig sichtbare Wiederholungsflaeche.
   '.': { art: 'stone_floor', solid: false, fringeTarget: true, variants: ['stone_floor', 'stone_floor_v1', 'stone_floor_v2', 'stone_floor_v3', 'stone_floor_v8'] },

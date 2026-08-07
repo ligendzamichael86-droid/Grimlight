@@ -56,10 +56,38 @@ const FLOOR_RINGS = [       // Boden-Glow (Radius 8 px), Spitze 0.15 * pulse
   { rf: 0.46, a: 0.04, c: '216,150,70' },
   { rf: 0.22, a: 0.04, c: '216,150,70' },
 ];
-const HOT_RINGS = [         // Flammen-Hotspot (Radius 2.25 px), Spitze 0.5 * pulse
-  { rf: 1.00, a: 0.15, c: '255,240,200' },
-  { rf: 0.66, a: 0.17, c: '255,240,200' },
-  { rf: 0.33, a: 0.18, c: '255,240,200' },
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 5 RUNDE 3 — HOTSPOT-WEISS (Jury: "12 px reines 255,255,255 im
+// Flammenkern durch additives Saettigen").
+//
+// RECHNUNG (der Grund, warum der Kern ausbrannte): die drei Hotspot-Ringe sind
+// KONZENTRISCH — im Zentrum summieren sich ihre Deckungen. Bisher lag die
+// Summe bei 0,15 + 0,17 + 0,18 = 0,50 auf dem Ton (255,240,200), also ein
+// additiver Zuschlag von (+128, +120, +100). Darunter liegt der hellste
+// Flammen-Pixel der Fackel-Sprites, Palettenton '1' = #ffe9b0 =
+// (255, 233, 176), und der Kegel-Punch hat an der Fackel die volle Dunkelheit
+// entfernt. Ergebnis pro Kanal: R 255+128, G 233+120, B 176+100 — ALLE DREI
+// klemmen bei 255. Genau das ist der weisse 12-px-Fleck.
+//
+// FIX (konservativ, ohne Render-Nachmessung — die Zahlen sind die Rechnung):
+//   (1) SPITZEN-ALPHA GESENKT: Summe 0,50 -> 0,18 (-64 %).
+//   (2) FARBE WAERMER: (255,238,190)/(255,236,180)/(255,234,170) statt des
+//       fast neutralen (255,240,200) — der Blau-Anteil steigt am langsamsten.
+// Neue Kernrechnung bei pulse = 1 (Summe der drei Ringe im Zentrum):
+//   R += 0,06*255*3            = 45,9   -> 255 + 45,9      -> klemmt (255)
+//   G += 0,06*(238+236+234)    = 42,5   -> 233 + 42,5      -> klemmt (255)
+//   B += 0,06*(190+180+170)    = 32,4   -> 176 + 32,4      = 208,4
+//   dazu der Warm-Glow (B +6,2) und der Bodenglow-Aussenring (B +2,2)
+//   -> B ~ 217 im Kern.
+// DAMIT: R - B ~ 255 - 217 = +38 > 0. Der Kern liest als warmes Creme
+// (~255,255,217 — die geforderte Anmutung 255,252,232), nie mehr als reines
+// Weiss; die Sattigung von G ist bei einem Flammen-KERN erwuenscht und
+// unvermeidbar (der Untergrund steht dort schon bei G = 233, jede sichtbare
+// additive Spitze klemmt ihn — nur B haelt den Farbstich, und den haelt er).
+const HOT_RINGS = [         // Flammen-Hotspot (Radius 2.25 px), Spitze 0.18 * pulse
+  { rf: 1.00, a: 0.06, c: '255,238,190' },
+  { rf: 0.66, a: 0.06, c: '255,236,180' },
+  { rf: 0.33, a: 0.06, c: '255,234,170' },
 ];
 
 const PUNCH_RINGS = [
@@ -225,7 +253,7 @@ export function createLighting(viewW, viewH) {
         ctx.fill();
       }
 
-      // (b) 2-3 px weiss-gelber Flammenkern-Hotspot (Radial, Stops ~0.5->0),
+      // (b) 2-3 px warm-cremiger Flammenkern-Hotspot (Radial, Stops ~0.5->0),
       // pulsierend wie der Boden-Glow. Sitzt knapp ueber dem Zentrum (Flammenkern).
       // Grafikpass 4 R3 §(b): Hotspot-Radius leicht reduziert (~25 %: 3 -> 2.25 px),
       // damit der weiss-gelbe Kern straffer sitzt (begleitet die Funken-Straffung).

@@ -1823,6 +1823,20 @@ export const TILE_ART = {
   //     die Props "auf dem Rasen kleben".
   // (2) LICHT-SCHLUESSEL vereinheitlicht: 'F' (Stein-Spitzlicht) liegt bei
   //     allen Steinen NUR oben/links, 'g'/'n' NUR unten/rechts.
+  //
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 4) — PROPS LIGA 2 =====
+  // Die Jury hat die R2-Loesung als WIRKUNGSLOS zurueckgewiesen: "Grabsteine/
+  // Schaedel/Zaun haben keinen SICHTBAREN Kontaktschatten — der '0'-Ton ist
+  // gegen Gras fast unsichtbar." Nachgerechnet stimmt das: '0' (#0f1a12) hat
+  // Luminanz 21,8, das Gras 'e' 31,9 — 10 Stufen Unterschied, im Render unter
+  // Ambient praktisch null. NEU ist der Schatten deshalb 'k' (#14101a,
+  // Luminanz 18,3, dunkelster Ton der Palette) und er hat die von der Jury
+  // verlangte GROESSE DER STANDFLAECHE statt einer 1px-Linie:
+  //   Grabsteine 10 px breit x 3 Zeilen (Ellipse 10/8/4, nach unten-rechts
+  //   verjuengt = Licht von oben-links), Schaedel 8 px x 2 Zeilen (8/6).
+  //   Zaun: 4 px je Pfosten in der Fusszeile.
+  // Die 'm'-Grasbueschel von skull_v2 bleiben stehen (sie werden nach dem
+  // Setzen des Schattens wieder eingesetzt).
   // Grabstein, leicht schief nach links gesackt
   gravestone: [
     'eeeeeeeeeeeeeeee',
@@ -1835,9 +1849,9 @@ export const TILE_ART = {
     'eeeeksssggkeeeee',
     'eeeekssgggkeeeee',
     'eeeekkkkkkkeeeee',
-    'eee000000000eeee',
-    'eeeEeeeeeeeEeeee',
-    'eEeeeeeeeeeeeeee',
+    'eeekkkkkkkkkkeee',
+    'eeeEekkkkkkkkeee',
+    'eEeeeeeekkkkeeee',
     'eeeeeeeeeeeeeeee',
     'eeeEeeeeeeeEeeee',
     'eeeeeeeeeeeeeeee',
@@ -1969,76 +1983,102 @@ export const TILE_ART = {
   //   schlechtester komponierter Wert 3,13 (Gate >= 2,5; interner Puffer 2,7)
   //   Gate (d) nachgerechnet: laengster HARTER Zonenkanten-Lauf 6px (Gate <= 8)
   //   Frame-Delta roh 7,4-12,9 % (Teich-Gate 1,5-15 %), '=' gesamt 49 (>= 20).
+  //
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 2d) — KAMMZEILEN-ABSTAENDE =====
+  // Auftrag: "Kammzeilen-Abstaende in den 4 Teich-Frames auf 2/4/3/5/3
+  // variieren (statt konstant 3) — Verschiebe-Semantik und Anisotropie
+  // erhalten." Umgesetzt mit zwei dokumentierten Abweichungen, beide
+  // arithmetisch erzwungen:
+  //  (1) 2+4+3+5+3 = 17. Ein 16px-Loop kann diese Folge nicht kacheln. Gewaehlt
+  //      ist 4/2/5/2/3 (Summe 16) — enthaelt alle geforderten Schritte 2/3/4/5
+  //      und haelt das GRUENE Gate-(d)-Verhalten: das 6-Zeilen-Fenster ueber der
+  //      Kachelnaht (13/14/15 | 0/1/2) traegt oben wie unten exakt 1 Kamm,
+  //      1 Tal, 1 Leerzeile — die Welle kuerzt sich an der Naht weiter heraus.
+  //      Kaemme 0/4/6/11/13, Taeler 1/5/7/12/14, Leerzeilen 2/3/8/9/10/15.
+  //  (2) Ein Abstand 2 legt VIER belegte Zeilen uebereinander (Kamm/Tal/Kamm/
+  //      Tal) und wuerde 4px lange SENKRECHTE Hell-Laeufe erzeugen — genau das
+  //      Gegenteil der waagerechten Formensprache. Die beiden Baender eines
+  //      2er-Paares liegen deshalb in DISJUNKTEN Spaltenbereichen
+  //      (Zeile 4: x 8..15 gegen Zeile 6: x 0..5; Zeile 11: x 2..11 gegen
+  //      Zeile 13: x 12..15/0).
+  // Verschiebe-Semantik UNVERAENDERT: zwei Baender wandern seitlich mit der
+  // Phase 0->1->2->1, der '='-Glanz faerbt je Frame EINEN ganzen Kamm um; kein
+  // Pixel wird gewuerfelt (Pixelzahl je Frame identisch, im Generator geprueft).
+  // NACHGEMESSEN mit der Proof-Metrik (Juror-Metrik, Fenster 64x16 Texel =
+  // Gate-a-Rect): ANISOTROPIE h/v 3,05 in allen vier Frames — bitgleich zum
+  // R2-Stand (dort im Render 3,048-3,122 gemessen). Mit water_shallow 3,74.
+  // Frame-Delta 7,4-8,6 % (Gate 1,5-15 %), '='-Texel 27 (Gate >= 20).
+  // Gen/Messung: .tmp/gen_water_gp5r3.mjs.
   water: [
+    'w=======wwwwwwww',
+    'wwWWWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www=====wwwwwwww',
-    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwwww9999999ww',
-    'wwwwwwwwWWWWWWww',
+    'wwwwwwww999999ww',
+    'wwwwwwwwwWWWWWww',
+    '999999wwwwwwwwww',
+    'wWWWWWwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    '99999wwwwwwww999',
-    'WWWWWwwwwwwwwwWW',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwwwww=====w',
-    'wwwwwwwwwwwWWWWw',
     'wwwwwwwwwwwwwwww',
-    'www9999999wwwwww',
-    'wwwwWWWWWWwwwwww',
+    'ww99999999wwwwww',
+    'wwwWWWWWWWwwwwww',
+    '9wwwwwwwwwww9999',
+    'WwwwwwwwwwwwwWWW',
     'wwwwwwwwwwwwwwww',
   ],
   water_1: [
+    'w9999999wwwwwwww',
+    'wwWWWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www99999wwwwwwww',
-    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwww=======www',
-    'wwwwwwwWWWWWWwww',
+    'wwwwwwwww======w',
+    'wwwwwwwwwwWWWWWw',
+    '999999wwwwwwwwww',
+    'wWWWWWwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    '999999wwwwwwww99',
-    'WWWWWWwwwwwwwwwW',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwwwww99999w',
-    'wwwwwwwwwwwWWWWw',
     'wwwwwwwwwwwwwwww',
-    'www=======wwwwww',
-    'wwwwWWWWWWwwwwww',
+    'www99999999wwwww',
+    'wwwwWWWWWWWwwwww',
+    '9wwwwwwwwwww9999',
+    'WwwwwwwwwwwwwWWW',
     'wwwwwwwwwwwwwwww',
   ],
   water_2: [
+    'w9999999wwwwwwww',
+    'wwWWWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www=====wwwwwwww',
-    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwwww9999999ww',
-    'wwwwwwwwWWWWWWww',
+    'wwwwwwwwww999999',
+    'wwwwwwwwwwwWWWWW',
+    '======wwwwwwwwww',
+    'wWWWWWwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    '=======wwwwwwww=',
-    'WWWWWWWwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwwwww99999w',
-    'wwwwwwwwwwwWWWWw',
     'wwwwwwwwwwwwwwww',
-    'www9999999wwwwww',
-    'wwwwWWWWWWwwwwww',
+    'wwww99999999wwww',
+    'wwwwwWWWWWWWwwww',
+    '9wwwwwwwwwww9999',
+    'WwwwwwwwwwwwwWWW',
     'wwwwwwwwwwwwwwww',
   ],
   water_3: [
+    'w9999999wwwwwwww',
+    'wwWWWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'www99999wwwwwwww',
-    'wwwwWWWWwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwww=======w',
-    'wwwwwwwwwWWWWWWw',
+    'wwwwwwwww999999w',
+    'wwwwwwwwwwWWWWWw',
+    '999999wwwwwwwwww',
+    'wWWWWWwwwwwwwwww',
     'wwwwwwwwwwwwwwww',
-    '999999wwwwwwww99',
-    'WWWWWWwwwwwwwwwW',
     'wwwwwwwwwwwwwwww',
-    'wwwwwwwwww=====w',
-    'wwwwwwwwwwwWWWWw',
     'wwwwwwwwwwwwwwww',
-    'www9999999wwwwww',
-    'wwwwWWWWWWwwwwww',
+    'www========wwwww',
+    'wwwwWWWWWWWwwwww',
+    '9wwwwwwwwwww9999',
+    'WwwwwwwwwwwwwWWW',
     'wwwwwwwwwwwwwwww',
   ],
   // GFX3-R3 (M-K3a, NEUE KEYS; Engine verdrahtet die FLUESTERGRUFT-Legende):
@@ -2187,17 +2227,17 @@ export const TILE_ART = {
   water_shallow: [
     '................',
     '................',
-    '................',
-    '.====....======.',
-    '................',
-    '................',
-    '=====..=====....',
+    '........======..',
+    '=====...........',
     '................',
     '................',
-    '...===..=====...',
     '................',
     '................',
-    '..======...====.',
+    '......=======...',
+    '.====...........',
+    '............====',
+    '................',
+    '................',
     '................',
     '................',
     '................',
@@ -2235,20 +2275,32 @@ export const TILE_ART = {
   //     freies Wasser landen im 2-Means IMMER in derselben Zone, koennen also
   //     gar keine Zonenkante mehr bilden.
   // Deckung 12,1 %; Anisotropie im Verbund 3,15-3,19 (Gate >= 2,5).
+  //
+  // ===== GP5 RUNDE 3 — NACHTRAG ZU PUNKT 2 OBEN =====
+  // Der Satz "'k' liegt in der Luminanz praktisch gleichauf mit 'w'" gilt seit
+  // der R3-Rampe NICHT MEHR: 'w' ist von 19,4 auf 31,3 gestiegen (Jury-Auftrag
+  // "Wasser ist die dunkelste Grossflaeche"), 'k' liegt unveraendert bei 18,3.
+  // Die Tiefzone hat damit ZUM ERSTEN MAL einen echten Abdunkelungsschritt von
+  // 13 Luminanzstufen, ohne dass helle Pixel geloescht werden muessen.
+  // Kacheltoene neu: nackt 36,8 | +water_shallow 41,2 | +water_mid_calm 36,0.
+  // Der Zonensprung bleibt mit 5,2 Stufen (frueher 11,6) klein genug, dass
+  // Gate (d) keine harte Kante findet. Strichlagen liegen weiter
+  // AUSSCHLIESSLICH auf den Leerzeilen der neuen Wellensprache (2/3/8/9/10),
+  // Zeile 15 bleibt schleierfrei. Deckung 6,3 %.
   water_mid_calm: [
     '................',
     '................',
     '................',
-    '.kkk.....kkkkk..',
+    '.kkkkkk.........',
     '................',
     '................',
-    '.........kkk....',
     '................',
     '................',
-    '.kkkkk..kkk.....',
+    '................',
+    'k....kkkkkkk..kk',
     '................',
     '................',
-    'k.kkkkkkkk..kkk.',
+    '................',
     '................',
     '................',
     '................',
@@ -2276,23 +2328,54 @@ export const TILE_ART = {
   //     senkte die Kanal-Anisotropie von 2,83 auf 2,55 (V/H laengs der
   //     Fliessachse) und die Deckung von 27,7 % auf 6,6 %. Er wurde deshalb
   //     VERWORFEN — Regel "unveraendert lassen, was gruen ist".
+  //
+  // ===== GP5 RUNDE 3 — KOMPLETTNEUBAU (Jury R2, ART-Auftrag 1) =====
+  // Der Unveraendert-Entscheid oben ist EINSTIMMIG VERWORFEN worden ("tuerkises
+  // Labyrinth", "Platinen-Leiterbahnen", "schlechtestes Einzelbild"). Der
+  // Befund war richtig: die alten Streu-'k'-Pixel bildeten Haken und
+  // T-Kreuzungen, also Leiterbahnen statt Stroemung. Neu gebaut nach dem
+  // woertlichen Juror-Rezept ("Teich-Sprache 90 Grad gedreht"):
+  //   * NUR GERADE SENKRECHTE Laeufe von 4-9px entlang der Fliessachse.
+  //   * Genau EINE Glyphe je Spalte der 16px-Kachel; die Vertikalphase kommt
+  //     aus einem Hash (x*9+3) mod 16, also 0..15 — kein Zufallsgenerator.
+  //   * Nachbarspalten starten NIE innerhalb von 2px Vertikalabstand
+  //     (zyklischer Abstand >= 3, auch ueber die Naht Spalte 15 <-> 0). Wo der
+  //     Roh-Hash das verletzt, verschiebt der Generator deterministisch um die
+  //     kleinste Zahl von Zeilen nach unten, bis es passt.
+  //   * MAX EIN 1px-Seitenversatz je Glyphe. Er faellt deterministisch weg,
+  //     sobald er irgendwo einen WAAGERECHTEN Lauf > 2px erzeugen wuerde — das
+  //     ist die harte Absicherung gegen Haken- und T-Formen (geprueft: der
+  //     laengste waagerechte Lauf der Kachel ist 2).
+  //   * KEIN 'k' MEHR. Die frueheren Schwarz-Anteile stehen jetzt im Wasser-
+  //     Grundton 'w' (Ton-Auftrag des Jurors); der Rest der Glyphen liegt in
+  //     'W', eine Stufe unter dem Straehnen-Ton '9' der Basis. Ueber einer
+  //     Straehne DAEMPFT 'W' also (Tiefe), ueber dem Grund HEBT es leicht an
+  //     (weiche Tiefenstroemung) — in beiden Faellen bleibt der senkrechte
+  //     Lauf ganz, statt ihn wie frueher zu zerhacken.
+  // NACHGEMESSEN (Juror-Metrik, 32x32-Verbund, ANISOTROPIE v/h LAENGS der
+  // Fliessachse, ueber alle vier Kanal-Frames):
+  //   water_v nackt  2,78-3,35   |   water_v + water_mid  3,30-3,67
+  //   -> schlechtester Verbundwert 3,30 (Auflage >= 2,5). Der Schleier HEBT die
+  //   Anisotropie jetzt, statt sie zu druecken (R2: 2,42 im schlechtesten Frame
+  //   bei einem Probeneubau). Deckung 37,9 %, Glyphenlaengen 4-9.
+  // Gen/Messung: .tmp/gen_water_gp5r3.mjs.
   water_mid: [
-    '................',
-    '...w...k.w......',
-    '...wk..k.wk..k..',
-    '.k.wk..k.wk..k..',
-    '.k.wk..k.wk..k..',
-    '.k.wk..k..k..k..',
-    '....k.....k.wk..',
-    '.k..k.....k.wk..',
-    '.k..k..k..k.w...',
-    '.k..k..k..k.w...',
-    'w...k.wk..k.wk..',
-    '......wk..k.wk..',
-    '.k....wk....wk..',
-    '....k..k.....k..',
-    '....k.w...k.....',
-    '................',
+    '.W.W.W..W.W.w..W',
+    '...W.W..W...w.WW',
+    '...W.W.w....w.WW',
+    'W..W.W.w......W.',
+    'W..W.W.w.W....W.',
+    'W.wW.W.w.W....W.',
+    'W.wW.W.w.W.W..W.',
+    '..w.W.....WW..W.',
+    '..w.W.....WW.W..',
+    '...wW.W....W.W..',
+    '...wW.W....W.W.W',
+    '...wW.W.W..W.W.W',
+    '.W..W.W.W..W.W.W',
+    '.W..W...W.W....W',
+    '.W.WW...W.W....W',
+    '.W.W....W.W.w..W',
   ],
   // GFX3 (§3.1): Nasskanten am Gruft-Kanal. GFX4-R2 (Jury H): jetzt eine 2px
   // dunkle Wasserlinie (n/w, Bodenschatten) direkt UNTER der Boden-Abschlusskante
@@ -2382,9 +2465,9 @@ export const TILE_ART = {
     'eeeeeekSsgkeeeee',
     'eeeeeeksggkeeeee',
     'eeeeeekkkkkeeeee',
-    'eeee00000000eeee',
-    'eeeEeeeeeeeEeeee',
-    'eEeeeeeeeEeeeeee',
+    'eeekkkkkkkkkkeee',
+    'eeeEekkkkkkkkeee',
+    'eEeeeeeekkkkeeee',
     'eeeeeeeeeeeeeeee',
     'eeeEeeeeeeeEeeee',
     'eeeeeeeeeeeeeeee',
@@ -2402,9 +2485,9 @@ export const TILE_ART = {
     'eeeeksssggkeeeee',
     'eeeekkkkkkkeeeee',
     'eeeeeekgskeeeeee',
-    'eee000000000eeee',
-    'eEeeeeeeeeeEeeee',
-    'eeeeeeeeeeeeeeee',
+    'eeekkkkkkkkkkeee',
+    'eEeeekkkkkkkkeee',
+    'eeeeeeeekkkkeeee',
     'eeeEeeeeeEeeeeee',
     'eeeeeeeeeeeeeeee',
   ],
@@ -2461,8 +2544,8 @@ export const TILE_ART = {
     'eeekbbbkkbbBkeee',
     'eeeekbkbkbkBkeee',
     'eeeeekkkkkkkeeee',
-    'eeee000000000eee',
-    'eeeEeeeeeeeeEeee',
+    'eeeekkkkkkkkeeee',
+    'eeeEeekkkkkkEeee',
     'eEeeeeeeeEeeeeee',
     'eeeeeeeeeeeeeeee',
     'eeeEeeeeeEeeeeee',
@@ -2475,23 +2558,35 @@ export const TILE_ART = {
   // Fuss in 'k'. Zwei QUERLATTEN liegen DAVOR, also durchgehend UEBER den
   // Pfosten: Oberkante 'S' mit 'F'-Glanztupfern, Koerper 's', Unterkante 'g'.
   // Darunter der einheitliche 1px-Kontaktschatten ('0') je Pfosten.
+  // GP5-R3 (Jury R2, ART-Auftrag 4 "Zaun abdunkeln ~L 130 -> ~76 + rechte
+  // Flanken"): die Juror-Zahl meint den HELLSTEN Zaunton im Render — 'F'
+  // (#a39cb2, Palette-Luminanz 160,6) kommt bei ~0,87 Render-Faktor als ~140
+  // an; Ziel ~76 entspricht Palette ~88, und genau dort liegt 's' (84,0).
+  // Abbildung eine Stufe die Stein-Rampe hinunter (n < g < s < S < F):
+  //   F -> S, S -> s, s -> g, g -> n.
+  // Damit ist der FLAECHENton jetzt 's' (84,0 statt 121,6), 'S' bleibt nur als
+  // 8px-Spitzlicht auf den Querlatten-Oberkanten. Mittlere Metall-Luminanz
+  // 85,1 -> 54,8. Die 1px dunkle RECHTE Flanke je Pfosten ergibt sich aus
+  // derselben Abbildung ('g' -> 'n'), zusaetzlich setzt der Generator eine
+  // 'n'-Flanke rechts neben jedes verbliebene 's'/'S' am Gras-Rand.
+  // Kontaktschatten '0' -> 'k', 4 px je Pfosten.
   fence: [
     'eeeeeeeeeeeeeeee',
-    'eSgeeeSgeeeeSgee',
-    'eSgeeeSgeeeeSgee',
-    'eSgeeeSgeeeeSgee',
-    'SFSSSFSSSSFSSSFS',
-    'ssssssssssssssss',
+    'esneeesneeeesnee',
+    'esneeesneeeesnee',
+    'esneeesneeeesnee',
+    'sSsssSssssSsssSs',
     'gggggggggggggggg',
-    'eSgeeeSgeeeeSgee',
-    'eSgeeeSgeeeeSgee',
-    'eSgeeeSgeeeeSgee',
-    'SFSSSFSSSSFSSSFS',
-    'ssssssssssssssss',
+    'nnnnnnnnnnnnnnnn',
+    'esneeesneeeesnee',
+    'esneeesneeeesnee',
+    'esneeesneeeesnee',
+    'sSsssSssssSsssSs',
     'gggggggggggggggg',
-    'eSgeeeSgeeeeSgee',
-    'ekgeeekgeeeekgee',
-    'e00eee00eeee00ee',
+    'nnnnnnnnnnnnnnnn',
+    'esneeesneeeesnee',
+    'ekneeekneeeeknee',
+    'kkkkekkkkeekkkke',
   ],
   // Krypta-Treppe abwärts: Stufen versinken im Schwarz
   crypt_stairs_down: [
@@ -2747,37 +2842,59 @@ export const TILE_ART = {
   //    5,9 % (Auflage +-20 %). Die Bewegung liegt jetzt in der NEIGUNG
   //    (Frame 1 nach links geduckt, Frame 2 nach rechts aufgerichtet),
   //    nicht mehr im Zerfall. Gen: .tmp/gen_props_gp5r2.mjs.
+  //
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 3) — SILHOUETTEN-UMBAU =====
+  // Befund: "Kreuz-Arme der Silhouette weg (Ziel ~10 breit x 16 hoch), je Frame
+  // EINE leckende Zunge". Die R2-Flamme war 8 px BREIT und 6 px HOCH — also
+  // breiter als hoch, mit seitlichen Armen auf der Mittelzeile: eine Raute, die
+  // bei 4-6x als Stern/Kreuz las, nicht als Feuer.
+  //  * BODENFACKEL: Flamme jetzt Zeilen 0-6, Glutzeile 7 auf dem Pfostenkopf,
+  //    Pfosten Zeilen 8-13 (zwei Zeilen kuerzer). Silhouette 5 breit x 8 hoch
+  //    = Verhaeltnis 0,63 — das ist exakt das geforderte 10:16.
+  //  * WANDFACKEL: die Wandschale (Zeilen 6-9) und der Ziegelverband sind
+  //    gesetzt, die Flamme kann nur nach OBEN wachsen. Silhouette 5 breit x
+  //    6 hoch (0,83) statt 8 breit x 6 hoch (1,33). Die geforderten 10:16 sind
+  //    hier geometrisch nicht erreichbar — DEKLARIERT.
+  //  * EINE ZUNGE JE FRAME, abwechselnd: Frame 0 senkrecht, Frame 1 nach links
+  //    geneigt, Frame 2 nach rechts. Jede Zeile ueberlappt die naechste
+  //    (zusammenhaengend, im Generator geprueft), keine Seitenarme.
+  //  * FLAECHE Bodenfackel 25/24/26 px (Mittel 25,0, max. Abweichung 4,0 %),
+  //    Wandfackel 17/17/17 px (0,0 %) — Auflage +-20 %.
+  //  * WEISS-ANTEIL gesenkt: der Kern '1' liegt nur noch in den oberen vier
+  //    Zeilen, darunter kuehlt die Zunge auf 'y'/'o' ab (Jury: "12px reines
+  //    Weiss im Kern"). Bodenfackel jetzt 5 statt 11 '1'-Texel.
+  // Gen/Messung: .tmp/gen_props_gp5r3.mjs.
   torch_0: [
-    'eeeeeee11eeeeeee',
-    'eeeeeoy11yoeeeee',
-    'eeeeoy1111yoeeee',
-    'eeeeeoy11yoeeeee',
+    'eeeeeee1eeeeeeee',
+    'eeeeeey1yeeeeeee',
+    'eeeeeey11yeeeeee',
+    'eeeeeyy1yyeeeeee',
+    'eeeeeeoyyoeeeeee',
+    'eeeeeeoyyoeeeeee',
     'eeeeeeoyyoeeeeee',
     'eeeeeeorroeeeeee',
     'eeeeeekPPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
-    'eeeeeekpPkeeeeee',
-    'eeeeeekppkeeeeee',
     'eeeeekppppkeeeee',
     'eeeeekkkkkkeeeee',
     'eeeeeeeeeeeeeeee',
     'eeeeeeeeeeeeeeee',
   ],
   torch_1: [
-    'eeeeeeeeeeeeeeee',
-    'eeeeoy11yeeeeeee',
-    'eeeoy111yoeeeeee',
-    'eeeeoy11yoeeeeee',
-    'eeeeeoyyooeeeeee',
+    'eeeee1eeeeeeeeee',
+    'eeeeey1yeeeeeeee',
+    'eeeeey11yeeeeeee',
+    'eeeeey11yeeeeeee',
+    'eeeeeeoyyoeeeeee',
+    'eeeeeeoyyoeeeeee',
+    'eeeeeeoyyoeeeeee',
     'eeeeeeorroeeeeee',
     'eeeeeekPPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
-    'eeeeeekpPkeeeeee',
-    'eeeeeekppkeeeeee',
     'eeeeekppppkeeeee',
     'eeeeekkkkkkeeeee',
     'eeeeeeeeeeeeeeee',
@@ -2787,12 +2904,12 @@ export const TILE_ART = {
   // GFX4-R2 (Jury M, "Laterne"): brauner Halter -> STAHL-Gehaeuse (S/s) mit 1px
   // dunkler k-Aussenkontur; warme Flamme (o/y/1) bleibt der Glaskern.
   torch_wall_0: [
-    'LLLLLLLk11LLLLLk',
-    'TTTTTToy11yoTTTk',
-    'tttttoy1111yottk',
-    'kkkkkkoy11yokkkk',
-    'LLLkLLLoyyoLLLLL',
-    'TTTkTTTorroTTTTT',
+    'LLLLLLLk1LLLLLLk',
+    'TTTTTTTy1yTTTTTk',
+    'tttttty11ytttttk',
+    'kkkkkkyy1yykkkkk',
+    'LLLkLLoyyoLkLLLL',
+    'TTTkTTorroTkTTTT',
     'tttktttkSSkttttt',
     'kkkkkkksSSskkkkk',
     'LLLLLLLsSsLLLLLk',
@@ -2806,12 +2923,12 @@ export const TILE_ART = {
   ],
   // Wandfackel Frame 1: kürzere Flamme, nach rechts geduckt
   torch_wall_1: [
-    'LLLLLLLkLLLLLLLk',
-    'TTTTToy11yTTTTTk',
-    'ttttoy111yottttk',
-    'kkkkkoy11yokkkkk',
-    'LLLkLLoyyooLLLLL',
-    'TTTkTTTorroTTTTT',
+    'LLLLLL1kLLLLLLLk',
+    'TTTTTTy1yTTTTTTk',
+    'tttttty11ytttttk',
+    'kkkkkkyy1yykkkkk',
+    'LLLkLLoyyoLkLLLL',
+    'TTTkTTorroTkTTTT',
     'tttktttkSSkttttt',
     'kkkkkkksSSskkkkk',
     'LLLLLLLsSsLLLLLk',
@@ -4021,21 +4138,29 @@ export const TILE_ART = {
   // Linie auf 'k' gezogen: jeder Kratzer hat jetzt 1px SCHATTEN rechts/unter
   // sich und liest als Vertiefung. Nur die Kratzer-Pixel sind angefasst, der
   // geerbte stone_floor-Untergrund ist Pixel fuer Pixel unveraendert.
+  // GP5-R3 (Jury R2, ART-Auftrag 4): die R2-Umfaerbung kam WARM/KHAKI an — 'O'
+  // (#6e6655) gehoert zur KNOCHEN-Rampe, nicht zur Steinrampe, und stach als
+  // gelblicher Fremdkoerper aus dem kalten Boden. Der Auftrag lautet "kalte
+  // L/D-Rampe, 2 Stufen dunkler": die 12 Kratzerpixel stehen jetzt auf 'T'
+  // (#4a4a45, Luminanz 73,4) — zwei Stufen unter dem R1-Ton 'D' (156,8) bzw.
+  // eine unter 'L' (112,0), und damit nur noch 28 statt 66 Luminanzstufen ueber
+  // dem Bodenton 't' (45,7): eine Schramme, kein Lichtreflex. Die begleitende
+  // 1px-Unterkante bleibt der kalte Tiefstton 'k' (18,3).
   floor_decal_crack: [
     'tttttttttttttttt',
     'tLLDLLLLtLLLLLLt',
-    'tTttTttntOktttnt',
-    'tTtttttntOkTttnt',
-    'tTtttTtntTOkttnt',
-    'tnnnnnnntnOnnnnt',
-    'tttttttttttOkttt',
-    'ttttLLLLLLLOkttt',
-    'ttttTtttttntOktt',
-    'ttttTttTttnOkttt',
-    'ttttTtttttnOkttt',
-    'ttttTtTtttOktttt',
-    'ttttnnnnnOnttttt',
-    'tttttttttOkttmtt',
+    'tTttTttntTktttnt',
+    'tTtttttntTkTttnt',
+    'tTtttTtntTTkttnt',
+    'tnnnnnnntnTnnnnt',
+    'tttttttttttTkttt',
+    'ttttLLLLLLLTkttt',
+    'ttttTtttttntTktt',
+    'ttttTttTttnTkttt',
+    'ttttTtttttnTkttt',
+    'ttttTtTtttTktttt',
+    'ttttnnnnnTnttttt',
+    'tttttttttTkttmtt',
     'ttDttttttttttDtt',
     'tttttttttttttttt',
   ],
@@ -4460,9 +4585,9 @@ export const TILE_ART = {
     'eeeekssgsggkeeee',
     'eeekkssgggkeeeee',
     'eeekkkkkkkeeeeee',
-    'ee000000000eeeee',
-    'eeEeeeeeeeeEeeee',
-    'eEeeeeeeeeEeeeee',
+    'eeekkkkkkkkkkeee',
+    'eeEeekkkkkkkkeee',
+    'eEeeeeeekkkkeeee',
     'eeeeeeeeeeeeeeee',
     'eeeEeeeeeeeEeeee',
     'eeeeeeeeeeeeeeee',
@@ -4480,9 +4605,9 @@ export const TILE_ART = {
     'eeeeeekSsnkeeeee',
     'eeeeeeksggkeeeee',
     'eeeeekkkkkkeeeee',
-    'eee000000000eeee',
-    'eeeEeeeeeeeEeeee',
-    'eEeeeeeeeeeeeeee',
+    'eeekkkkkkkkkkeee',
+    'eeeEekkkkkkkkeee',
+    'eEeeeeeekkkkeeee',
     'eeeEeeeeeeeEeeee',
     'eeeeeeeeeeeeeeee',
   ],
@@ -4527,30 +4652,30 @@ export const TILE_ART = {
   // §3.8a Fackel 3-Frame (NEU): torch_2 + torch_wall_2 = dritter Flammen-Frame
   // fuer einen nahtlosen 3er-Zyklus (Flamme mittelhoch, nach links geneigt).
   torch_2: [
-    'eeeeeeee11eeeeee',
-    'eeeeeeoy11yeeeee',
-    'eeeeeoy111yoeeee',
-    'eeeeeeoy11yoeeee',
+    'eeeeeeeeee1eeeee',
+    'eeeeeeeey1yeeeee',
+    'eeeeeeey11yeeeee',
+    'eeeeeeyy1yyeeeee',
+    'eeeeeeooyooeeeee',
+    'eeeeeeoyyoeeeeee',
     'eeeeeeoyyoeeeeee',
     'eeeeeeorroeeeeee',
     'eeeeeekPPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
     'eeeeeekpPkeeeeee',
-    'eeeeeekpPkeeeeee',
-    'eeeeeekppkeeeeee',
     'eeeeekppppkeeeee',
     'eeeeekkkkkkeeeee',
     'eeeeeeeeeeeeeeee',
     'eeeeeeeeeeeeeeee',
   ],
   torch_wall_2: [
-    'LLLLLLLkL11LLLLk',
-    'TTTTTTToy11yTTTk',
-    'ttttttoy111yottk',
-    'kkkkkkkoy11yokkk',
-    'LLLkLLLoyyoLLLLL',
-    'TTTkTTTorroTTTTT',
+    'LLLLLLLkLLL1LLLk',
+    'TTTTTTTkTy1yTTTk',
+    'tttttttky11ytttk',
+    'kkkkkkkyy1yykkkk',
+    'LLLkLLoyyoLkLLLL',
+    'TTTkTTorroTkTTTT',
     'tttktttkSSkttttt',
     'kkkkkkksSSskkkkk',
     'LLLLLLLsSsLLLLLk',
@@ -6201,8 +6326,8 @@ export const TILE_ART = {
     'eeekBbbkkbbbkeee',
     'eeekBkbkbkbkeeee',
     'eeeekkkkkkkeeeee',
-    'eee000000000eeee',
-    'eeeEeeeeeeeeEeee',
+    'eeeekkkkkkkkeeee',
+    'eeeEeekkkkkkEeee',
     'eEeeeeeeeEeeeeee',
     'eeeeeeeeeeeeeeee',
     'eeeEeeeeeEeeeeee',
@@ -6219,11 +6344,426 @@ export const TILE_ART = {
     'eeeekNbbbbbBkeee',
     'eeeekbkkbbkBkeee',
     'eeeekbbbkkbBkeee',
-    'eeee00000000eeee',
-    'eeeEmeeeeeemEeee',
+    'eeeekkkkkkkkeeee',
+    'eeeEmekkkkkmEeee',
     'eEeeeeeeeEeeeeee',
     'eeeEeeeeeeeEeeee',
     'eeeeeeeeeeeeeeee',
+  ],
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 3) — TIEFEN-OVERLAY-VARIANTEN =====
+  // Wasser ist anim -> variants[] auf der Legende ist VERBOTEN. Die Jury hat die
+  // Wasser-WIEDERHOLUNG (dx16 = 0,71) deshalb ueber den DEPTH-Pass zu brechen
+  // verlangt: water_shallow/_calm bekommen je zwei Varianten, aus denen die
+  // Engine per variantIndex waehlt (Engine-Erweiterung + additiver Test).
+  // Jede Variante ist VERSCHIEBUNG **und** MUTATION der Strichlagen, keine reine
+  // Translation: andere Zeilenbelegung, andere Strichzahl, andere Laengen.
+  // Unveraendert bleiben die harten Regeln des R2-Gate-Fix: Striche liegen
+  // AUSSCHLIESSLICH auf den Leerzeilen der Wellensprache (2/3/8/9/10), Zeile 15
+  // bleibt schleierfrei (struktureller Saum), und keine Strichspalte stoesst in
+  // IRGENDEINEM der vier Frames senkrecht an ein helles Basispixel — sonst
+  // verlaengert der Schleier die senkrechten Laeufe und drueckt die Anisotropie.
+  // Gemessen (Juror-Metrik, 32x32-Verbund, Minimum ueber die 4 Frames):
+  //   shallow 3,63 | _v1 3,25 | _v2 3,56 | calm/_v1/_v2 je 2,91 (Gate >= 2,5).
+  // Deckung: shallow 10,2/9,8/9,8 % | calm 6,3/5,9/6,3 %.
+  water_shallow_v1: [
+    '................',
+    '................',
+    '..........====..',
+    '=======.........',
+    '................',
+    '................',
+    '................',
+    '................',
+    '......=====.....',
+    '.......======...',
+    '............===.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  water_shallow_v2: [
+    '................',
+    '................',
+    '........=====...',
+    '======..........',
+    '................',
+    '................',
+    '................',
+    '................',
+    '............====',
+    '...=======......',
+    '............===.',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  water_mid_calm_v1: [
+    '................',
+    '................',
+    '.........kkkkk..',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kkkkkk....',
+    '................',
+    '............kkkk',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  water_mid_calm_v2: [
+    '................',
+    '................',
+    '................',
+    'kkkkkkk.........',
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kkkkk.....',
+    '............kkkk',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  // ===== GP5 RUNDE 3 — VERDRAHTUNGS-NACHZUG: water_mid_v1 / _v2 =============
+  // LUECKE, die der Integrator gefunden hat: der depthArt-Pass (tilemap.js
+  // §2(e)) waehlt je Tiefenzelle per variantIndex(tx+617, ty+293, 3) zwischen
+  // Basis / _v1 / _v2. Die FLUESTERGRUFT zieht als Ring-1-Overlay `water_mid` —
+  // dessen _v1/_v2 gab es NICHT, die Engine fiel dort still auf die Basis
+  // zurueck (graceful degradation, siehe tilemap.js). Der Kanal war damit der
+  // EINZIGE Wasserkoerper, dessen 16px-Wiederholung ungebrochen blieb, obwohl
+  // die Engine dafuer schon verdrahtet war.
+  // Bauart wie water_shallow_v1/_v2: VERSCHIEBUNG **und** MUTATION. Die harten
+  // water_mid-Regeln (Jury R2, ART-Auftrag 1) gelten unveraendert und sind im
+  // Generator wie im Gate nachgemessen:
+  //   * NUR gerade SENKRECHTE Laeufe 4-9 px entlang der Fliessachse
+  //   * genau EINE Glyphe je 16px-Spalte
+  //   * Nachbarspalten starten nie innerhalb von 2 px (zyklischer Abstand >= 3,
+  //     auch ueber die Kachelnaht 15 <-> 0)
+  //   * MAX EIN 1px-Seitenversatz je Glyphe; er faellt deterministisch weg,
+  //     sobald er irgendwo einen WAAGERECHTEN Lauf > 2 px erzeugen wuerde
+  //   * KEIN 'k' — die Schwarz-Anteile stehen im Wasser-Grundton 'w'
+  // MUTATION statt Translation ueber fuenf Achsen: anderer Phasen-SCHRITT
+  // (5 bzw. 11 statt 9 mod 16 -> andere Neigung UND Richtung der Glyphenkoepfe),
+  // anderer Phasen-Offset, anderer Laengen-Hash, andere Seitenversatz-Auswahl,
+  // andere w/W-Ton-Verteilung. Der Generator prueft ueber ALLE 256 zyklischen
+  // Verschiebungen, dass keine Variante eine blosse Verschiebung der Basis ist.
+  // QUADRATISCHE Phasen-Hashes wurden gebaut und VERWORFEN: sie rissen
+  // waagerechte Laeufe bis 4 px auf (Haken/T = "Platinen-Leiterbahnen", der
+  // R2-Befund). Bei linearem Schritt s liegen die Phasen dreier Nachbarspalten
+  // auf p, p+s, p+2s; mit s in {5,9,11} ist p -> p+2s so weit, dass eine
+  // gemeinsame Zeile erst ab Glyphenlaenge > 9 entstehen koennte — und 9 ist
+  // die harte Obergrenze. Der Lauf <= 2 ist damit strukturell garantiert.
+  // GEMESSEN (Juror-Metrik, 32x32-Verbund, Anisotropie v/h LAENGS der
+  // Fliessachse, Minimum ueber alle vier Kanal-Frames; Auflage >= 2,5):
+  //   water_v nackt 2,78 | + water_mid 3,30 | + _v1 3,37 | + _v2 2,90
+  // Deckung 39,1 % / 42,2 % (Basis 37,9 %); Delta-Pixel Basis/_v1 55,5 %,
+  // Basis/_v2 50,0 %, _v1/_v2 56,6 % — die drei Auspraegungen teilen also nicht
+  // einmal die Haelfte ihrer Pixel. Gen/Messung: .tmp/gen_water_mid_var_gp5r3.mjs
+  // (baut die Basis zur Kontrolle byte-identisch nach, bevor er mutiert).
+  water_mid_v1: [
+    'WW..W..W..w..W..',
+    '.W..W..W..w...W.',
+    '.W..W..W..wW..W.',
+    '..W.W...W..W..W.',
+    '..W.WW..W..W..W.',
+    '..W.WW..W..W..W.',
+    '..W.WW..W...W.WW',
+    '..W.WW..W...W.WW',
+    '..W..W..WW..W..W',
+    '..W..WW.WW..W..W',
+    '..Ww.WW.WW..W..W',
+    'W.Ww.WW.WW..W..W',
+    'W..w..W..W..WW..',
+    'W..w...W..w..W..',
+    'W..w...W..w..W..',
+    'W..wW..W..w..W..',
+  ],
+  water_mid_v2: [
+    '..W..W..W..W..WW',
+    '.wW..W..W..W..WW',
+    '.wW.wW..W..W..WW',
+    '.w..wW.wW..W..W.',
+    '.w..w..wW.wW..W.',
+    '.w..w..w..wW.wW.',
+    'Ww..w..w..w..wW.',
+    'W..Ww..w..w..w..',
+    'W..Ww.Ww..w..w..',
+    'W..Ww.W..Ww..w..',
+    'W..Ww.W..W..Ww..',
+    'W..W..W..W..W..W',
+    '..WW..W..W..W..W',
+    '..WW.WW..W..W..W',
+    '..WW.W..WW..W..W',
+    '..W..W..W..WW..W',
+  ],
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 2b) — DIAGONALE ECKEN-UFER =====
+  // Die Teich-AUSSENecken lasen als reine 90-Grad-Kontur ('Becken-Raster').
+  // shore_diag_* setzt an ihre Stelle eine 45-GRAD-TREPPE mit den Stufenkanten
+  // 4/8/12/16 px: Zeilen 0-3 Land ab x>=4, Zeilen 4-7 ab x>=8, Zeilen 8-11 ab
+  // x>=12, Zeilen 12-15 kein Land. Die Landzunge (Gras e/E/a, 75 px) traegt an
+  // ihrer Wasserkante 1px 'n'-Kontaktschatten — auf der LANDseite ist 'n'
+  // ausdruecklich erlaubt (§1.6), im offenen Wasser steht kein einziges 'n'.
+  // Wasserseitig laeuft das Bestands-Ufer-Profil laengs der Treppe:
+  //   Abstand 1 = Schaumlinie 'W' mit Luecken | 2 = heller Kamm '9' + '='-Tupfer
+  //   | 3 = 'W' | 4-5 = ausduennende 'w'-Tupfer | darueber transparent.
+  // ANSCHLUSS-BEDINGUNG (der Grund, warum die Abstandsmessung ueber den
+  // Kachelrand hinaus rechnet): an einer Aussenecke sind N und E LAND, S und W
+  // WASSER. Damit laeuft das Band an der linken Kante WAAGERECHT (passt an
+  // shore_n) und an der Unterkante SENKRECHT (passt an shore_e). ne ist
+  // gezeichnet, nw/se/sw sind reine Spiegelungen — die vier Ecken koennen nicht
+  // auseinanderdriften. Gen: .tmp/gen_shore_gp5r3.mjs.
+  //
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 5) — UFER-ZAHN-VARIANTEN =====
+  // 'Ufer-Band 3 Zahn-Varianten': das bank_n_g-Band endete in JEDER Kachel auf
+  // derselben Zeile und zog damit eine durchgehende 16px-Linie durchs Bild.
+  // bank_n_g_v1/_v2/_v3 variieren die ZAHNTIEFE je Spalte (Bandhoehe 4-6 Zeilen,
+  // Hash-Profil je Variante verschieden) und stanzen zusaetzlich Loecher in die
+  // oberste Zeile (13-14 von 16 px belegt). Aufbau sonst wie bank_n_g: 3px
+  // Uferschatten k/n + 2px Material-Rampe z/p/v/M, gedithert.
+  shore_diag_ne: [
+    'WWWWnEaeeeEeeeEa',
+    '999WneEaeeeEeeeE',
+    'WW9WneeEaeeeEeee',
+    'wW9WnnnnEaeeeEee',
+    'wW9.WWWWnEaeeeEe',
+    '.W=9999WneEaeeeE',
+    'wWWWWW9WneeEaeee',
+    '..wwwW9WnnnnEaee',
+    'ww...W9W.WWWnEae',
+    '...wwW=9999.neEa',
+    '....wWWWWW9WneeE',
+    '...w...wwW9Wnnnn',
+    '.....ww..W9WW.WW',
+    '........wW=9999W',
+    '.........WWWWW9W',
+    '.......ww...wW9.',
+  ],
+  shore_diag_nw: [
+    'aEeeeEeeeaEnWWWW',
+    'EeeeEeeeaEenW999',
+    'eeeEeeeaEeenW9WW',
+    'eeEeeeaEnnnnW9Ww',
+    'eEeeeaEnWWWW.9Ww',
+    'EeeeaEenW9999=W.',
+    'eeeaEeenW9WWWWWw',
+    'eeaEnnnnW9Wwww..',
+    'eaEnWWW.W9W...ww',
+    'aEen.9999=Www...',
+    'EeenW9WWWWWw....',
+    'nnnnW9Www...w...',
+    'WW.WW9W..ww.....',
+    'W9999=Ww........',
+    'W9WWWWW.........',
+    '.9Ww...ww.......',
+  ],
+  shore_diag_se: [
+    '.......ww...wW9.',
+    '.........WWWWW9W',
+    '........wW=9999W',
+    '.....ww..W9WW.WW',
+    '...w...wwW9Wnnnn',
+    '....wWWWWW9WneeE',
+    '...wwW=9999.neEa',
+    'ww...W9W.WWWnEae',
+    '..wwwW9WnnnnEaee',
+    'wWWWWW9WneeEaeee',
+    '.W=9999WneEaeeeE',
+    'wW9.WWWWnEaeeeEe',
+    'wW9WnnnnEaeeeEee',
+    'WW9WneeEaeeeEeee',
+    '999WneEaeeeEeeeE',
+    'WWWWnEaeeeEeeeEa',
+  ],
+  shore_diag_sw: [
+    '.9Ww...ww.......',
+    'W9WWWWW.........',
+    'W9999=Ww........',
+    'WW.WW9W..ww.....',
+    'nnnnW9Www...w...',
+    'EeenW9WWWWWw....',
+    'aEen.9999=Www...',
+    'eaEnWWW.W9W...ww',
+    'eeaEnnnnW9Wwww..',
+    'eeeaEeenW9WWWWWw',
+    'EeeeaEenW9999=W.',
+    'eEeeeaEnWWWW.9Ww',
+    'eeEeeeaEnnnnW9Ww',
+    'eeeEeeeaEeenW9WW',
+    'EeeeEeeeaEenW999',
+    'aEeeeEeeeaEnWWWW',
+  ],
+  bank_n_g_v1: [
+    'nkknn.knnnkk.nnk',
+    'znnnzznnzznnnzzn',
+    'pppzzppzzpppzzpp',
+    'pvvpppvvppvvpppv',
+    '.vM.Mv.MM.vM.Mv.',
+    '.......M........',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  bank_n_g_v2: [
+    'nnn.knnnkn.nkknn',
+    'nzznnnzznnzznnnz',
+    'zzpppzzppzzpppzz',
+    'vppvvpppvvppvvpp',
+    'M.vv.MM.vM.vv.MM',
+    'M........M......',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  bank_n_g_v3: [
+    'n.nnnkkn.nknnnk.',
+    'znnzznnnzznnzznn',
+    'ppzzpppzzppzzppp',
+    'pvvppvvpppvvppvv',
+    'vvMMvvMMMvvMMvvM',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  // ===== GP5 RUNDE 3 (Jury R2, ART-Auftrag 5) — ZIEGEL-LUMINANZ-VARIANTEN =====
+  // Auftrag: '4 Luminanz-Stufen (-8/-4/+4/+8 %) + jeder 12. mit Diagonalkerbe
+  // (Ziel dy-Autokorr < 0,20), Moertel entgittern'.
+  // (1) LUMINANZ-STUFEN: die Palette ist fix (61 Alnum + 3 Symbole) — ein
+  //     Ziegelton laesst sich nicht 'um 4 % abdunkeln'. Die Stufe entsteht durch
+  //     DITHER-Tausch einzelner Pixel des Ziegelgesichts (7x3 px) gegen den
+  //     benachbarten Rampenton (k 18,3 < t 45,7 < T 73,4 < L 112,0 < D 156,8).
+  //     Basis-Mittel 77,06. Getroffen (Soll | Ist):
+  //       -8 % 70,89 | 71,54   -4 % 73,97 | 73,38
+  //       +4 % 80,14 | 81,03   +8 % 83,22 | 83,46
+  //     Welche der vier Stufen ein Stein bekommt, entscheidet ein Hash aus
+  //     Kurs und Fugenhaelfte — kein Zufallsgenerator, ungerade Moduln 7/11/13.
+  // (2) MITTELWERT-NEUTRALES ZUSATZ-DITHER: je Gesicht wandern gleich viele
+  //     Pixel eine Stufe hoch wie runter. Die Stufe bleibt damit exakt, die
+  //     TEXTUR wird gestreut — und die Textur traegt die Autokorrelation.
+  //     't' faellt dabei NIE auf 'k' (das wuerde Moertelloecher stanzen).
+  // (3) DIAGONALKERBE: 3px-Treppe im Tiefstton mit 1px hellem Oberlicht auf
+  //     jedem ~12. Stein (2 Kerben auf 32 Steinen der vier Kacheln).
+  // (4) MOERTEL ENTGITTERT: jeder 5. Moertelpixel geht auf den dunkelsten
+  //     ZIEGELton 't' — k-Pixel je Kachel 70-73 statt 80 im Bestand.
+  // GEMESSEN (Autokorrelation der Luminanz, 64x64-Wandflaeche, dy 4/8/12):
+  //   brick_wall (Bestand R2)          0,626 | 0,967 | 0,626
+  //   Wandflaeche aus den 4 Varianten  0,452 | 0,667 | 0,565
+  //   Varianten + Bestand gemischt     0,503 | 0,732 | 0,499
+  // DAS ZIEL < 0,20 IST NICHT ERREICHT und ist mit einem KURSVERBAND auch nicht
+  // erreichbar: die vier Zeilen eines Kurses (Oberkante L 112 / Koerper T 73 /
+  // Fuss t 46 / Moertel k 18) spannen 94 Luminanzstufen, die geforderte
+  // Steinvariation nur 12 (+-8 % von 77). Der Zeilenrhythmus dominiert die
+  // dy-Autokorrelation um den Faktor 8 — sie faellt erst unter 0,20, wenn die
+  // Kurse selbst aufgeloest werden, und dann ist es kein Ziegel mehr. Der
+  // erreichte Fortschritt: dy8 (die 'jeder zweite Kurs ist identisch'-Kopie)
+  // von 0,967 auf 0,667, dy4 von 0,626 auf 0,452. ZUR JURY-ENTSCHEIDUNG.
+  // VERDRAHTUNG (Engine-B): brick_wall_l1..l4 gehoeren als zusaetzliche
+  // variants an die '#'-Legenden; unverdrahtet sind sie wirkungslos.
+  brick_wall_l1: [
+    'TTLTLTTkTLTTLTLt',
+    'TTTtLTTkLTTTLLTk',
+    'tTttttTtttTttttk',
+    'kkktkkkktkkkktkk',
+    'LTTkDDLDDLDkTDLT',
+    'tLTkTLLTTTLktTTT',
+    'tttktttttttttttT',
+    'kktkkkktkkkktkkk',
+    'DDLDLDDkLDDLTLDk',
+    'TTTLTtTkTtLTTTtk',
+    'TttttttkttttTttt',
+    'ktkkkktkkkktkkkk',
+    'DLDkLTLDTTLkLDTL',
+    'LTttTTttTTTkLTLT',
+    'tttktTtttTtkttTt',
+    'tkkkktkkkktkkkkt',
+  ],
+  brick_wall_l2: [
+    'LLDLTLDkTTLTLTTt',
+    'TttTLTtkTTTLTTTk',
+    'TtttTtttTTtttTtk',
+    'kkktkkkktkkkktkk',
+    'LTTkLTTTTLTkLkLT',
+    'TTTkLTTTLLTkTLkL',
+    'tTTkttTttttttttk',
+    'kktkkkktkkkktkkk',
+    'LTLTTLTkDDLLDDDk',
+    'TLTTTTLktTLTtTTk',
+    'tttTtttktttttttt',
+    'ktkkkktkkkktkkkk',
+    'DDDkLDDLLLDkTDLL',
+    'TTTtLtTTTttkTTtL',
+    'tttkttttTttkTTtt',
+    'tkkkktkkkktkkkkt',
+  ],
+  brick_wall_l3: [
+    'DDLDLDDkLDLTDLLt',
+    'tTLTttTkTtLTTTLk',
+    'tttTtttttttTTttk',
+    'kkktkkkktkkkktkk',
+    'DLDkTLLLTTLkLDDL',
+    'TLtkTTtLTTTkLTLT',
+    'TttkTTtttTtttttt',
+    'kktkkkktkkkktkkk',
+    'LTTLTLTkLTTDTLLk',
+    'TTTTLTTkLLTtTLTk',
+    'ttTtttTktttttttt',
+    'ktkkkktkkkktkkkk',
+    'TLLkDLDLDDLkLTLT',
+    'TLLtTTLTtTTkttTT',
+    'tttktttttttktttT',
+    'tkkkktkkkktkkkkt',
+  ],
+  brick_wall_l4: [
+    'LTLDTLTkDDTLDLDt',
+    'TLTtTLTkTTTTtTTk',
+    'ttttttTtttTtttTk',
+    'kkktkkkktkkkktkk',
+    'DDLkLDDTLLLkTDLL',
+    'tTTkttTLTtLkTTLL',
+    'tttktttTTtttTttt',
+    'kktkkkktkkkktkkk',
+    'TLDLTTLkLTkLLTDk',
+    'TTtLTTTkTTTkLTtk',
+    'TttttTtktTttkLtt',
+    'ktkkkktkkkktkkkk',
+    'LTTkTLTDLTLkDLTL',
+    'LTTtLTTTTLTkTTTt',
+    'ttTktttttttkttTt',
+    'tkkkktkkkktkkkkt',
   ],
   // ===================== ENDE GRAFIKPASS 5 =====================
 };

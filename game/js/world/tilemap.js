@@ -202,6 +202,10 @@ function isWaterDef(d) {
 // Ostkante endet nach Nord/Sued). Rein additiv, kein Ersetzen, kein Doppel-Key.
 // Aufruf im Ground-Pass NACH fringeOverlays; fehlt ein Art-Key, wird still
 // nichts gezeichnet.
+// GP5 RUNDE 3 §2(e): Anzahl der Auspraegungen je Tiefen-Overlay-Key
+// (Basis + _v1 + _v2). UNGERADE und teilerfremd zu 5/7/17/29/47 (§0.4).
+const DEPTH_VARIANT_N = 3;
+
 const SHORE_SIDES = [['n', 0, -1], ['e', 1, 0], ['s', 0, 1], ['w', -1, 0]];
 const SHORE_PERP = {
   n: [['w', -1, 0], ['e', 1, 0]],
@@ -209,6 +213,25 @@ const SHORE_PERP = {
   w: [['n', 0, -1], ['s', 0, 1]],
   e: [['n', 0, -1], ['s', 0, 1]],
 };
+
+// GP5 RUNDE 3 §2(b) — DIAGONALE ECKEN-UFER (Verdrahtungs-Nachzug).
+// Die vier Kacheln shore_diag_ne/nw/se/sw lagen fertig in art/sprites.js, ohne
+// dass sie je EMITTIERT wurden. Sie gehoeren auf die AUSSENECKEN des Beckens:
+// eine WASSER-Kachel, deren senkrechter UND waagerechter Nachbar Land ist und
+// deren Diagonale dazwischen ebenfalls Land ist. Genau dort lief die Uferlinie
+// bisher im rechten Winkel um die Ecke ("Becken-Raster", Jury R2); die Kachel
+// legt an ihre Stelle eine 45-Grad-Treppe.
+// Namenskonvention der Art (dort nachgelesen, nicht geraten): "an einer
+// Aussenecke sind N und E LAND, S und W WASSER" -> shore_diag_ne. Der erste
+// Buchstabe ist also die SENKRECHTE Landseite, der zweite die WAAGERECHTE.
+// Eintrag: [Name, adx, ady (senkrechte Seite), bdx, bdy (waagerechte Seite)];
+// die Diagonale ist die Summe der beiden Versaetze.
+const SHORE_DIAG = [
+  ['ne', 0, -1, 1, 0],
+  ['nw', 0, -1, -1, 0],
+  ['se', 0, 1, 1, 0],
+  ['sw', 0, 1, -1, 0],
+];
 
 export function shoreEdges(getDef, tx, ty) {
   const def = getDef(tx, ty);
@@ -231,6 +254,31 @@ export function shoreEdges(getDef, tx, ty) {
       out.push(`shore_cap_${name}${pname}`);
     }
   }
+  // §2(b) 45-GRAD-TREPPE an den Aussenecken. ADDITIV wie die Caps und ZULETZT
+  // in der Liste: der Ground-Pass zeichnet die Liste der Reihe nach, die
+  // Treppenkachel liegt also ueber den geraden shore_*-Kanten und den
+  // fringe-Innenecken derselben Zelle. NACHGEMESSEN auf allen zehn echten
+  // Teich-Aussenecken: von den vorher gezeichneten Overlay-Pixeln bleiben
+  // hoechstens 10 von 256 sichtbar (einzelne w/W/9-Tupfer des Ufer-Profils in
+  // den transparenten Feldern der Treppe) — die 90-Grad-Kontur selbst ist
+  // vollstaendig ueberdeckt. Fehlt ein Art-Key, wird im Ground-Pass still
+  // nichts gezeichnet.
+  //
+  // WARUM NUR shorePrefix 'shore': die vier Kacheln backen eine GRAS-Landzunge
+  // (Toene e/E/a) ein. Am Gruft-KANAL (shorePrefix 'wet', Steinboden und
+  // Ziegelwand ringsum) waere das Gras ein Material-Fehler — dort blieben 15
+  // geometrisch passende Ecken bewusst unbedient (gemessen, Jury-Deklaration).
+  // Die uebrigen shore_*-Familien bleiben material-agnostisch wie bisher.
+  if (def.shorePrefix === 'shore') {
+    for (const [name, adx, ady, bdx, bdy] of SHORE_DIAG) {
+      const a = at(adx, ady);
+      const b = at(bdx, bdy);
+      const d = at(adx + bdx, ady + bdy);
+      if (!a || !b || !d) continue;                              // Kartenrand
+      if (isWaterDef(a) || isWaterDef(b) || isWaterDef(d)) continue;
+      out.push(`shore_diag_${name}`);
+    }
+  }
   return out;
 }
 
@@ -244,6 +292,8 @@ export function shoreEdges(getDef, tx, ty) {
 // Ecken nur, wenn die diagonale Wasserzelle NICHT schon von einem geraden Band
 // derselben Kachel abgedeckt ist (beide angrenzenden Orthogonalen kein Wasser)
 // — sonst laege das Eckstueck doppelt auf dem Band.
+// GP5 RUNDE 3 §2(a): Einbuchtungs-/Zungen-/Landbruecken-Zellen sind KOMPLETT
+// von Baendern ausgenommen (Regel im Funktionsrumpf dokumentiert).
 export function bankOverlays(getDef, tx, ty) {
   const def = getDef(tx, ty);
   // Frueher Abbruch in zwei Stufen: (1) das Flag (die mit Abstand billigste
@@ -258,16 +308,114 @@ export function bankOverlays(getDef, tx, ty) {
   const e = w(1, 0);
   const s = w(0, 1);
   const west = w(-1, 0);
+  // ---------------------------------------------------------------------
+  // GRAFIKPASS 5 RUNDE 3 §2(a) — TEICH-BALKEN-BUG (Juror K: "braune Ufer-
+  // baender laufen QUER DURCH die Wasserflaeche").
+  //
+  // URSACHE: eine Landkachel, die TIEF im Becken sitzt (Einbuchtung, Zunge,
+  // Landbruecke), hat Wasser auf mehreren Seiten und bekam bisher auf JEDER
+  // dieser Seiten ein Uferband. Bei einer 1 Kachel breiten Landbruecke
+  // (Wasser N UND S bzw. E UND W) treffen sich die beiden Baender in der
+  // Kachelmitte und lesen aus der Distanz als BALKEN, der quer durch die
+  // Wasserflaeche laeuft — statt als Ufer.
+  //
+  // REGEL (Jury-Rezept, woertlich): kein Band, wenn die Landkachel
+  //   (a) GEGENUEBERLIEGENDE Wasser-Orthonachbarn hat (N+S oder E+W)  ODER
+  //   (b) >= 3 Wasser-Orthonachbarn hat (Einbuchtungs-/Zungen-Zelle).
+  // Solche Zellen sind visuell Teil des Beckens, nicht sein Ufer; ihre Kanten
+  // bedienen weiterhin fringeOverlays/shoreEdges von der WASSERSEITE her
+  // (Komplement-Regel unberuehrt — es entfaellt nur das LANDSEITIGE Band).
+  // Die Unterdrueckung wirkt fuer die GANZE Kachel (auch die Eckstuecke):
+  // ein Eckstueck ohne die zugehoerigen geraden Baender waere ein Stummel.
+  const nWater = (n ? 1 : 0) + (e ? 1 : 0) + (s ? 1 : 0) + (west ? 1 : 0);
+  if ((n && s) || (e && west) || nWater >= 3) return [];
+  const ne = w(1, -1);
+  const nw = w(-1, -1);
+  const se = w(1, 1);
+  const sw = w(-1, 1);
+  // ---------------------------------------------------------------------
+  // GP5 RUNDE 3 — TEICH-BALKEN-ECHTFIX (Verdrahtungs-Nachzug).
+  //
+  // BEFUND: die Regel oben (gegenueberliegende Wasserseiten / >= 3 Wasser-
+  // Orthonachbarn) hat auf den echten Karten NICHT EINE EINZIGE Zelle
+  // getroffen. Headless nachgemessen (alle vier Karten, jede Landzelle):
+  // die hoechste Wasser-Orthonachbarzahl einer bandtragenden Kachel ist 2,
+  // gegenueberliegende Seiten kommen nirgends vor. Der von der Jury
+  // gesehene Balken kam also aus einer ANDEREN Konstellation.
+  //
+  // ECHTE URSACHE: die TREPPEN-INNENECKE. Der Friedhofsteich ist eine
+  // Treppenkontur (Wasser-Bounding-Box x29-37 / y14-18, Zeilenbreiten
+  // 2/6/9/9/2). An jeder Stufe sitzt eine Landkachel, die auf ZWEI
+  // BENACHBARTEN Seiten Wasser hat UND deren Diagonale zwischen diesen
+  // beiden Seiten ebenfalls Wasser ist. Sie ragt damit als Zacken in die
+  // Wasserflaeche; ihre beiden Baender treffen sich in der Kachelecke und
+  // lesen zusammen mit den Baendern der Nachbarstufen als brauner Balken
+  // quer durchs Becken. Genau diese Ecken bekommen ab jetzt von der
+  // WASSERSEITE die 45-Grad-Treppe shore_diag_* (§2(b), oben) — das
+  // landseitige Band waere dort doppelt und wuerde die Treppe zudecken.
+  //
+  // REGEL: kein Band, wenn eine senkrechte und eine waagerechte Seite
+  // Wasser sind UND die Diagonale zwischen ihnen ebenfalls Wasser ist.
+  // Unterdrueckt wird die GANZE Kachel (wie oben) — ein Eckstueck ohne
+  // seine geraden Baender waere ein Stummel.
+  //
+  // AEQUIVALENZ ZUM AUFTRAGS-WORTLAUT ("Landzellen INNERHALB der Teich-
+  // Bounding-Box mit >= 2 Wasser-Orthonachbarn"): headless gegengerechnet
+  // liefern beide Formulierungen auf ALLEN VIER Karten exakt dieselbe
+  // Zellmenge (GRAVEYARD 6 Zellen / 12 Emissionen, FLUESTERGRUFT 6 Zellen
+  // / 12 Emissionen, Katakomben und Bosskammer haben kein Wasser).
+  // Genommen ist die LOKALE Fassung, weil sie (a) eine reine Funktion der
+  // 3x3-Nachbarschaft bleibt — bankOverlays wird pro sichtbarer Kachel und
+  // Frame gerufen, eine Bounding-Box braeuchte einen Ganzkarten-Scan — und
+  // (b) nicht von der zufaelligen Lage des Box-Randes abhaengt: die
+  // Bounding-Box-Fassung haette die beiden spiegelbildlichen Nord-Stufen
+  // (29,15) und (36,15) unterschiedlich behandelt, sobald man "vollstaendig
+  // innerhalb" streng liest.
+  if ((n && e && ne) || (n && west && nw) || (s && e && se) || (s && west && sw)) return [];
   const out = [];
   if (n) out.push(`bank_n_${set}`);
   if (e) out.push(`bank_e_${set}`);
   if (s) out.push(`bank_s_${set}`);
   if (west) out.push(`bank_w_${set}`);
-  if (!n && !e && w(1, -1)) out.push(`bank_ne_${set}`);
-  if (!n && !west && w(-1, -1)) out.push(`bank_nw_${set}`);
-  if (!s && !e && w(1, 1)) out.push(`bank_se_${set}`);
-  if (!s && !west && w(-1, 1)) out.push(`bank_sw_${set}`);
+  if (!n && !e && ne) out.push(`bank_ne_${set}`);
+  if (!n && !west && nw) out.push(`bank_nw_${set}`);
+  if (!s && !e && se) out.push(`bank_se_${set}`);
+  if (!s && !west && sw) out.push(`bank_sw_${set}`);
   return out;
+}
+
+// GP5 RUNDE 3 §5 — UFER-ZAHN-VARIANTEN (Verdrahtungs-Nachzug), REINE Funktion.
+// bank_n_g_v1/_v2/_v3 lagen fertig in art/sprites.js und wurden nie gezogen:
+// das Suedufer-Band endete dadurch in JEDER Kachel auf derselben Zeile und zog
+// eine durchgehende 16px-Linie durchs Bild (Jury R2, Auftrag 5).
+// Die Wahl sitzt bewusst NICHT in bankOverlays, sondern hier: bankOverlays
+// beantwortet "WELCHE Baender", diese Funktion "welches Pixel-Grid" — dieselbe
+// Trennung wie zwischen der Legende und artFor(). Damit bleibt die Emission
+// weiter die kanonische Key-Familie bank_*_g|s (alle Bestandstests unberuehrt).
+// n = 7: UNGERADE und teilerfremd zu 3 (Tiefen-Overlay), 5 (Anker-Jitter),
+// 17/29 (Anker-Versatz), 47 (Gras-Pool) und zu 5 (die '='-Weg-Legende, die auf
+// denselben Uferkacheln liegt). Die Basis steht auf genau EINEM der sieben
+// Plaetze, jede Zahn-Variante auf zweien — der Bestandston bleibt im Bild, die
+// gleichfoermige Zeile verschwindet.
+// Koordinaten mit 419/971 versetzt (beide prim, verschieden von allen anderen
+// Versaetzen 617/293, 1013/571, 421/907, 331/733), damit die Zahnwahl weder mit
+// der Tiefen-Streuung noch mit Anker- oder Sway-Muster korreliert. Der Versatz
+// ist nicht geraten, sondern auf den SIEBEN echten bank_n_g-Kacheln des Teichs
+// ausgemessen: die vier zusammenhaengenden Suedufer-Kacheln (34..37, 18) ziehen
+// VIER VERSCHIEDENE Grids (v1/Basis/v3/v2 — genau der Defekt "das Band endet in
+// jeder Kachel auf derselben Zeile" ist damit gebrochen), die beiden Nachbarn
+// (31,19)/(32,19) zwei verschiedene, und die Gesamtverteilung trifft die
+// Listen-Gewichtung exakt (1x Basis, je 2x v1/v2/v3).
+// Kein Zufall, kein Zeitstempel (§0.4).
+const BANK_VARIANTS = {
+  bank_n_g: ['bank_n_g', 'bank_n_g_v1', 'bank_n_g_v2', 'bank_n_g_v3',
+    'bank_n_g_v1', 'bank_n_g_v2', 'bank_n_g_v3'],
+};
+
+export function bankVariantFor(key, tx, ty) {
+  const list = BANK_VARIANTS[key];
+  if (!list) return key;
+  return list[variantIndex(tx + 419, ty + 971, list.length)];
 }
 
 // §3.B4 waterReflections(lights, defAt, cam, timeSec) — REINE Funktion.
@@ -418,6 +566,10 @@ const SWAY_CLUSTER_N = 7; // ungerade, teilerfremd zu 5/29/17 (§0.4)
 // Schritte pro Sekunde der Kronen-Boe. 1.6 = animRate 0.8 der Gras-Legenden x2
 // (4 Schritte statt 2 Frames -> gleiche Zykluslaenge 2,5 s wie im Bestand).
 const CROWN_SWAY_RATE = 1.6;
+// GRAFIKPASS 5 RUNDE 3: Amplituden-Faktor der 16x16-HAENGE-Kronen (kein span).
+// 2 -> +-2 px statt +-1 px ("Kronen-Sway-Amplitude +1 px"). Die span-Anker
+// (2x2-Grosskronen) bleiben bei Faktor 1, damit die Krone am Stamm bleibt.
+const HANG_SWAY_AMP = 2;
 
 // REINE Funktion (Node-testbar): Phase und Amplitude der Sway-Welle an (tx,ty).
 // rate = Schritte pro Sekunde. Kein Zufall, kein Zeitstempel (§0.4).
@@ -496,7 +648,30 @@ export function createTilemap(rows, legend, overRows = null) {
   // (Distanz 1) -> depthOverlays[0] (flach), der naechste Ring -> depthOverlays[1]
   // (mittel), tiefer -> nichts. depthArt[ty][tx] haelt den fertigen Art-Key oder
   // null; der Ground-Pass zeichnet ihn NACH Tile+Shore/Fringe statisch drueber.
+  //
+  // GRAFIKPASS 5 RUNDE 3 §2(e) — DEPTH-OVERLAY-VARIANTEN. Die Jury mass an der
+  // Wasserflaeche eine Selbstaehnlichkeit von dx16 = 0,71: JEDE Kachel eines
+  // Tiefenrings trug denselben Schleier, das 16-px-Gitter stand offen im Bild.
+  // `variants` ist auf Wasser VERBOTEN (die Basiskachel ist anim), die
+  // Wiederholung sitzt aber im STATISCHEN Tiefen-Overlay — genau dort laesst
+  // sie sich brechen. Der depthArt-Pass waehlt deshalb je Zelle deterministisch
+  // eine von DREI Auspraegungen des Ring-Keys:
+  //     Index 0 -> Basis-Key            (z. B. water_shallow)
+  //     Index 1 -> `${Basis}_v1`        (z. B. water_shallow_v1)
+  //     Index 2 -> `${Basis}_v2`
+  // per variantIndex(tx + 617, ty + 293, 3): n = 3 ist UNGERADE und teilerfremd
+  // zu allen anderen n am selben Ort (5 Jitter, 7 Sway, 17/29 Anker, 47 Gras-
+  // Pool); die Koordinaten sind mit 617/293 gegen ALLE anderen Hash-Versaetze
+  // (1013/571, 421/907, 331/733) versetzt, damit die Tiefen-Streuung nicht mit
+  // Anker- oder Sway-Muster korreliert. Kein Zufall, kein Zeitstempel (§0.4);
+  // die Wahl faellt EINMAL beim Kartenaufbau -> Render-Determinismus wie bisher
+  // (zwei Draws zu verschiedenen Zeiten liefern identische Platzierung).
+  // GRACEFUL DEGRADATION (Interface-Regel "Art liefert die Keys; fehlt einer ->
+  // still Basis"): der Zeichenpfad nimmt die Variante NUR, wenn sie in der
+  // Kachelquelle wirklich vorhanden ist (hasOwnProperty). Liefert art/sprites.js
+  // die _v1/_v2-Grids noch nicht, rendert die Karte exakt wie zuvor.
   const depthArt = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
+  const depthVarArt = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
   {
     const dist = Array.from({ length: hTiles }, () => new Array(wTiles).fill(Infinity));
     let frontier = [];
@@ -529,7 +704,13 @@ export function createTilemap(rows, legend, overRows = null) {
         const def = cells[ty][tx];
         if (!def.depthOverlays) continue;
         const ring = dist[ty][tx] - 1; // Ufer-Ring (Distanz 1) = Index 0
-        if (ring >= 0 && ring < def.depthOverlays.length) depthArt[ty][tx] = def.depthOverlays[ring];
+        if (ring >= 0 && ring < def.depthOverlays.length) {
+          const base = def.depthOverlays[ring];
+          depthArt[ty][tx] = base;
+          // §2(e) R3: Varianten-Index je Zelle (0 = Basis, 1/2 = _v1/_v2).
+          const vi = variantIndex(tx + 617, ty + 293, DEPTH_VARIANT_N);
+          depthVarArt[ty][tx] = vi === 0 ? null : `${base}_v${vi}`;
+        }
       }
     }
   }
@@ -762,7 +943,16 @@ export function createTilemap(rows, legend, overRows = null) {
           // timeSec = 0 exakt 0 -> alle Anker-/Culling-/Determinismus-Tests
           // (die bei t = 0 messen) bleiben unberuehrt, und ein Cluster kann nie
           // gegen seinen Nachbarn schlagen (Vorzeichen-Regel der Welle).
-          ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx;
+          // GRAFIKPASS 5 RUNDE 3: Amplitude der HAENGE-Kronen um +1 px erhoeht
+          // (+-1 -> +-2 px, Faktor HANG_SWAY_AMP). Sie haengen frei am Rand des
+          // Blattwerks und sind die einzigen Kronen OHNE Stamm-/Ankerbindung —
+          // bei +-1 px war die Boe an ihnen im Strip nicht abzulesen. Die
+          // 2x2-GROSSKRONEN (span-Anker, Zweig oben) behalten bewusst +-1 px:
+          // sie sitzen auf einem Stamm und duerfen nicht von ihm abreissen.
+          // Weiterhin rein deterministisch (derselbe swayPhase-Hash), und bei
+          // timeSec = 0 ist der Versatz exakt 0 -> alle Anker-/Culling-/
+          // Determinismus-Tests (die bei t = 0 messen) bleiben unberuehrt.
+          ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx * HANG_SWAY_AMP;
         }
         const img = tileCanvases[artFor(def, tx, ty, timeSec)];
         if (img) ctx.drawImage(img, ax, ay);
@@ -776,22 +966,51 @@ export function createTilemap(rows, legend, overRows = null) {
         // im Ground-Pass NACH fringeOverlays, rein ADDITIV (Komplement-Regel —
         // nie dieselbe Kante zweimal). Fehlt ein Art-Key, wird still nichts
         // gezeichnet.
+        // GP5 R3 §2(b): merkt sich, ob auf dieser Zelle wirklich eine
+        // 45-Grad-Treppe GEZEICHNET wurde (nicht bloss emittiert). Die halbe
+        // Kachel ist dann Landzunge — der Tiefen-Schleier hat dort nichts
+        // verloren (siehe unten).
+        let diagDrawn = false;
         if (!over) {
           for (const key of shoreEdges(defAt, tx, ty)) {
             const simg = tileCanvases[key];
+            if (simg && key.startsWith('shore_diag_')) diagDrawn = true;
             if (simg) ctx.drawImage(simg, sx, sy);
           }
           // §3.B2: Uferband auf der LANDSEITE (bankSet-Flag der Landkachel).
+          // GP5 R3 §5: das Band zieht je Kachel eine der Zahn-Varianten
+          // (bankVariantFor). Fuehrt die Kachelquelle die Variante nicht, faellt
+          // es still auf den Basis-Key zurueck — Art liefert die Keys, die
+          // Engine erzwingt sie nicht.
           for (const key of bankOverlays(defAt, tx, ty)) {
-            const bimg = tileCanvases[key];
+            const vkey = bankVariantFor(key, tx, ty);
+            const bimg = tileCanvases[vkey] || tileCanvases[key];
             if (bimg) ctx.drawImage(bimg, sx, sy);
           }
         }
         // Grafikpass 2 §8b.1: Wasser-Tiefen-Overlay im GROUND-Pass NACH
         // Tile+Shore/Fringe (statisch ueber dem animierten Wasser). Fehlt der
         // Art-Key noch, wird still nichts gezeichnet.
-        if (!over && depthArt[ty][tx]) {
-          const dimg = tileCanvases[depthArt[ty][tx]];
+        // Grafikpass 5 R3 §2(e): je Zelle die im depthArt-Pass gewaehlte
+        // VARIANTE (_v1/_v2), sofern die Kachelquelle sie wirklich fuehrt —
+        // sonst still die Basis (Art liefert die Keys, die Engine erzwingt sie
+        // nicht). Die Pruefung laeuft ueber hasOwnProperty statt ueber die
+        // blosse Wahrheit von tileCanvases[key], damit eine Kachelquelle, die
+        // JEDEN Namen beantwortet (Test-Proxys), nicht faelschlich Varianten
+        // vortaeuscht — die Basis bleibt dort der geprüfte Bestandspfad.
+        // GP5 R3 §2(b)-NACHZUG: auf einer Zelle mit gezeichneter 45-Grad-Treppe
+        // ENTFAELLT der Tiefen-Schleier. Er liegt sonst ueber der Landzunge der
+        // Treppe: nachgemessen landeten 4-10 seiner '='-Glanztupfer je Ecke auf
+        // den ~75 Gras-Pixeln (bis 13 %) — tuerkise Sprenkel auf Gras. Der
+        // Schleier bedeutet "tieferes Wasser"; eine halbe Landkachel ist genau
+        // das nicht. Betroffen sind ausschliesslich die zehn Teich-Aussenecken;
+        // fehlt die Treppen-Kachel in der Kachelquelle, bleibt der Schleier wie
+        // bisher stehen (diagDrawn wird nur bei echtem Draw gesetzt).
+        if (!over && depthArt[ty][tx] && !diagDrawn) {
+          const vkey = depthVarArt[ty][tx];
+          const dimg = (vkey && Object.prototype.hasOwnProperty.call(tileCanvases, vkey) && tileCanvases[vkey])
+            ? tileCanvases[vkey]
+            : tileCanvases[depthArt[ty][tx]];
           if (dimg) ctx.drawImage(dimg, sx, sy);
         }
         // Grafikpass 2 §8a.4: Kronen-Schlagschatten im GROUND-Pass NACH
