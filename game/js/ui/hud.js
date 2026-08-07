@@ -372,6 +372,24 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
   }
+
+  // GOD-MODE-Hinweis (Testwerkzeug): kleines gelbes GOTT oben rechts, links
+  // NEBEN der Item-Box (die belegt 296..316) und rechts vom Boss-Balken (endet
+  // bei 200) — kollisionsfrei. Nur sichtbar, wenn main.js ?god=1 gelesen und
+  // an createPlayer durchgereicht hat; ohne das Flag wird hier nichts gezeichnet.
+  if (player.god) {
+    ctx.save();
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#14101a';   // 1-px-Kontur wie beim GOLD-Text
+    ctx.fillText('GOTT', 293, 6);
+    ctx.fillStyle = '#f0bf4e';
+    ctx.fillText('GOTT', 292, 5);
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+  }
 }
 
 // Pickup-Popup (Slice 2): schwebt in 0,9 s um 8 px über dem Spielerkopf

@@ -89,6 +89,13 @@ let startMapKey = 'GRAVEYARD';
   if (q && Object.hasOwn(MAPS, q)) startMapKey = q;
 }
 
+// Dev-Parameter ?god=1: GOD-MODE (Testwerkzeug fuer den Auftraggeber).
+// Unverwundbar + Schaden x10 + Tempo x1,4 + 500 Gold + Bumerang, sichtbar
+// als gelbes GOTT oben rechts. Gelesen wie ?map= — location.search wird
+// AUSSCHLIESSLICH hier angefasst, alle anderen Module bleiben Node-importierbar.
+// Ohne den Parameter ist godMode false und jede Abzweigung tot.
+const godMode = new URLSearchParams(window.location.search).get('god') === '1';
+
 let state = 'title';
 let stateTime = 0;
 let timeSec = 0;
@@ -159,7 +166,7 @@ function buildWorld(mapKey, spawn, carry) {
   mapDef = MAPS[mapKey];
   map = createTilemap(mapDef.rows, mapDef.legend, mapDef.overRows || null);
   const prev = player;
-  player = createPlayer(spawn);
+  player = createPlayer(spawn, { god: godMode });
   if (carry && prev) {
     // carry-Reihenfolge FEST (Spec Slice 2/3): erst Inventar- UND Progression-
     // Referenz, dann Stats ableiten (maxHp aus Level/Herzen), dann hp/gold/
@@ -170,6 +177,14 @@ function buildWorld(mapKey, spawn, carry) {
     player.hp = Math.min(prev.hp, player.maxHp);
     player.gold = prev.gold;
     player.potions = prev.potions;
+  }
+  // GOD-MODE-Startausstattung: 500 Gold NUR beim frischen Spieler (bei carry
+  // traegt der Uebergang das Gold ohnehin mit) und der Bumerang im zelda-Slot,
+  // aber nie doppelt (bei carry ist player.inv die REFERENZ auf das alte
+  // Inventar). Ohne ?god=1 passiert hier nichts.
+  if (godMode) {
+    if (!carry) player.gold = 500;
+    if (!player.inv.zelda.includes('boomerang')) player.inv.zelda.push('boomerang');
   }
   enemies = [
     ...mapDef.skeletonSpawns.map(createSkeleton),

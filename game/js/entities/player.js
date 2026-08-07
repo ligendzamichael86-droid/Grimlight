@@ -19,16 +19,36 @@ const INVULN_TIME = 1;
 const MAX_POTIONS = 3;
 const POTION_COOLDOWN = 0.3;
 
+// GOD-MODE (Testwerkzeug fuer den Auftraggeber, NUR via ?god=1 in main.js):
+// Schaden x10, Tempo x1,4. Die Werte liegen hier, weil der Kampfcode
+// ausschliesslich player.stats liest (Spec Slice 2) — so braucht weder
+// enemies.js noch sonst ein Modul einen Sonderpfad.
+const GOD_DMG_MULT = 10;
+const GOD_SPEED_MULT = 1.4;
+
 // spawn = Weltpixel, ZENTRUM der 12×14-AABB (Konvention aus maps.js)
-export function createPlayer(spawn) {
+// opts.god === true schaltet den GOD-MODE (default aus; alle Alt-Aufrufer
+// createPlayer(spawn) bleiben unveraendert).
+export function createPlayer(spawn, opts = {}) {
   // Flankenerkennung fürs Trinken: input.potion ist ein PEGEL (input.js),
   // getrunken wird nur beim Übergang unten→oben.
   let potionHeld = false;
+  const god = opts.god === true;
+
+  // GOD-MODE: Schaden/Tempo auf dem FERTIGEN Stats-Objekt skalieren (das ist
+  // immer eine frische Kopie: computeStats klont base, applyProgress liefert
+  // ein neues Objekt). Ohne Flag unveraendert durchgereicht.
+  function godBoost(s) {
+    if (!god) return s;
+    s.dmg *= GOD_DMG_MULT;
+    s.speed = Math.round(s.speed * GOD_SPEED_MULT * 100) / 100;
+    return s;
+  }
 
   const inv = createInventory();
   // XP/Level (§2.1): Level = Zaehigkeit. applyProgress addiert nur maxHp.
   const prog = createProgress();
-  const stats = applyProgress(computeStats(inv), prog);
+  const stats = godBoost(applyProgress(computeStats(inv), prog));
 
   const player = {
     x: spawn.x - 6,
@@ -40,6 +60,7 @@ export function createPlayer(spawn) {
     inv,
     prog,
     stats,
+    god,                // GOD-MODE aktiv (hud.js zeichnet daraus den GOTT-Hinweis)
     zeldaState: 'none', // 'none' | 'ready' | 'air', pro Frame von main.js gespiegelt
     deathToll: null,    // Gold-Zoll bei Tod (§2.6.3); main.js berechnet/liest ihn
     gold: 0,
@@ -69,7 +90,7 @@ export function createPlayer(spawn) {
   function recalcStats() {
     // §3: applyProgress spiegeln (maxHp aus Level + Herzcontainern). Anlegen
     // heilt NICHT, Ablegen kappt hp auf das neue Maximum.
-    player.stats = applyProgress(computeStats(player.inv), player.prog);
+    player.stats = godBoost(applyProgress(computeStats(player.inv), player.prog));
     player.maxHp = player.stats.maxHp;
     player.hp = Math.min(player.hp, player.maxHp);
   }
@@ -161,6 +182,11 @@ export function createPlayer(spawn) {
   // §3: optionaler vierter Parameter knockMult (rueckwaertskompatibel, alle
   // Alt-Aufrufe bleiben unveraendert). Der Boss-Rundumschlag braucht x1,5.
   function hurt(dmg, fromX, fromY, knockMult = 1) {
+    // GOD-MODE: EINZIGER Eintrittspunkt fuer Spielerschaden (enemies.js,
+    // boss.js Rundumschlag + Sturm rufen alle hierher). false = "nicht
+    // getroffen": kein hp-Abzug, kein Knockback, kein hurt-State — damit kann
+    // hp nie <= 0 werden und der Tod-/Respawn-/Game-Over-Pfad nie starten.
+    if (player.god) return false;
     if (player.invulnTimer > 0 || player.state === 'dead') return false;
     player.hp -= dmg;
     player.invulnTimer = INVULN_TIME;
