@@ -34,6 +34,144 @@ const BOSS_FILL_RAMP = [
   '#b95042', // 7
 ];
 
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 §6.7c — DAMAGE-LAG-STREIFEN ALS 8-ZEILEN-RAMPE.
+// Der Lag-Streifen (das Stueck, das der Boss gerade verloren hat) war bis GP5
+// eine FLAECHE aus einem Ton (#b8a09c) plus einer Unterkantenzeile — genau der
+// Fehler, den die Jury an der Fuellung selbst schon abgestellt hatte. Er ist
+// jetzt die ENTSAETTIGTE SCHWESTER von BOSS_FILL_RAMP: gleiche Bandstruktur
+// (Glanz / hell / Grund / Tief), gleiche Zeilenzahl, aber jeder Ton um 65 %
+// auf seine eigene Rec.601-Luma zusammengezogen und danach um +8 je Kanal
+// angehoben. Rechenweg je Ton c -> c' = round(c + 0.65*(L(c) - c)) + 8:
+//   #f6c9bc L 213,0 -> (225,209,204)+8 = (233,217,212) = #e9d9d4
+//   #f59682 L 176,1 -> (200,167,160)+8 = (208,175,168) = #d0afa8
+//   #e87a66 L 152,6 -> (180,142,135)+8 = (188,150,143) = #bc968f
+//   #b95042 L 109,8 -> (136, 99, 95)+8 = (144,107,103) = #906b67
+// Wirkung: der Streifen liest weiter als "eben verloren" (heller/blasser als
+// die Fuellung), traegt aber dieselbe Lichtkante-oben/Tiefe-unten-Plastik und
+// keine Zeile stellt mehr als ~13 % seiner Flaeche. Keine neue Zeichenlogik —
+// dieselbe Zeilenschleife wie die Fuellung, weiterhin fillRect-only.
+const BOSS_LAG_RAMP = [
+  '#e9d9d4', // 0 Glanz-Schwester
+  '#d0afa8', // 1
+  '#d0afa8', // 2
+  '#bc968f', // 3 Grundton-Schwester
+  '#bc968f', // 4
+  '#bc968f', // 5
+  '#906b67', // 6 Tiefband-Schwester
+  '#906b67', // 7
+];
+
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 §6.7a — XP-LEISTE: EIGENER FARBORT + 3-ZEILEN-RAMPE.
+// Bis GP5 lief die XP-Fuellung im GRAUVIOLETT des Panel-Bevels (#9a90a6 /
+// #7d7588) und die Rinne im Bevel-Mittelton #3a3542 — Leiste und Rahmen hatten
+// denselben Farbort, der Fuellstand war auf 320x180 kaum ablesbar.
+// MASSE BLEIBEN UNVERAENDERT (xh = 5, Innenhoehe 3 px; eine 8-Zeilen-Rampe wie
+// beim Boss-Balken ist dort geometrisch unmoeglich, Review P1-B1/P3-B6):
+// stattdessen genau DREI Zeilen hell/mittel/dunkel in MOOSGRUEN.
+// Rec.601-Luma (L = 0,299R + 0,587G + 0,114B), nachgerechnet:
+//   hell   #8fb85c = (143,184, 92) -> 42,8 + 108,0 + 10,5 = 161,2
+//   mittel #6d9645 = (109,150, 69) -> 32,6 +  88,1 +  7,9 = 128,5
+//   dunkel #4e7030 = ( 78,112, 48) -> 23,3 +  65,7 +  5,5 =  94,5
+//   Rinne  #131e0d = ( 19, 30, 13) ->  5,7 +  17,6 +  1,5 =  24,8
+// KONTRAST-BELEG (§6.7a fordert hellste Rampenzeile >= L 125 und Kontrast
+// >= 100 L gegen die Rinne): hellste Zeile 161,2 >= 125 OK;
+// 161,2 - 24,8 = 136,4 >= 100 OK. Auch die DUNKELSTE Rampenzeile liegt mit
+// 94,5 - 24,8 = 69,7 L noch klar ueber der Rinne, der Fuellstand ist also auf
+// jeder der drei Zeilen ablesbar. Rinne ~L 25 wie gefordert (24,8).
+// Alles weiterhin fillRect-only; Blink (#f1e9d3) und Anfangs-Schimmer bleiben.
+const XP_RAMP = ['#8fb85c', '#6d9645', '#4e7030']; // Zeile 0 (oben) .. 2 (unten)
+const XP_RINNE = '#131e0d';
+
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 §6.7b — 3x5-PIXELZIFFERN FUER GOLD- UND TRANK-WERT.
+// Die zwei Zahlen waren die letzten VEKTOR-Glyphen im Spielfeld-HUD: '8px
+// monospace' rastert je nach Systemschrift mit Antialiasing und Subpixel-
+// Vorschueben, im 320x180-Backing-Store liest das als weiche Grauflecken neben
+// harten Pixel-Icons. Ersatz ist eine 3x5-Bitmap-Ziffer, gezeichnet
+// AUSSCHLIESSLICH mit fillRect (die Flusstest-Stubs kennen nichts anderes).
+//
+// DIE fillText-ZUEGE BLEIBEN UNVERAENDERT STEHEN (bindend, §6.7b): sie sind die
+// TEST-SONDE, ueber die check_main_slice1/check_inventory_slice2/probe_god den
+// Goldstand lesen ('GOLD <n>' per startsWith). Sie werden nur VERDECKT.
+// Zeilen-Muster von oben nach unten, '1' = Texel.
+const PIXEL_DIGITS = [
+  ['111', '101', '101', '101', '111'], // 0
+  ['010', '110', '010', '010', '111'], // 1
+  ['111', '001', '111', '100', '111'], // 2
+  ['111', '001', '111', '001', '111'], // 3
+  ['101', '101', '111', '001', '001'], // 4
+  ['111', '100', '111', '001', '111'], // 5
+  ['111', '100', '111', '101', '111'], // 6
+  ['111', '001', '001', '001', '001'], // 7
+  ['111', '101', '111', '101', '111'], // 8
+  ['111', '101', '111', '001', '111'], // 9
+];
+const PIXEL_DIGIT_PITCH = 4; // 3 px Glyphe + 1 px Luecke
+const PIXEL_DIGIT_MAX = 6;   // s. HUD_VAL_W-Herleitung unten
+
+// Zeichnet eine ganze Zahl als Pixelziffern; erst der 1-px nach unten-rechts
+// versetzte Kontur-Zug, dann der Fuellzug (dieselbe Doppel-Draw-Logik wie der
+// GOLD-fillText, §5.D6 GP5) — die Zahl steht damit auch auf hellem Panel.
+function drawPixelNumber(ctx, value, x, y, color, kontur) {
+  let s = String(Math.max(0, Math.floor(Number(value) || 0)));
+  if (s.length > PIXEL_DIGIT_MAX) s = '9'.repeat(PIXEL_DIGIT_MAX);
+  for (const pass of [1, 0]) {
+    ctx.fillStyle = pass ? kontur : color;
+    const o = pass ? 1 : 0;
+    for (let i = 0; i < s.length; i++) {
+      const g = PIXEL_DIGITS[s.charCodeAt(i) - 48];
+      if (!g) continue;
+      const gx = x + i * PIXEL_DIGIT_PITCH + o;
+      for (let ry = 0; ry < 5; ry++) {
+        const row = g[ry];
+        for (let rx = 0; rx < 3; rx++) {
+          if (row[rx] === '1') ctx.fillRect(gx + rx, y + ry + o, 1, 1);
+        }
+      }
+    }
+  }
+}
+
+// --- GEOMETRIE DER ZWEI DECKRECHTECKE (feste Konstanten, KEIN measureText) ---
+// Panel-Bandtoene (woertlich aus dem Panel-Block in drawHUD, px=2 py=2 pw=54
+// ph=40): das helle Band ist fillRect(px+1, py+1, pw-2, round((ph-2)/3)) =
+// (3, 3, 52, 13) und belegt damit die Zeilen y3..y15; ab y16 liegt das dunkle
+// Mittelband '#0a0a12'. DIE BANDGRENZE IST ALSO y15/y16 — und genau darum
+// braucht es ZWEI Deckrechtecke: der GOLD-Zug beginnt bei y15 und laeuft bis
+// y23, kreuzt die Grenze also.
+const HUD_BAND_HELL = '#10101c';    // Zeilen y3..y15
+const HUD_BAND_DUNKEL = '#0a0a12';  // ab y16
+const HUD_BAND_GRENZE = 16;         // erste Zeile des dunklen Bandes
+// x-Herleitung: '8px monospace' hat 0,6 em Vorschub = 4,8 px je Zeichen.
+//   GOLD  fillText('GOLD <n>', 4, 15): Label 'GOLD' belegt x 4,0..23,2, der
+//         Kontur-Zug bei (5,16) verschiebt es auf 5,0..24,2 -> letzte
+//         beschriebene Spalte x = 24. Der WERT beginnt bei 4 + 5*4,8 = 28,0.
+//   TRANK fillText('x <n>', 16, 27): Label 'x ' belegt 16,0..25,6, der WERT
+//         beginnt bei 16 + 2*4,8 = 25,6.
+// Die linkeste Spalte, die NUR Wert-Tinte traegt, ist damit x = 25.
+const HUD_VAL_X = 25;
+// Rechte Grenze: der dunkle Innenbevel des Panels liegt auf x = px+pw-2 = 54,
+// die letzte frei ueberschreibbare Spalte ist 53 -> Breite 53-25+1 = 29.
+// Daraus auch PIXEL_DIGIT_MAX: 6 Ziffern * 4 px + 1 px Kontur = 25 px ab
+// HUD_DIGIT_X = 26 -> letzte Spalte 50 < 54.
+const HUD_VAL_W = 29;
+// y-Herleitung: GOLD-Zug top y15 (Kontur y16) -> Tinte bis y23/y24;
+// Trank-Zug top y27 (kein Kontur-Zug) -> Tinte bis y35. Die XP-Leiste beginnt
+// bei y36 und bleibt damit unberuehrt.
+// NACHGEMESSEN am 320x180-Backing-Store (Chromium, DejaVu Sans Mono): die
+// Ziffern-Glyphe ragt EINE Zeile ueber die textBaseline-'top'-Kante hinaus —
+// bei y15 gesetzt liegt ihre oberste Antialiasing-Zeile auf y14. Der Deckel
+// beginnt deshalb bei y14; y14 liegt noch im HELLEN Panelband (y3..y15), das
+// erste Deckrechteck ist also 2 Zeilen hoch.
+const HUD_DECK_Y0 = 14;
+const HUD_DECK_Y1 = 35;
+// Pixelziffern-Anker (Mitte der jeweiligen Textzeile, 5 px hoch).
+const HUD_DIGIT_X = 26;
+const HUD_GOLD_DIGIT_Y = 17;
+const HUD_POT_DIGIT_Y = 29;
+
 export function drawHUD(ctx, player, input, gfx) {
   // Grafikpass 3 §2.6: dezentes Panel HINTER dem bestehenden HUD-Block oben links
   // (Herzen, GOLD, Trank, XP-Balken). AUSSCHLIESSLICH aus fillRect (kein
@@ -161,6 +299,26 @@ export function drawHUD(ctx, player, input, gfx) {
   ctx.fillStyle = '#d6cbb1';
   ctx.fillText(`x ${player.potions ?? 0}`, 16, 27);
 
+  // GRAFIKPASS 6 §6.7b: die beiden fillText-WERTE oben werden jetzt von ZWEI
+  // Deckrechtecken (eines je Panel-Farbband, Grenze y15/y16) ueberdeckt und
+  // durch 3x5-Pixelziffern ersetzt. Herleitung aller Konstanten am Dateikopf.
+  // Reihenfolge zwingend HIER: nach beiden fillText-Zuegen (sonst deckt nichts)
+  // und VOR dem Boss-Schluessel-Icon (das bei (30,25) im Deckbereich liegt und
+  // sichtbar bleiben muss). GOLD-Theta auf den Game-Over-/Sieg-Schirmen bleibt
+  // bewusst fillText (Deklarationsliste §9) — dort gibt es kein Panel-Band, das
+  // man deckungsgleich nachziehen koennte.
+  {
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = HUD_BAND_HELL;
+    ctx.fillRect(HUD_VAL_X, HUD_DECK_Y0, HUD_VAL_W, HUD_BAND_GRENZE - HUD_DECK_Y0);
+    ctx.fillStyle = HUD_BAND_DUNKEL;
+    ctx.fillRect(HUD_VAL_X, HUD_BAND_GRENZE, HUD_VAL_W, HUD_DECK_Y1 - HUD_BAND_GRENZE + 1);
+    drawPixelNumber(ctx, player.gold, HUD_DIGIT_X, HUD_GOLD_DIGIT_Y, '#f0bf4e', '#14101a');
+    drawPixelNumber(ctx, player.potions ?? 0, HUD_DIGIT_X, HUD_POT_DIGIT_Y, '#d6cbb1', '#14101a');
+    ctx.restore();
+  }
+
   // Boss-Schluessel-Icon (§3): 8x8 bei (30,25) neben dem Trank-Zaehler,
   // sichtbar sobald der Boss-Schluessel im zelda-Slot liegt.
   if (player.inv && player.inv.zelda && player.inv.zelda.includes('boss_key') && gfx.icon_key) {
@@ -183,8 +341,9 @@ export function drawHUD(ctx, player, input, gfx) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#14101a';
     ctx.fillRect(xx, xy, xw, xh);
-    // entsaettigte Rinne ueber die volle Innenbreite
-    ctx.fillStyle = '#3a3542';
+    // GP6 §6.7a: Rinne im EIGENEN Farbort (dunkles Moosgruen, L 24,8) statt im
+    // Bevel-Grauviolett — sonst liegen Rinne und Rahmen auf derselben Farbe.
+    ctx.fillStyle = XP_RINNE;
     ctx.fillRect(ix, iy, iw, ih);
     let frac = 1;
     if (prog.level < LEVEL_CAP) {
@@ -195,10 +354,15 @@ export function drawHUD(ctx, player, input, gfx) {
     const fw = Math.round(iw * frac);
     if (fw > 0) {
       const blink = (player.xpBlink ?? 0) > 0;
-      ctx.fillStyle = blink ? '#f1e9d3' : '#9a90a6'; // oberes Band: heller
-      ctx.fillRect(ix, iy, fw, 1);
-      ctx.fillStyle = blink ? '#f1e9d3' : '#7d7588'; // unteres Band: Grundton
-      ctx.fillRect(ix, iy + 1, fw, ih - 1);
+      // GP6 §6.7a: 3-ZEILEN-RAMPE statt 2-Band-Gradient — je Innenzeile ein
+      // eigener Moosgruen-Ton (hell oben = Lichtkante, dunkel unten = Tiefe).
+      // ih ist konstant 3 (Masse unveraendert); die Schleife bleibt trotzdem
+      // ih-generisch und klammert auf die Rampenlaenge, damit eine spaetere
+      // Masse-Aenderung nicht still ins Leere greift.
+      for (let r = 0; r < ih; r++) {
+        ctx.fillStyle = blink ? '#f1e9d3' : XP_RAMP[Math.min(r, XP_RAMP.length - 1)];
+        ctx.fillRect(ix, iy + r, fw, 1);
+      }
       // Grafikpass 5 §5.D6: 1-px-ANFANGS-SCHIMMER — die erste Spalte der
       // Fuellung traegt den hellsten Ton. Der Balken bekommt damit einen
       // Lichtanschlag und liest schon bei minimalem Fortschritt als GEFUELLT
@@ -272,10 +436,12 @@ export function drawHUD(ctx, player, input, gfx) {
     // faellt die Schicht still weg.
     const lagW = Math.max(fw, Math.min(iw, Math.round(bb.lagW ?? fw)));
     if (lagW > fw) {
-      ctx.fillStyle = '#b8a09c';                 // entsaettigt hell
-      ctx.fillRect(ix, iy, lagW, ih);
-      ctx.fillStyle = '#7d6a67';                 // Unterkante des Lag-Streifens
-      ctx.fillRect(ix, iy + ih - 1, lagW, 1);
+      // GP6 §6.7c: 8-ZEILEN-RAMPE (entsaettigte Schwester von BOSS_FILL_RAMP,
+      // Herleitung im Kopf der Datei) statt Flaeche + Unterkantenzeile.
+      for (let r = 0; r < ih; r++) {
+        ctx.fillStyle = BOSS_LAG_RAMP[Math.min(r, BOSS_LAG_RAMP.length - 1)];
+        ctx.fillRect(ix, iy + r, lagW, 1);
+      }
     }
     // --- FUELLRAMPE ueber 8 ZEILEN (Runde 2): der R1-Balken war zu 93 % EIN
     // Rotton (3 Baender, davon eines 6 px hoch). Jetzt traegt JEDE der 8
@@ -457,8 +623,18 @@ const BAYER4 = [
   [3, 11, 1, 9],
   [15, 7, 13, 5],
 ];
-const VIG_STEP = 0.09;               // Stufenhoehe; 5 * 0.09 = 0.45 = Max wie bisher
-const VIG_MAX_LEVEL = 5;             // Stufen 0..5 = 6 Stufen
+// GRAFIKPASS 6 §3.3 — VIGNETTE ENTSCHAERFT (testfreier Begleit-Hebel des
+// Belichtungs-Sockels). Die GP5-Vignette zog die Bildraender um bis zu 0,45
+// Deckung ins Schwarze; zusammen mit dem abgesenkten Ambient (§3.2) haette sie
+// die M1-Baender "Anteil L<16" allein am Rand gerissen. Jetzt:
+//   VIG_STEP 0,09 -> 0,06  UND  Profil auf 2/3 reskaliert -> a_max = 0,30.
+// VIG_MAX_LEVEL bleibt 5 (die STUFENKARTE ist damit identisch, jede Stufe
+// traegt nur noch 2/3 Deckung) — 5 * 0,06 = 0,30 = Profil-Maximum, die
+// Bayer-Dither-Sprache des Randes bleibt unveraendert erhalten.
+const VIG_STEP = 0.06;               // Stufenhoehe; 5 * 0.06 = 0.30 = neues Max (§3.3)
+const VIG_MAX_LEVEL = 5;             // Stufen 0..5 = 6 Stufen (unveraendert)
+// Reskalierungsfaktor des Radialprofils (0,45 -> 0,30).
+const VIG_SCALE = 2 / 3;
 // Vorgerechnete Fuellfarben je Stufe (Ton wie bisher: fast schwarzes Blau).
 const VIG_STYLES = [];
 for (let i = 0; i <= VIG_MAX_LEVEL; i++) VIG_STYLES.push(`rgba(5,3,9,${(i * VIG_STEP).toFixed(2)})`);
@@ -471,6 +647,8 @@ export function drawVignette(ctx) {
     const vctx = vignetteCanvas.getContext('2d');
     // Radiales Profil wie GP3 (Innenradius 90 klar, Mittel-Stop 0.55 -> 0.14,
     // Aussenradius 190 -> 0.45), aber in 6 Stufen gerastert statt interpoliert.
+    // GP6 §3.3: dasselbe Profil mit VIG_SCALE = 2/3 multipliziert
+    // (0,14 -> 0,0933 und 0,45 -> 0,30) — Form identisch, Amplitude gesenkt.
     const cx = VIEW_W / 2;
     const cy = VIEW_H / 2;
     const R_IN = 90;
@@ -488,7 +666,7 @@ export function drawVignette(ctx) {
           const t = Math.max(0, Math.min(1, (d - R_IN) / (R_OUT - R_IN)));
           // stueckweise lineares Profil (dieselben zwei Abschnitte wie der
           // fruehere Gradient), danach Stufe + Bayer-Schwelle.
-          const a = t <= 0.55 ? (t / 0.55) * 0.14 : 0.14 + ((t - 0.55) / 0.45) * 0.31;
+          const a = (t <= 0.55 ? (t / 0.55) * 0.14 : 0.14 + ((t - 0.55) / 0.45) * 0.31) * VIG_SCALE;
           const lvl = Math.min(
             VIG_MAX_LEVEL,
             Math.floor(a / VIG_STEP + BAYER4[y & 3][x & 3] / 16)

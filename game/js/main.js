@@ -2,11 +2,11 @@
 
 import { PALETTE } from './art/palette.js';
 import { SPRITES, TILE_ART } from './art/sprites.js';
-import { buildSprite, buildAll } from './core/sprite_factory.js';
+import { buildSprite, buildAll, buildTintMask } from './core/sprite_factory.js';
 import { createLoop } from './core/loop.js';
 import { createInput } from './core/input.js';
 import { createCamera } from './core/camera.js';
-import { createLighting } from './core/lighting.js';
+import { createLighting, lightAt } from './core/lighting.js';
 import { createParticles } from './core/particles.js';
 import { createTilemap, litDitherCells, waterReflections } from './world/tilemap.js';
 // Slice 3: boss.js EINMAL explizit importieren — das Modulende registriert
@@ -69,6 +69,146 @@ for (const key of [
   gfx[`${key}_flip`] = buildSprite(SPRITES[key], PALETTE, { flipX: true });
 }
 const tiles = buildAll(TILE_ART, PALETTE);
+
+// ===========================================================================
+// GRAFIKPASS 6 §4.2 — SPRITE-LICHT: MASKEN-REGISTRY + FASSADE.
+//
+// PROBLEM: Figuren und Props wurden bisher als flache Sprites gezeichnet und
+// erst vom Dunkel-Overlay global gedimmt. Eine Figur NEBEN einer Fackel sah
+// deshalb exakt so aus wie dieselbe Figur 200 px weiter im Dunkeln — nur
+// heller. Es fehlten Lichtfarbe und Halbseiten-Modellierung (M3).
+//
+// LOESUNG: je Sprite-Canvas gibt es bis zu drei TINT-MASKEN (sprite_factory.
+// buildTintMask) mit identischer Alpha-Form und zwei Toenen; sie werden mit
+// kleinem globalAlpha per source-over UEBER das zuerst gezeichnete Original
+// gelegt. Damit der Aufrufer nichts davon wissen muss, laeuft das Zeichnen der
+// Welt-Entities durch eine FASSADE, die nur drawImage abfaengt.
+//
+// REGISTRY: Map<canvas, {name, grid}>. Sie wird HIER gebaut (nach dem
+// gfx/tiles-Bau, §0.5 "neue Canvases erst nach main.js:71") und traegt fuer
+// jeden gfx-Canvas das Quell-Grid. Fuer die _flip-Canvases wird das Grid
+// SPALTENWEISE gespiegelt — sonst laege die Maske seitenverkehrt auf dem
+// gespiegelten Sprite. Die Masken selbst entstehen LAZY beim ersten Bedarf
+// (kein Canvas-Sturm beim Start, und alle Masken-Canvases liegen zeitlich
+// hinter dem Boot).
+const MASK_REG = new Map();
+for (const name of Object.keys(gfx)) {
+  const flip = name.endsWith('_flip');
+  const grid = SPRITES[flip ? name.slice(0, -5) : name];
+  if (!grid) continue;
+  MASK_REG.set(gfx[name], {
+    name,
+    grid: flip ? grid.map((row) => [...row].reverse().join('')) : grid,
+    masken: null, // lazy: { 'WL': canvas, 'WR': canvas, 'K:<tint>': canvas }
+  });
+}
+
+// §4.2 Alphastufen. WARM: vier Stufen aus round(warm*3) — warm liegt auf dem
+// 12er-Raster von lightAt, die Vergroeberung auf 4 Stufen haelt die Figur beim
+// Gehen ruhig (mit 13 Stufen flackerte die Tinte texelweise mit).
+// KALT: drei Stufen aus der DUNKELSTUFE (1 - f); f = 1 ist der Kegelkern
+// (keine Kaelte), f = 0 das Fernfeld (volle Kaelte).
+const WARM_ALPHA = [0, 0.12, 0.24, 0.36];
+const KALT_ALPHA = [0, 0.08, 0.16];
+// §4.2 Warm-Toene: der Kern-Ton des Warm-Passes (216,114,42 = #d8722a, siehe
+// GLOW_RINGS in lighting.js) als HELLE Seite, eine um ~20 % abgedunkelte
+// Variante (176,88,34 = #b05822) als lichtabgewandte Seite.
+const WARM_HELL = '#d8722a';
+const WARM_DUNKEL = '#b05822';
+
+// KALT-PAAR je Karte: der ambientTint der Map ist der dunkle Ton, eine um 22
+// Stufen je Kanal angehobene Fassung der helle. Damit traegt die Schattenseite
+// EXAKT die Farbtemperatur, die das Dunkel-Overlay derselben Karte auf den
+// Boden legt (Friedhof blauviolett, Katakomben kaltblau, Gruft gruenschwarz,
+// Bosskammer rotbraun) — Figur und Grund stehen im selben Licht.
+function kaltPaar(tint) {
+  const hex = /^#([0-9a-f]{6})$/i.exec(String(tint || '#050510'));
+  const v = hex ? parseInt(hex[1], 16) : 0x050510;
+  const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+  const lift = (c) => Math.min(255, c + 22);
+  const hx = (c) => c.toString(16).padStart(2, '0');
+  return { dunkel: `#${hx(r)}${hx(g)}${hx(b)}`, hell: `#${hx(lift(r))}${hx(lift(g))}${hx(lift(b))}` };
+}
+
+// Maske holen/bauen. art: 'WL' | 'WR' (warm, helle Seite links/rechts) oder
+// 'K' (kalt, Ton-Paar der AKTUELLEN Karte -> Cache-Schluessel traegt den Tint).
+function tintMaske(eintrag, art) {
+  if (!eintrag.masken) eintrag.masken = {};
+  const tint = art === 'K' ? (mapDef && mapDef.ambientTint) || '#050510' : '';
+  const key = art === 'K' ? `K:${tint}` : art;
+  let m = eintrag.masken[key];
+  if (m === undefined) {
+    if (art === 'K') {
+      const paar = kaltPaar(tint);
+      // Richtung 'L' FEST (Deklaration §9): der Kalt-Pass hat keine
+      // Lichtquelle, aus der sich eine Seite ableiten liesse. 'L' folgt der
+      // Art-Direction-Konvention "Licht von oben-links" und gibt der Figur im
+      // Dunkeln einen Volumenhinweis statt einer flachen Faerbung.
+      m = buildTintMask(eintrag.grid, PALETTE, paar.dunkel, paar.hell, 'L');
+    } else {
+      m = buildTintMask(eintrag.grid, PALETTE, WARM_DUNKEL, WARM_HELL, art === 'WL' ? 'L' : 'R');
+    }
+    eintrag.masken[key] = m;
+  }
+  return m;
+}
+
+// Aktive Toenung des gerade gezeichneten Renderables. Wird VOR jedem r.draw()
+// gesetzt; r.draw() ist synchron, ein zweiter Zustand kann also nie entstehen.
+const tintCfg = { on: false, warmA: 0, kaltA: 0, seite: 'WL' };
+
+// Der abgefangene drawImage-Zug der Fassade.
+function tintDrawImage(img, ...a) {
+  ctx.drawImage(img, ...a); // §0.5 WAECHTER B: der ERSTE Draw ist IMMER das Original
+  if (!tintCfg.on) return;
+  const eintrag = MASK_REG.get(img);
+  if (!eintrag) return; // Tiles, Fringes, HUD-Icons: nicht registriert -> nichts
+  const wA = tintCfg.warmA;
+  const kA = tintCfg.kaltA;
+  if (wA <= 0 && kA <= 0) return;
+  // Zustand des Aufrufers sichern: manche Zeichner blinken ueber globalAlpha.
+  // Die Masken skalieren mit (eine halb transparente Figur bekommt auch nur
+  // halbe Tinte); bei globalAlpha 1 — dem Normalfall und dem Messfall M3 —
+  // stehen die Stufen exakt auf den Spec-Werten.
+  const vorA = ctx.globalAlpha;
+  const vorG = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'source-over'; // §4.2: NIE 'lighter' auf Sprites
+  if (kA > 0) {
+    ctx.globalAlpha = kA * vorA;
+    ctx.drawImage(tintMaske(eintrag, 'K'), ...a);
+    ctx.globalAlpha = 1; // §4.2: nach JEDEM Masken-Draw
+  }
+  if (wA > 0) {
+    ctx.globalAlpha = wA * vorA;
+    ctx.drawImage(tintMaske(eintrag, tintCfg.seite), ...a);
+    ctx.globalAlpha = 1; // §4.2: nach JEDEM Masken-Draw
+  }
+  ctx.globalCompositeOperation = vorG;
+  if (vorA !== 1) ctx.globalAlpha = vorA;
+}
+
+// DIE FASSADE. Ein Proxy auf den echten ctx: alle Eigenschaften und Methoden
+// gehen unveraendert durch (Methoden an den echten ctx gebunden, damit `this`
+// stimmt), NUR drawImage wird ersetzt. Der Proxy entsteht EINMAL; die
+// Zeichen-Closures bekommen ihn beim renderables-Bau als ctx-Argument
+// (§4.2 korrigierter Bauort — eine Fassade "um die Schleife" erreicht die
+// lexikalisch gebundenen ctx der Closures nicht).
+const tintCtx = new Proxy(ctx, {
+  get(t, p) {
+    if (p === 'drawImage') return tintDrawImage;
+    const v = t[p];
+    return typeof v === 'function' ? v.bind(t) : v;
+  },
+  set(t, p, v) { t[p] = v; return true; },
+});
+
+// §4.1 HYSTERESE-SPEICHER. lightAt ist PURE — den Zustand haelt der Aufrufer.
+// Je ENTITY (Spieler/Gegner/Prop, Objektidentitaet) merken wir das letzte
+// Rueckgabeobjekt und reichen es beim naechsten Frame als 6. Argument herein.
+// Ohne das stroboskopiert eine STEHENDE Figur mit 4 Stufenwechseln je Sekunde
+// (Review P2-M-5). WeakMap, damit Map-Wechsel (buildWorld erzeugt neue
+// Entities) nichts leaken.
+const TINT_PREV = new WeakMap();
 
 const input = createInput();
 input.attach(canvas);
@@ -211,9 +351,22 @@ function buildWorld(mapKey, spawn, carry) {
   zeldaWasAir = false;
   zeldaBlink = 0;
   playerLight = { x: 0, y: 0, radius: mapDef.playerLightRadius, flicker: 0.3 };
+  // GRAFIKPASS 6 §2.6 — FACKEL-WAND-FLAG. Die Licht-Objekte tragen keine
+  // Art-Info; lighting.js verortet den Flammen-Hotspot (HOT_RINGS) aber
+  // unterschiedlich: BODENfackel cy-2 (Flammenkern in den Grid-Zeilen 5..7),
+  // WANDfackel cy-4 (deren Flamme endet eine Zeile hoeher — auf Bodenfackel-
+  // Hoehe laege der Hotspot im Metallgehaeuse). Die Unterscheidung faellt
+  // deshalb HIER, beim Sammeln: alles, dessen Legenden-Art-Key mit
+  // 'torch_wall' beginnt, ist eine Wandfackel. Fehlt das Flag, bleibt
+  // lighting.js beim Bodenfackel-Wert (Default, Vertrag Engine-A).
   lights = mapDef.torchChars
-    .flatMap((ch) => map.findTiles(ch))
-    .map((t) => ({ x: t.x, y: t.y, radius: TORCH_RADIUS, flicker: 1 }));
+    .flatMap((ch) => map.findTiles(ch).map((t) => ({ t, ch })))
+    .map(({ t, ch }) => {
+      const l = { x: t.x, y: t.y, radius: TORCH_RADIUS, flicker: 1 };
+      const art = (mapDef.legend[ch] && mapDef.legend[ch].art) || '';
+      if (art.startsWith('torch_wall')) l.wall = true;
+      return l;
+    });
   lights.push(playerLight);
   portalsArmed = mapDef.portals.map(() => false);
   levelupTimer = 0;
@@ -542,9 +695,26 @@ function litFilter(tx, ty) {
 // unten), 0.20, 0.10] — unten satt, oben auslaufend. Gilt fuer Spieler, Gegner
 // UND (neu) echte Props (vase/urn/chest verlieren ihre gebackenen Schatten,
 // Art-Builder §3.5b). '#000', Unterkante y + h - 1.
-const SHADOW_W = [0.95, 0.7, 0.4];
-const SHADOW_A = [0.40, 0.20, 0.10];
-const SHADOW_DY = [0, 1, 2];          // Zeilen OBERHALB der Fusskante
+// GRAFIKPASS 6 §4.3 — STANDARDPROFIL AUF VIER ZEILEN. Das GP4-Profil begann
+// AUF der Fusskante (dy 0) und lief nach OBEN aus — jede seiner drei Zeilen lag
+// damit hinter dem Sprite, das mit den Fuessen buendig auf derselben Kante
+// steht. Sichtbar blieben nur Restpixel neben dem Fuss-Cluster; M5 verlangt
+// aber >= 8 sichtbare Schatten-Texel UNTER der Fusskante. Deshalb bekommt das
+// Standardprofil dieselbe Bauart wie das laengst bewaehrte BIG-Profil des
+// Bosses: eine ZUSAETZLICHE, breite Zeile bei dy -1 (also eine Zeile UNTER der
+// Fusskante), die kein Sprite verdeckt, und die satteste Deckung eine Zeile
+// darueber. BIG bleibt UNVERAENDERT (SHADOW_*_BIG unten).
+//   dy -1  0,90 x Breite, Alpha 0,30  <- der sichtbare Bodenkontakt (M5)
+//   dy  0  0,95 x Breite, Alpha 0,40  <- Kern wie GP4
+//   dy  1  0,70 x Breite, Alpha 0,20
+//   dy  2  0,40 x Breite, Alpha 0,10
+// Beispiel Spieler (w = 12): 11 / 11 / 8 / 5 Texel — die -1-Zeile allein
+// liefert 11 sichtbare Texel unter der Fusskante.
+// BLINK-VERHALTEN (Deklaration §9): der Schatten haengt an der Hitbox, nicht am
+// Sprite — eine unverwundbar blinkende Figur behaelt ihren Schatten.
+const SHADOW_W = [0.90, 0.95, 0.7, 0.4];
+const SHADOW_A = [0.30, 0.40, 0.20, 0.10];
+const SHADOW_DY = [-1, 0, 1, 2];      // Zeilen OBERHALB der Fusskante (-1 = darunter)
 // ---------------------------------------------------------------------------
 // GRAFIKPASS 5 RUNDE 3 — BOSS-KONTAKTSCHATTEN (Jury: "der BOSS hat keinen
 // sichtbaren Kontaktschatten; pruefen, warum er aus dem Weichschatten-Pass
@@ -653,25 +823,114 @@ function drawWorld() {
 
   drawMarkers();
 
+  // Lights pro Frame: Fackeln + Spieler-Laterne (lights) plus je ein Licht
+  // pro liegendem SELTENEN Item-Drop (der Diablo-Moment: guter Loot
+  // leuchtet im Dunkeln).
+  // GRAFIKPASS 6 §4.1: dieser Aufbau ist VORGEZOGEN — er stand bis GP5 direkt
+  // vor lighting.draw, aber der renderables-Bau unten fragt fuer JEDE Entity
+  // lightAt(frameLights, ...) ab und braucht die vollstaendige Liste deshalb
+  // schon hier. Zwischen diesem Block und lighting.draw wird frameLights NICHT
+  // mehr veraendert, das gezeichnete Licht ist also bitgleich zum Bestand.
+  const frameLights = lights.slice();
+  for (const d of drops) {
+    if (d.kind === 'item' && d.item && d.item.rare) {
+      frameLights.push({ x: d.x + d.w / 2, y: d.y + d.h / 2, radius: 18, flicker: 0.3 });
+    }
+  }
+  // §2.4: Mini-Lichter der LEBENDEN Eliten PRO FRAME (Muster Selten-Drop-
+  // Lichter; NICHT ins statische lights-Array, das klebt am Spawn).
+  for (const l of eliteLights(enemies)) frameLights.push(l);
+  // §5.D4 [GP5]: statische Fuell-Lichter der Map (mapDef.extraLights, Engine-B
+  // setzt das Feld; BOSS_KAMMER bekommt ein Zentrums-Licht mit flicker 0.5,
+  // FLUESTERGRUFT seit GP6 §3.3 zwei im Kanalraum).
+  // Sie liegen bewusst UNTER der 0.8-Schwelle: kein Warm-Glow, kein Lit-Dither,
+  // keine Funken, keine Wasser-Reflexion — nur Grundaufhellung der Arena.
+  // Fehlt das Feld, passiert nichts (additiv).
+  if (mapDef.extraLights) {
+    for (const l of mapDef.extraLights) frameLights.push(l);
+  }
+
   // §2.4: Weichschatten VOR der renderables-Schleife (unter allen Entities, über
   // dem Boden) für Spieler, jeden Gegner UND jeden echten Prop.
   drawSoftShadow(player);
   for (const e of enemies) drawSoftShadow(e);
   for (const p of props) drawSoftShadow(p);
 
+  // -------------------------------------------------------------------------
+  // GRAFIKPASS 6 §4.2 — SPRITE-LICHT AM RENDERABLES-BAU (korrigierter Bauort,
+  // Review P2-M-10/P1-M9). Jede Zeichen-Closure bekommt HIER `tintCtx` statt
+  // `ctx` gereicht; eine Fassade, die erst "um die Schleife" gelegt wird,
+  // erreicht die lexikalisch gebundenen ctx dieser Closures nicht.
+  // Je Renderable stehen fest:
+  //   fy      Fusskante (Y-Sortierung, Bestand)
+  //   ax, ay  ABTASTPUNKT der Lichtabfrage = Schatten-Anker (cx, Fusskante-1),
+  //           also exakt der Punkt, an dem auch drawSoftShadow ansetzt
+  //   tint    false NUR fuer Drops und Projektile (Deklaration §9: Loot und
+  //           Wurfgeschosse sind SIGNALE, keine beleuchteten Koerper — sie
+  //           muessen im Dunkeln lesbar bleiben). Props (Vase/Urne/Truhe),
+  //           Gegner und Spieler werden GETOENT.
+  const noTint = !!window.__noTint; // Rig-Schalter M3; NUR main.js liest window
+  // Fackeln (flicker >= 0.8) fuer die Seitenwahl der Warm-Rampe.
+  const tintTorches = frameLights.filter((l) => (l.flicker || 0) >= 0.8);
+
+  function tintFor(ent, ax, ay) {
+    const lit = lightAt(frameLights, ax, ay, mapDef.ambient, timeSec, TINT_PREV.get(ent));
+    TINT_PREV.set(ent, lit); // §4.1: Hysterese-Zustand beim Aufrufer
+    const wS = Math.max(0, Math.min(3, Math.round(lit.warm * 3)));
+    const kS = Math.max(0, Math.min(2, Math.round((1 - lit.f) * 2)));
+    // §4.2 SEITE der Warm-Rampe = Vorzeichen (Fackel-x - Entity-x) der
+    // NAECHSTEN Fackel, die den Abtastpunkt ueberhaupt erreicht. Ohne solche
+    // Fackel ist warm = 0 und die Seite belanglos (Default 'WL').
+    let seite = 'WL';
+    let best = Infinity;
+    for (const l of tintTorches) {
+      const dx = l.x - ax;
+      const dy = l.y - ay;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < best && d2 < l.radius * l.radius) {
+        best = d2;
+        seite = dx >= 0 ? 'WR' : 'WL';
+      }
+    }
+    return { warmA: WARM_ALPHA[wS], kaltA: KALT_ALPHA[kS], seite };
+  }
+
   // Gemeinsame Y-Sortierung aller Welt-Entities nach Fußkante (y + h).
   // Array.sort ist stabil → bei Gleichstand bleibt Einfügereihenfolge
   // (Spieler zuletzt = bei Gleichstand oben).
   const renderables = [];
-  drops.forEach((d, i) => renderables.push({ fy: d.y + d.h, draw: () => drawDrop(ctx, camera, d, i, gfx, timeSec) }));
-  for (const p of props) renderables.push({ fy: p.y + p.h, draw: () => drawProp(ctx, camera, p, gfx, timeSec) });
-  for (const e of enemies) renderables.push({ fy: e.y + e.h, draw: () => drawEnemy(ctx, camera, e, gfx, timeSec) });
-  for (const p of projectiles.list) renderables.push({ fy: p.y + p.h, draw: () => drawProjectile(ctx, camera, p, gfx, timeSec) });
-  renderables.push({ fy: player.y + player.h, draw: () => player.draw(ctx, camera, gfx, timeSec) });
+  const pushTinted = (ent, drawFn) => {
+    const ax = ent.x + ent.w / 2;
+    const ay = ent.y + ent.h - 1;
+    const t = tintFor(ent, ax, ay);
+    renderables.push({ fy: ent.y + ent.h, ax, ay, tint: true, warmA: t.warmA, kaltA: t.kaltA, seite: t.seite, draw: drawFn });
+  };
+  drops.forEach((d, i) => renderables.push({
+    fy: d.y + d.h, ax: d.x + d.w / 2, ay: d.y + d.h - 1, tint: false, warmA: 0, kaltA: 0, seite: 'WL',
+    draw: () => drawDrop(tintCtx, camera, d, i, gfx, timeSec),
+  }));
+  for (const p of props) pushTinted(p, () => drawProp(tintCtx, camera, p, gfx, timeSec));
+  for (const e of enemies) pushTinted(e, () => drawEnemy(tintCtx, camera, e, gfx, timeSec));
+  for (const p of projectiles.list) renderables.push({
+    fy: p.y + p.h, ax: p.x + p.w / 2, ay: p.y + p.h - 1, tint: false, warmA: 0, kaltA: 0, seite: 'WL',
+    draw: () => drawProjectile(tintCtx, camera, p, gfx, timeSec),
+  });
+  pushTinted(player, () => player.draw(tintCtx, camera, gfx, timeSec));
   renderables.sort((a, b) => a.fy - b.fy);
-  for (const r of renderables) r.draw();
+  for (const r of renderables) {
+    // Die Fassade liest ihre Toenung aus tintCfg; r.draw() ist synchron, ein
+    // zweiter Zustand kann also nie gleichzeitig aktiv sein.
+    tintCfg.on = r.tint && !noTint;
+    tintCfg.warmA = r.warmA;
+    tintCfg.kaltA = r.kaltA;
+    tintCfg.seite = r.seite;
+    r.draw();
+  }
+  tintCfg.on = false; // Fassade nach der Schleife neutral (Hygiene wie gco/Alpha)
 
   // §3: Level-Up-Ring (levelup_0/1, 0,5 s) UEBER der Spieler-Fußkante.
+  // §4.2-Deklaration: laeuft NACH der Schleife am ECHTEN ctx und bleibt damit
+  // TINT-FREI — er ist ein Effekt-Overlay, kein beleuchteter Koerper.
   if (levelupTimer > 0) {
     const rimg = gfx[levelupTimer > 0.25 ? 'levelup_0' : 'levelup_1'];
     if (rimg) {
@@ -685,26 +944,8 @@ function drawWorld() {
 
   map.draw(ctx, camera, tiles, timeSec, 'over');
   if (mapDef.fog) drawFog(ctx, camera, gfx, timeSec);
-  // Lights pro Frame: Fackeln + Spieler-Laterne (lights) plus je ein Licht
-  // pro liegendem SELTENEN Item-Drop (der Diablo-Moment: guter Loot
-  // leuchtet im Dunkeln).
-  const frameLights = lights.slice();
-  for (const d of drops) {
-    if (d.kind === 'item' && d.item && d.item.rare) {
-      frameLights.push({ x: d.x + d.w / 2, y: d.y + d.h / 2, radius: 18, flicker: 0.3 });
-    }
-  }
-  // §2.4: Mini-Lichter der LEBENDEN Eliten PRO FRAME (Muster Selten-Drop-
-  // Lichter; NICHT ins statische lights-Array, das klebt am Spawn).
-  for (const l of eliteLights(enemies)) frameLights.push(l);
-  // §5.D4 [GP5]: statische Fuell-Lichter der Map (mapDef.extraLights, Engine-B
-  // setzt das Feld; BOSS_KAMMER bekommt ein Zentrums-Licht mit flicker 0.5).
-  // Sie liegen bewusst UNTER der 0.8-Schwelle: kein Warm-Glow, kein Lit-Dither,
-  // keine Funken, keine Wasser-Reflexion — nur Grundaufhellung der Arena.
-  // Fehlt das Feld, passiert nichts (additiv).
-  if (mapDef.extraLights) {
-    for (const l of mapDef.extraLights) frameLights.push(l);
-  }
+  // frameLights ist oben (vor dem renderables-Bau) fertig aufgebaut worden
+  // (GP6 §4.1) und seither unveraendert.
   // §2.3: mapDef.ambientTint als 6. Argument durchreichen (Farbtemperatur je Map).
   lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec, mapDef.ambientTint);
   // §2.4: Funken NACH dem Dunkel-Overlay und VOR der Vignette — sie sind

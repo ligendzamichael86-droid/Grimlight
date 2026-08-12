@@ -94,7 +94,17 @@ const FLUESTERGRUFT_LEGEND = {
   // den moss_fringe_*-Ufern eine additive wet_n/e/s/w-Nasskante ueber die
   // Moos-Uferkanten (nur Orthogonale). Wasser hier BEGEHBAR (solid:false).
   // §8b.1: depthOverlays wie im Friedhofsteich (Ufer flach, naechster Ring mittel).
-  '~': { art: 'water_v', solid: false, fringeTarget: true, shorePrefix: 'wet', anim: ['water_v', 'water_v_1', 'water_v_2', 'water_v_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow', 'water_mid'] },
+  // GRAFIKPASS 6 §6.1 KANAL-UFERRING: der Ufer-Ring zieht jetzt den VERTIKALEN
+  // Uferring 'water_shallow_vert' statt des horizontalen 'water_shallow'. Grund
+  // (Jury-Befund GP5 R2/R3): der Gruftkanal fliesst SENKRECHT (art 'water_v',
+  // vertikaler 4-Frame-Zyklus), sein Uferschleier trug aber die WAAGERECHTEN
+  // Baender des Teich-Grids — Stroemungsrichtung und Uferstruktur standen quer
+  // zueinander. Art (Phase 1) hat water_shallow_vert(+_v1/_v2) geliefert; die
+  // _v1/_v2-Streuung des depthArt-Passes (variantIndex(tx+617,ty+293,3)) greift
+  // automatisch, weil sie ueber den Basis-Key abgeleitet wird.
+  // Der MITTEL-Ring bleibt 'water_mid' (richtungsneutral, GP5 R3).
+  // Gate §6.1: Ufer-Anisotropie laengs >= 2,0 (Messung Phase 4).
+  '~': { art: 'water_v', solid: false, fringeTarget: true, shorePrefix: 'wet', anim: ['water_v', 'water_v_1', 'water_v_2', 'water_v_3'], animRate: 3, animSync: true, depthOverlays: ['water_shallow_vert', 'water_mid'] },
   'P': { art: 'pillar', solid: true },
   'R': { art: 'rubble', solid: true },
   'S': { art: 'sarcophagus', solid: true },
@@ -163,4 +173,32 @@ export const FLUESTERGRUFT = {
   playerLightRadius: 52,
   fog: false,             // Mobile-Overdraw (§2.5)
   torchChars: ['W'],
+  // -------------------------------------------------------------------------
+  // GRAFIKPASS 6 §3.3 — ZWEI FUELL-LICHTER IM KANALRAUM. Der Gruftkanal
+  // (Wasser-Kachelblock tx 18..22 / ty 9..16) ist der dunkelste Ort der
+  // dunkelsten Karte: er wird nur von ZWEI Wandfackeln flankiert, (18,10) im
+  // Norden und (23,15) im Sueden, beide mit r = 72. Dazwischen bleibt ein
+  // Loch — nachgemessen ueber alle 31 Kanalzellen ist die groesste Distanz zur
+  // NAECHSTEN Fackel 82 px, also weit ausserhalb jedes Kegels.
+  //
+  // POSITIONSWAHL (nicht geschaetzt, sondern das Argmax dieser Messung):
+  //   (296,264) = Kachelzentrum (18,16) — Distanz 82 px zur naechsten Fackel,
+  //               der dunkelste Punkt des Kanals ueberhaupt (Knick vom
+  //               Vertikalkanal in den gefluteten Sued-Korridor).
+  //   (360,152) = Kachelzentrum (22,9)  — Distanz 66 px, der dunkelste Punkt
+  //               der Nordhaelfte (Ostspalte, von der Fackel (18,10) am
+  //               weitesten entfernt).
+  // Beide liegen auf WASSER-Kacheln, also im Kanalraum selbst; ihr Abstand
+  // betraegt 129 px, sodass sich die Kegel ergaenzen statt zu stapeln.
+  //
+  // flicker 0.5 (BEWUSST unter der 0.8-Schwelle, Muster BOSS_KAMMER §5.D4):
+  // kein Warm-Glow, kein Lit-Dither, keine Funken, keine Wasser-Reflexion —
+  // reine Grundaufhellung des Dunkel-Overlays. Radius 80 <= 88 (§3.3-Deckel);
+  // die Kammern links und rechts des Kanals bleiben dadurch dunkel.
+  // geoHash-frei: §36 hasht playerSpawn/Spawns/Portale/torchChars-findTiles,
+  // NICHT extraLights.
+  extraLights: [
+    { x: 296, y: 264, radius: 80, flicker: 0.5 },
+    { x: 360, y: 152, radius: 80, flicker: 0.5 },
+  ],
 };

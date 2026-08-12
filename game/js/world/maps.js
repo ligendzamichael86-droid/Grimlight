@@ -79,7 +79,10 @@ const GRAVEYARD_ROWS = [
   '#=================================,...T#',
   '#=================================,...T#',
   '#I,..b...F..fiif........,..s=.dy~~....T#',
-  '#ee..Gkg....IGjhI.......III.pp~~~~~~w.T#',
+  // GP6 §6.3 WEGSPORN: die zwei Trittstein-Kacheln (28,15) und (29,15) tragen
+  // jetzt 'P' = path_pebbles statt 'p' = pebble_small (EXAKT dieselben Flags,
+  // siehe Legende) — der einzige ROWS-Tausch dieses Passes.
+  '#ee..Gkg....IGjhI.......III.PP~~~~~~w.T#',
   '#eIo........rIiI..e.....,I...~~~~~~~~~T#',
   '#re,IGIh..u..gIGI.e.....IIIIy~~~~~~~~~T#',
   '#eIeiIiI......b..,eee...IiIIFI.~~y..u.T#',
@@ -144,6 +147,67 @@ const GRAVEYARD_LEGEND = {
   'Y': { art: 'tree_canopy_back_a', span: [2, 2], solid: false },
   'Z': { art: 'tree_canopy_back_b', span: [2, 2], solid: false },
   'A': { art: 'tree_canopy_back_c', span: [2, 2], solid: false },
+  // -------------------------------------------------------------------------
+  // GRAFIKPASS 6 §5.5 — XL-KRONEN (Hebel "Maszstab"). Drei neue Groessen-
+  // klassen im Over-Layer, je + Spiegelvariante (_m):
+  //   '1'/'2' tree_canopy_xl_a(_m)  span [3,2] = 48x32 px
+  //   '3'/'4' tree_canopy_xl_b(_m)  span [4,3] = 64x48 px  (M4-Beweiszelle)
+  //   '5'/'6' tree_canopy_xl_c(_m)  span [3,2] = 48x32 px
+  // Die Zeichen '1'..'6' hat der Generator .tmp/gen_over_gp6.mjs automatisch als
+  // kollisionsfrei bestimmt (gegen GRAVEYARD_LEGEND, GRAVEYARD_ROWS und
+  // GRAVEYARD_OVER_ROWS); 'P' unten (Wegsporn) stammt aus derselben Restliste.
+  // Nie solid (Over-Layer) — man laeuft unter allen Kronen durch.
+  //
+  // swayPoses (§5.2): GEBACKENE Scher-Posen statt Pixel-Translation. Die Folge
+  // hat Laenge 8 und traegt die Auslenkungen [0,+1,+2,+1,0,-1,-2,-1] ueber die
+  // FUENF echten Posen (Basis, _r1, _r2, _l1, _l2). poses[0] === art ist
+  // Engine-Assert (tilemap.js createTilemap) und garantiert die byte-gleiche
+  // Ruhelage bei timeSec = 0. Die Belegung ist EXAKT das Feld swayPoses aus
+  // .tmp/gen_crowns_gp6_out.json (Generator-Ausgabe, nicht nachgetippt).
+  // Bei gesetztem swayPoses entfaellt die ax-Translation des Span-Zweigs
+  // (tilemap.js §5.2) — sonst schert UND wackelt die Krone.
+  //
+  // shadowArt (§5.3): EIN-Draw-Schattenbake sw*16 x 32 statt sw Einzelkacheln.
+  // Die GESPIEGELTEN Kronen (_m) ziehen bewusst DENSELBEN, UNGESPIEGELTEN
+  // Schatten-Key (Jury-Deklaration §9): die Bake-Silhouette ist stark erodiert
+  // und in Bayer-25 % gedithert, ein zweiter Spiegel-Bake waere 3 zusaetzliche
+  // Art-Grids fuer einen im Bild nicht unterscheidbaren Unterschied.
+  '1': {
+    art: 'tree_canopy_xl_a', span: [3, 2], solid: false,
+    swayPoses: ['tree_canopy_xl_a', 'tree_canopy_xl_a_r1', 'tree_canopy_xl_a_r2', 'tree_canopy_xl_a_r1',
+      'tree_canopy_xl_a', 'tree_canopy_xl_a_l1', 'tree_canopy_xl_a_l2', 'tree_canopy_xl_a_l1'],
+    shadowArt: 'canopy_shadow_xl_a',
+  },
+  '2': {
+    art: 'tree_canopy_xl_a_m', span: [3, 2], solid: false,
+    swayPoses: ['tree_canopy_xl_a_m', 'tree_canopy_xl_a_m_r1', 'tree_canopy_xl_a_m_r2', 'tree_canopy_xl_a_m_r1',
+      'tree_canopy_xl_a_m', 'tree_canopy_xl_a_m_l1', 'tree_canopy_xl_a_m_l2', 'tree_canopy_xl_a_m_l1'],
+    shadowArt: 'canopy_shadow_xl_a',
+  },
+  '3': {
+    art: 'tree_canopy_xl_b', span: [4, 3], solid: false,
+    swayPoses: ['tree_canopy_xl_b', 'tree_canopy_xl_b_r1', 'tree_canopy_xl_b_r2', 'tree_canopy_xl_b_r1',
+      'tree_canopy_xl_b', 'tree_canopy_xl_b_l1', 'tree_canopy_xl_b_l2', 'tree_canopy_xl_b_l1'],
+    shadowArt: 'canopy_shadow_xl_b',
+  },
+  '4': {
+    art: 'tree_canopy_xl_b_m', span: [4, 3], solid: false,
+    swayPoses: ['tree_canopy_xl_b_m', 'tree_canopy_xl_b_m_r1', 'tree_canopy_xl_b_m_r2', 'tree_canopy_xl_b_m_r1',
+      'tree_canopy_xl_b_m', 'tree_canopy_xl_b_m_l1', 'tree_canopy_xl_b_m_l2', 'tree_canopy_xl_b_m_l1'],
+    shadowArt: 'canopy_shadow_xl_b',
+  },
+  '5': {
+    art: 'tree_canopy_xl_c', span: [3, 2], solid: false,
+    swayPoses: ['tree_canopy_xl_c', 'tree_canopy_xl_c_r1', 'tree_canopy_xl_c_r2', 'tree_canopy_xl_c_r1',
+      'tree_canopy_xl_c', 'tree_canopy_xl_c_l1', 'tree_canopy_xl_c_l2', 'tree_canopy_xl_c_l1'],
+    shadowArt: 'canopy_shadow_xl_c',
+  },
+  '6': {
+    art: 'tree_canopy_xl_c_m', span: [3, 2], solid: false,
+    swayPoses: ['tree_canopy_xl_c_m', 'tree_canopy_xl_c_m_r1', 'tree_canopy_xl_c_m_r2', 'tree_canopy_xl_c_m_r1',
+      'tree_canopy_xl_c_m', 'tree_canopy_xl_c_m_l1', 'tree_canopy_xl_c_m_l2', 'tree_canopy_xl_c_m_l1'],
+    shadowArt: 'canopy_shadow_xl_c',
+  },
   // Grafikpass 2: Boden-/Weg-/Mauer-Varianten gegen Flächen-Wiederholung
   // (variants[0] === art, deterministische Wahl aus der Tile-Koordinate).
   // §PRIO2 [GP4 R3] (Jury K1 "Gras-Tapete"): drei zusaetzliche Basis-Gras-Varianten
@@ -197,8 +261,17 @@ const GRAVEYARD_LEGEND = {
   // variantIndex-Wahl streut die Ausrichtung, ohne Laufzeit-Flip.
   // §2.A2 UNGERADE-n-SWEEP: 'u' hatte n=2 (gerade) — die dritte Variante
   // grass_tuft_v1 (Art, §2.A2) macht daraus n=3.
-  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_tuft', 'grass_tuft_r1', 'grass_tuft_v1'] },
-  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_blade', 'grass_blade_v1', 'grass_blade_r1'] },
+  // GRAFIKPASS 6 §6.5 GRAS-POOLS 'u'/'j': n 3 -> 5. Art (Phase 1) hat je ZWEI
+  // GROESSENSTUFEN nachgelegt (grass_tuft_sm/_lg bzw. grass_blade_sm/_lg); sie
+  // haengen ans ENDE der Liste, variants[0] === art bleibt (Engine-Assert,
+  // smoke §6#4e). n = 5 ist UNGERADE und teilerfremd zu JEDEM anderen n, das an
+  // DERSELBEN Kachel zieht (§0.6): am Ort einer Deko-Zelle rechnen sonst nur die
+  // VERSETZTEN Hashes (Anker 29/17, Bank 7, Tiefe 3, Lit-Dither 2) — die
+  // untranslatierte variantIndex(tx,ty,n) zieht je Kachel genau EINMAL, weil
+  // eine Kachel genau ein Legendenzeichen traegt. gcd(5,29)=gcd(5,17)=gcd(5,7)=
+  // gcd(5,3)=gcd(5,2)=1.
+  'u': { art: 'grass_tuft', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_tuft', 'grass_tuft_r1', 'grass_tuft_v1', 'grass_tuft_sm', 'grass_tuft_lg'] },
+  'j': { art: 'grass_blade', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_blade', 'grass_blade_v1', 'grass_blade_r1', 'grass_blade_sm', 'grass_blade_lg'] },
   'k': { art: 'grass_speck', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g', variants: ['grass_speck', 'grass_speck_v1', 'grass_speck_r1'] },
   // Grafikpass 4 §3.8b/§4 Gras-Sway: zwei animierte Deko-Glyphen (Halme wiegen
   // sich, zweiter Frame _f1). Eigene Zeichen, weil variants UND anim an EINEM
@@ -290,6 +363,21 @@ const GRAVEYARD_LEGEND = {
       'grass_lumalo', 'grass_lumalo_mix', 'grass_lumalo_mix75'],
   },
   'p': { art: 'pebble_small', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
+  // GRAFIKPASS 6 §6.3 WEGSPORN. Der 3-Kachel-Sporn vom Hauptweg an das
+  // Teich-Westufer ((28,14)->(28,15)->(29,15), GP5 R2 .tmp/gen_teich_gp5r2.mjs)
+  // lief bisher komplett ueber 'p' = pebble_small — dieselbe Einzelkiesel-Kachel
+  // wie die gestreute Wiesen-Deko. Die zwei TRITTSTEIN-Kacheln bekommen jetzt
+  // ein eigenes Grid: 'P' = path_pebbles (Art, Phase 1), ein dichteres
+  // Kiesel-Pflaster, das den Sporn als WEG statt als Deko liest.
+  // Zeichen 'P': aus der Restliste des Generators .tmp/gen_over_gp6.mjs
+  // ("freie_zeichen_uebrig"), gegen GRAVEYARD_LEGEND, GRAVEYARD_ROWS und
+  // GRAVEYARD_OVER_ROWS geprueft kollisionsfrei.
+  // FLAGS EXAKT WIE 'p' (bindend, §6.3): solid false, fringeSource, fringeSet
+  // 'grass', bankSet 'g'. Damit ist der Tausch emissions-neutral — der Fringe-/
+  // Bank-/Shore-Nachbarschaftscode liest ausschliesslich diese vier Flags, die
+  // sechs Nachbarzellen emittieren byte-gleich, und weil solid unveraendert
+  // false bleibt, sind solHash UND geoHash (§36) unberuehrt.
+  'P': { art: 'path_pebbles', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   'd': { art: 'dirt_patch', solid: false, fringeSource: true, fringeSet: 'grass', bankSet: 'g' },
   // Seltenes Grossdetail (H-K1, ~1/6-8 der Detail-Zellen): kraeftigere Erdfleck-Variante.
   // §2.A2 UNGERADE-n-SWEEP: n war 2 (gerade) und stand NICHT auf der Spec-Liste —
@@ -375,30 +463,52 @@ const GRAVEYARD_LEGEND = {
 //    LEER — das §4.C2-Culling zieht tyEnd um +1 und txStart um 1 nach links.
 // Anker-Offset kommt zur Laufzeit aus tilemap.js (§4.C2: dx pro Anker-Klasse
 // bis ±14, dy -4..+4; der canopy_shadow wandert mit).
+//
+// GRAFIKPASS 6 §5.5 — NEU ERZEUGT (.tmp/gen_over_gp6.mjs, Ausgabe
+// .tmp/gen_over_gp6_rows.txt, hier byte-gleich uebernommen). Der GP5-Stand war
+// eine gestreute Einzelkronen-Landschaft ohne Maszstabssprung: die groeszte
+// Silhouette war 32x32 px, also zwei Kacheln — auf 320x180 liest das als
+// Buschwerk, nicht als Baumkrone. Das neue Raster:
+//  * ZWEI GESCHLOSSENE XL-DAECHER. Nord um (31,9) MIT 'tree_canopy_xl_b'
+//    (Anker (30,8), deckt Tiles 30..33 / Zeilen 8..10) — die M4-Beweiszelle
+//    (31,9) liegt mittig darunter, der Spieler laeuft dort mit dem KOPF durch
+//    das Laub (verdeckt_kopf 191 / silhouette_kopf 191 = Quotient 1,000).
+//    Suedwest um (12,22) mit 'tree_canopy_xl_b_m' (Anker (10,21)).
+//  * SPALTEN-PITCH 2 im Dach (16 px Ueberlappung): bei Pitch 3 rissen die
+//    +-4-px-Anker-Jitter (ANCHOR_CLAMP W=4) Loecher ins Dach.
+//  * 2x2- und Back-Kronen AUSGEDUENNT (2x2 22->21, Back 18->7, 'B' 10->0),
+//    'C'-Mittelcluster unveraendert (6). Gesamt 56 -> 64 Anker.
+//  * GUARDS zeilenexplizit eingehalten (Generator-Selbstpruefung, §5.5):
+//    Spalte 21 leer in ALLEN Zeilen 0..12; Zeile 12 leer in ALLEN Spalten
+//    0..21. Beides haelt das Culling-Fenster des Smoke-Tests (smoke:695-697)
+//    stabil, obwohl der Over-Zweig jetzt bis tx1+1 laeuft (§5.4).
+//  * KEINE span-Zeichen in den Ground-rows, keine Fackelzeichen im Over-Layer,
+//    Maszgabe 24x40 unveraendert. sol/geo bleiben unberuehrt (solHash liest nur
+//    Ground-rows, geoHash nur Spawns/Portale/findTiles('F')).
 const GRAVEYARD_OVER_ROWS = [
-  'MO......X............................V..',
-  '......................................Y.',
-  '.B....................................N.',
+  '.O......X...............................',
+  'Q.....................................Y.',
   '........................................',
-  '.....................................AB.',
-  '.....................................O..',
-  '.....................................A..',
-  'Z..............................Y......Q.',
-  'M............................Y.M........',
-  '..............................O......YB.',
-  '.B...................................V..',
-  '.B....................................Z.',
-  '......................................N.',
-  '......................................Y.',
   '.....................................X..',
   '........................................',
-  '..................C...C..............AB.',
-  'Y...................C.................N.',
+  '.....................................O..',
+  '.........................1.6.2.5.1.6.A..',
+  '........................................',
+  'M.......................5.2.6.3...1.5...',
+  'V.......................................',
+  'V........................6.1.5.2.6.1.V..',
+  '......................................Z.',
+  '......................................N.',
+  '........................................',
+  '.....................................X..',
+  '.....................................Q..',
+  '..................C...C.................',
+  '....................C.................N.',
   'V....................................Z..',
-  '..Y.................C.C..............Q..',
-  '.QYY........Y..........CY.........A.....',
-  '.MX.........V............X.........N.BB.',
-  '.....................................BB.',
+  '..Y.................C.C.................',
+  '.QY....5.2.6.1.5.2.....C..........A..Q..',
+  '.MX.......4..............X..........XQ..',
+  '......1.6.....5.2.......................',
   '........................................',
 ];
 
