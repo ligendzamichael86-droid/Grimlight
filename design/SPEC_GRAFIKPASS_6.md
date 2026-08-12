@@ -1,508 +1,548 @@
-# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 1, 07.08.2026, Fable)
+# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2, 12.08.2026, Fable)
 
 Grundlage: Michaels Entscheid OPTION A (design/DOSSIER_GRAFIKBLOCK.md),
-Landkarte design/GP6_LANDKARTE.md (wf_69e483d4-2fd, HEAD 7e1d86d).
-Umfang: Dossier-Hebel 1-4 plus R3-Restliste. Hebel 5
-(Karten-Autorenschaft) ist NICHT Teil dieses Passes.
+Landkarte design/GP6_LANDKARTE.md, adversarialer Review
+design/GP6_SPEC_REVIEW.md (3 Prüfer, 16 BLOCKER / 35 MAJOR /
+20 MINOR — ALLE eingearbeitet; die "Geprüft OK"-Listen der Prüfer
+gelten als bestätigt und werden nicht erneut debattiert).
+Umfang: Dossier-Hebel 1-4 plus R3-Restliste. Hebel 5 ist NICHT Teil
+dieses Passes.
 
-**NEU: Die Abnahme läuft über MESSZIELE (§1), nicht über die
-10er-Skala.** Die Jury prüft, ob die Messungen das Richtige messen,
-und liefert Sichtbefunde — aber "fertig" ist definiert, bevor der
-erste Agent baut, und kann nicht mehr wandern.
+**Abnahme über MESSZIELE (§1), nicht über die 10er-Skala.** Zwei
+Schwellen (§1-Eichung) werden in Phase 0 nach festgelegter FORMEL
+aus Vormessungen abgeleitet, VOR Baubeginn als Rev 2.1 eingetragen
+und sind danach unveränderlich. Alle anderen Schwellen stehen hier.
 
 ---
 
 ## §0 Eiserne Regeln
 
-0.1 **Kanonische Flusstests** (.tmp/check_main_slice1.mjs,
-check_inventory_slice2.mjs, check_boss_slice3.mjs): NULL Änderungen
-— mit der EINEN Ausnahme der sanktionierten Ambient-Zeilen aus §7.A.
-Keine Stub-Erweiterungen. `.tmp/check_lighting_input_slice1.mjs` ist
-BEKANNT ROT und NICHT kanonisch (Landkarte T1 §0) — kein Agent
-behandelt ihn als Regression, niemand fasst ihn an.
-`.tmp/debug_victory_*.mjs` sind tot — nicht anfassen.
+0.1 **Kanonische Flusstests**: NULL Änderungen außer den
+sanktionierten Ambient-Zeilen §7.A. Keine Stub-Erweiterungen.
+`.tmp/check_lighting_input_slice1.mjs` ist BEKANNT ROT, nicht
+kanonisch; `.tmp/debug_victory_*.mjs` tot — beide nicht anfassen.
 
-0.2 **ambientAlpha-Detektor** (inhaltlich, Zeilennummern wandern):
-Der Ambient-Fill in lighting.js (heute :138, `octx.globalAlpha =
-ambient` + `fillRect` Vollbild) bleibt der ERSTE und EINZIGE
-fillRect mit 0 < globalAlpha < 1 auf einem Nicht-Main-Canvas in
-jedem Frame. JEDE weitere Offscreen-Zeichnung führt ihre Deckung in
-der rgba(...)-Füllfarbe bei globalAlpha === 1 — das gilt
-ausdrücklich AUCH für destination-out-Stanzen per fillRect (§2).
-Kein zweites Offscreen aus dem OFFSCREEN-Kontext erzeugen
-(ownerDocument-Crash, Landkarte T1 §1.2); neue Offscreens nur aus
-dem Haupt-ctx und erst NACH main.js:71.
+0.2 **ambientAlpha-Detektor**: Der Ambient-Fill in lighting.js
+(heute :138) bleibt der ERSTE und EINZIGE fillRect mit
+0 < globalAlpha < 1 auf einem Nicht-Main-Canvas. Jede weitere
+Offscreen-Zeichnung (auch destination-out-Stanzen per fillRect)
+führt die Deckung in rgba(...) bei globalAlpha === 1. Kein
+Offscreen aus dem Offscreen-Kontext; neue Canvases nur aus dem
+Haupt-ctx und erst NACH main.js:71.
 
-0.3 **Canvas-Whitelist** wie GP4/GP5 (SPEC_GRAFIKPASS_4.md:35-42):
-fillRect, drawImage (bei Licht/Overlays/Tiles NUR 3-Argument), arc,
-fill, beginPath, save, restore, clearRect, createRadialGradient,
-fillText + globalAlpha/globalCompositeOperation/fillStyle.
-VERBOTEN bleibt insbesondere getImageData/putImageData und jede
-Transform. Nach JEDEM lighter-/destination-out-Block expliziter
-Reset `globalCompositeOperation='source-over'; globalAlpha=1`
-(check_boss-restore stellt gco NICHT wieder her).
+0.3 **Canvas-Whitelist** wie GP4/GP5; drawImage bei
+Licht/Overlays/Tiles NUR 3-Argument (dokumentierte Einzelausnahme
+§2.4-Stufe 2, falls gezogen). Nach jedem lighter-/destination-out-
+Block expliziter Reset gco='source-over', globalAlpha=1.
 
-0.4 **Golden-Hashes sol/geo: NULL Änderungen.** Ein geo-Drift ist
-ein STOPP-Signal. Die AMBIENT-Konstante smoke:1996 ist davon
-getrennt und über §7.B sanktioniert.
+0.4 **Golden-Hashes sol/geo: NULL Änderungen** (geo-Drift =
+STOPP-Signal). Die AMBIENT-Konstante smoke:1996 ist §7.B.
 
-0.5 **Reihenfolge-Wächter:** Neue SPRITES-/TILE_ART-Keys NUR ans
-ENDE der Objektliterale; neue Flip-Keys NUR ans Ende der Liste
-main.js:55-68; neue Canvases (Tint-Masken, Bakes) entstehen
-frühestens nach main.js:71 (Canvas→Name-Mapping der Flusstests
-läuft über die Erzeugungsreihenfolge, Indizes 0..74 sind bindend).
-Der ERSTE drawImage je Entity-Sprite bleibt IMMER das
-Original-Canvas aus gfx (Wächter B, Landkarte T3 §4.1).
+0.5 **Reihenfolge-Wächter**: Neue SPRITES-/TILE_ART-Keys nur ans
+ENDE; neue Flips ans Ende von main.js:55-68; neue Canvases erst
+nach main.js:71. Namensbasierte Test-Assertions existieren NUR auf
+SPRITES-Indizes 0..74 — die TILE_ART-Namen der Flusstests sind
+bereits heute verschoben und dürfen von keiner neuen Assertion
+benutzt werden (Review P1-m7). Der ERSTE drawImage je
+Entity-Sprite bleibt IMMER das Original-Canvas aus gfx.
 
-0.6 **Hash-Disziplin:** variantIndex nur mit UNGERADEM n,
-teilerfremd zu 3/5/7/17/29/47 am selben Ort, versetzte Koordinaten.
+0.6 **Hash-Disziplin**: variantIndex nur mit UNGERADEM n,
+teilerfremd zu 3/5/7/17/29/47 am selben Ort, versetzte
+Koordinaten. `swayPose8` ist rein ZEITBASIERT nach dem
+swayPhase-Muster (tilemap.js:576-587, Cluster-Versatz
+SWAY_CLUSTER_N=7, Modulo 8) — KEIN variantIndex mit n=8.
 Kein Math.random/Date.now in world/ und art/.
 
-0.7 **fringeOverlays bleibt byte-eingefroren**; jede neue Emission
-lebt in NEUEN Funktionen (Komplement-Regel wie GP5).
+0.7 **fringeOverlays byte-eingefroren**; neue Emission nur in
+NEUEN Funktionen.
 
-0.8 **Die 0.8-Flicker-Schwelle** (Warm-Glow/Lit-Dither/Reflexion)
-wandert nicht.
+0.8 **Die 0.8-Flicker-Schwelle wandert nicht.**
 
-0.9 **Tabu-Aufhebungen für GP6** (eng): core/lighting.js,
-core/sprite_factory.js (nur additiv: buildTintMask), main.js
-(Zeichenblöcke, Schatten, Fassaden-ctx), ui/hud.js, world/tilemap.js
-(additiv + die zwei sanktionierten Bestandsstellen §7), world/maps.js
-+ map_fluestergruft.js + map_bosskammer.js (ambient/Tint/extraLights/
-Legenden/OVER_ROWS/depthOverlays), art/*. entities/ bleibt TABU
-(die Fassade macht Sprite-Licht ohne entities/-Zeile möglich).
-God-Mode-Verhalten (7e1d86d) bleibt unangetastet.
+0.9 **Tabu-Aufhebungen** (abschließend): core/lighting.js;
+core/sprite_factory.js (additiv buildTintMask); main.js
+(Zeichenblöcke, Schatten, renderables-Bau §4.2); ui/hud.js;
+world/tilemap.js — additiv PLUS GENAU DREI Bestandsstellen:
+(a) Over-Zeichenpfad wählt swayPoses-Pose (§5.2, Marker GP6-§7C2),
+(b) canopy_shadow-Zeichenort wandert in den Zweitpass (§5.3,
+GP6-§7C3), (c) Culling-Grenze (§5.4, GP6-§7C4); world/maps.js +
+map_fluestergruft.js + map_bosskammer.js; art/*. entities/ TABU.
+God-Mode-Verhalten (7e1d86d) bleibt; `.tmp/probe_god.mjs` steht
+in der Grün-Liste §10.
 
-0.10 Port 8123 NIE anfassen; Agenten-Server auf 8124.
-Commit-Disziplin: Hauptloop committet jeden grünen Stand.
+0.10 Port 8123 NIE; Agenten-Server 8124. Hauptloop committet
+jeden grünen Stand.
+
+0.11 **KEINE neuen Palettenschlüssel** — 61 alnum + 3 Symbole
+bleiben exakt; alle Ton-Änderungen sind Wert-Änderungen
+bestehender Schlüssel (Review P1-m5).
 
 ---
 
-## §1 MESSZIEL-ABNAHME (das neue Abnahmesystem)
+## §1 MESSZIEL-ABNAHME
 
-**Werkzeug:** `.tmp/shot_gfx6.py` — portiert Rig, Kamera-Disziplin,
-Crop/Strip, Teillauf-Merge und die übernehmbaren Gates aus
-shot_gfx5.py (Landkarte T6 §1). Mess-Disziplin bindend wie GP5:
-(a) Juror-eigene bzw. hier Spec-eigene Metrik, (b) validierte
-Fenster, (c) Positiv- UND Negativ-Kontrolle je Methode, (d) Modus
-über 9 Läufe bei allem Bewegten, (e) Schwellen werden NIE
-nachträglich angepasst. Messung auf dem internen 320×180-Backing-
-Store, Luminanz Rec.601, HUD-Maske wie Landkarte T2 §3 (Panel +
-Boss-Bar IMMER + Item-Box, je +1 px Rand).
+Werkzeug `.tmp/shot_gfx6.py` (Port von shot_gfx5.py). Bindende
+**Nachzugsliste beim Port** (Review P3-M8, P1-M7): GLANZ_RGB auf
+den neuen '='-Hex; wegsporn-Sollwerte auf das neue Zeichen +
+`path_pebbles`; alle Ton-Tripel aus der P0b-Offset-Tabelle;
+WRAP_PLAYER auf `(...a)`-Durchreichung korrigieren (God-Mode-Arg);
+neuer Rig-Schalter `window.__noTint` (von der §4.2-Fassade in
+main.js gelesen — main.js darf window lesen); neuer Schalter
+`__noCanopyShadow` im tilemap-Wrapper. Mess-Disziplin wie GP5
+(Juror-/Spec-eigene Metrik, validierte Fenster, Positiv- UND
+Negativ-Kontrolle, 9-Lauf-Modus bei Bewegtem, Schwellen nach
+Eintrag NIE anpassen). Messung auf dem 320×180-Backing-Store,
+Rec.601, HUD-Maske Panel+BossBar+ItemBox je +1 px.
 
-**Der Pass ist abgenommen, wenn ALLE Messziele M1-M5 grün sind UND
-die Jury (§9) keinen neuen Prio-0-Befund meldet.** Die 10er-Note
-wird weiterhin erhoben, ist aber INFORMATIV.
+**Abnahme: alle Messziele M1-M5 grün UND Jury (§9) ohne neuen
+Prio-0.** 10er-Note informativ.
 
-### M1 Belichtung (je Karte, feste Kameras aus Landkarte T2 §3)
+**Phase-0-Eichung (Formel fix, danach eingefroren):** Zwei
+Schwellen werden in P0 gemessen und als Rev 2.1 eingetragen:
+(E1) M1-Highlight-Spalte, (E2) M2-Glow-Vielfalt. Formeln unten.
 
-| Karte | Median-L | Anteil L>128 | Anteil L<16 |
+### M1 Belichtung (feste Kameras aus Landkarte T2 §3)
+
+| Karte | Median-L | Highlight (E1) | Anteil L<16 |
 |---|---|---|---|
-| GRAVEYARD (beide Szenen) | 38..46 | ≥ 0,5 % | ≤ 2,0 % |
-| CATACOMBS | 40..50 | ≥ 2,0 % | ≤ 6,0 % |
-| FLUESTERGRUFT | 34..44 | ≥ 1,5 % | ≤ 8,0 % |
-| BOSS_KAMMER | 38..48 | ≥ 1,5 % | ≤ 4,0 % |
+| GRAVEYARD (beide Szenen) | 38..46 | Anteil L>96 ≥ E1a | ≤ 3,0 % |
+| CATACOMBS | 40..50 | Anteil L>128 ≥ E1b | ≤ 6,0 % |
+| FLUESTERGRUFT | 33..44 | Anteil L>128 ≥ E1c | ≤ 8,0 % |
+| BOSS_KAMMER | 38..48 | Anteil L>128 ≥ E1d | ≤ 4,0 % |
 
-Positiv-Kontrolle: Messung auf dem GP5-Archivbild reproduziert
-Median 24,9 (graveyard_teich) ±0,5. Negativ-Kontrolle:
-Schwarzbild-Test (Median < 5, L>128-Anteil 0). IST-Werte: T2 §3.1.
+Highlight außen auf L>96 (Break-even-Rechnung Review P2-B4/P3-B7:
+L>128 ist außen physikalisch nicht erreichbar — die Rev-1-Spalte
+war falsch). **E1-Formel:** P0b simuliert die Offset-Palette auf
+den palette_pur-Bildern + Ambient-Blend; E1x := max(1,25 × IST,
+0,6 × Simulationswert), je Karte, auf 2 Nachkommastellen.
+**Goodhart-Gegen-Gate:** Highlight-Texel verteilen sich auf ≥ 3
+Palettenton-Klassen und ≥ 12 zusammenhängende Cluster; kein
+Einzelton stellt > 60 % (Review P3-M13). Positiv-Kontrolle:
+GP5-Archivbild reproduziert Median 24,9 ±0,5. Negativ-Kontrolle:
+Schwarzbild (Median < 5, Highlight 0).
 
 ### M2 Licht-Quantisierung (3-Kanal-Schätzer, validiert T6 §4b)
 
-A/B-Aufnahme (mit Licht / `__noLight`), Restdunkelheit a per
-Least-Squares, CATACOMBS-Kamera (40,190):
-- `lichtstufen_anzahl`: distinkte a-Werte (Raster 0,01) in der
-  Punch-Zone **≤ 12** (IST 77).
-- `lichtstufen_plateau_anteil`: Texel auf einer der DEKLARIERTEN
-  Stufen (±0,01) **≥ 95 %** (IST 49,3 %). Stufenliste wird aus der
-  Engine-Konstante hergeleitet (§2), nicht frei gewählt. Abtastung
-  auf 2×2-Block-Zentren (Bayer-Kanten zählen nicht als Stufen).
-- Gradient-Schnitt vom Fackelzentrum (72 px): 8..12 Sprünge, jeder
-  ≥ 0,04, kein Plateau < 3 px — als Jury-Bild beigelegt.
-- Glow-Zone getrennt: distinkte (A−B)-Werte ≤ 24 (gestufte Ringe ×
-  quantisierter Pulse, §2.6).
-Kontrollen: A-gegen-A → exakt 1 Stufe; fackelferne Zone → a ==
-mapDef.ambient ±0,01 (beide bereits nachgewiesen, T6 §4b).
+A/B-Aufnahme (Licht / `__noLight`), CATACOMBS-Kamera (40,190),
+Zeit eingefroren, fester Pulse.
+- **Mess-Zone (bindend, Review P3-M3):** Vereinigung der Ringe
+  `0,48·r < d ≤ r` über alle Fackeln im Bild (Warm-Glow-frei);
+  Fenster-Validierung im Report.
+- **Abtastung:** 2×2-Block-MITTELWERT (Review P1-m5/m5-Def).
+- `lichtstufen_anzahl`: distinkte a-Werte (Raster 0,01) **≥ 9 und
+  ≤ 13** (Untergrenze = Goodhart-Sperre gegen Vergröbern, Review
+  P3-M6; 13 = LIGHT_STEPS+1, Review P1-B2).
+- `lichtstufen_plateau_anteil` **≥ 95 %** (±0,01) gegen die
+  DEKLARIERTE Liste `{ambient·k/12, k=0..12}` (folgt aus der
+  relativen Quantisierung §2.1 — das Fernfeld liegt exakt auf
+  k=12 = ambient; Review P3-B1/M4).
+- **Gradient-Schnitt** (Jury-Bild, NUR CATACOMBS): a entlang
+  72 px vom Fackelzentrum, ausgewertet auf Block-Mittelwerten;
+  **≥ 8 und ≤ 13 Sprünge**, jeder ≥ 0,04 (0,55/12 = 0,0458 ✓),
+  kein Plateau < 2 Blöcke (Review P2-B5: 2-px-Blöcke können keine
+  3-px-Plateaus garantieren).
+- **Glow-Zone getrennt (E2):** distinkte (A−B)-Luminanzwerte auf
+  Block-Mitteln, EINE freistehende Fackel (kein zweiter Kegel in
+  d < 2r), Ring d ≤ 0,48·r, fester Pulse. **E2-Formel:** P0a misst
+  IST; E2 := max(24, 0,6 × IST), ganzzahlig (Review P3-M5).
+Kontrollen: A-gegen-A → 1 Stufe; Fernzone → a == ambient ±0,01
+(exakt erfüllbar dank §2.1).
 
-### M3 Sprite-Beleuchtung (Verfahren T6 §4c)
+### M3 Sprite-Beleuchtung
 
-Silhouetten-Vergleich NAH (unter Fackel) / FERN, CATACOMBS; Spieler
-UND ein Skelett (Gegner = ohne Eigenlicht, Pflichtmessung):
-- `ΔWarm = (R−B)_nah − (R−B)_fern` **≥ +18** (IST +5,6).
+Silhouetten-Vergleich NAH/FERN, CATACOMBS; Frames FESTGENAGELT:
+`player_down_0` und `skeleton_0`, UNGESPIEGELT, Blickrichtung per
+Rig gesetzt (Review P2-M-4). `dE` := euklidischer RGB-Abstand der
+Silhouetten-Mittelfarben (Review P3-m6).
+- `ΔWarm = (R−B)_nah − (R−B)_fern` **≥ +18** (Prüfer-Modell:
+  ≈ +68 erreichbar).
 - Halbseiten-Modellierung: L-Differenz fackelzugewandte gegen
-  -abgewandte Silhouettenhälfte NAH **≥ +6 L**; FERN < 2 L.
-- Ausbrennen: 0 Silhouetten-Texel mit L > 240.
-Positiv-Kontrolle: mit `__noLight` sind ΔWarm und dE == 0.
-Negativ-Kontrolle: zwei ferne Standorte gegeneinander: dE < 4.
+  -abgewandte Hälfte NAH **≥ +6 L** (per Zweiton-Rampe §4.2);
+  Kontrolle: dieselbe Differenz mit `__noTint` < 2 L (Differenz
+  zur ungetönten Referenz DESSELBEN Frames — die Kunst selbst darf
+  asymmetrisch sein, Review P2-M-4).
+- Ausbrennen: 0 Silhouetten-Texel L > 240.
+Positiv-Kontrolle: `__noTint` UND `__noLight` → dE == 0 gegen
+Referenz. Negativ-Kontrolle: zwei ferne Standorte, gleicher Frame:
+dE < 4.
 
 ### M4 Kronen-Maßstab & Verdeckung
 
-- Art-Ebene (check_gfx6_art): ≥ 3 Kronen-Keys mit Tinten-Bbox
-  ≥ 40×28, davon ≥ 1 mit ≥ 56×40 (IST-Maximum 32×31).
-- Geschlossenes Dach: bestes 48×32-Fenster auf GRAVEYARD ≥ 85 %
-  Kronen-Pixel-Deckung (IST 70 %).
-- Spieler-unter-Laub (A/B/C/D-Verfahren, Beweiszelle NEU nach §5.5):
-  `verdeckt_kopf ≥ 120` Texel UND Quotient verdeckt/silhouette
-  ≥ 0,75 (IST-Gate: 52 Texel, alte Zelle). NEU Pflicht-Kontrollen:
-  A-gegen-A → silhouette 0; kronenfreie Standkachel → verdeckt 0.
-- Kein Rechtsrand-Ploppen: Culling-Fix §5.4 per Smoke belegt.
+- Art (check_gfx6_art): ≥ 3 Kronen-Keys Tinten-Bbox ≥ 40×28,
+  ≥ 1 mit ≥ 56×40.
+- Dach: bestes 48×32-Fenster GRAVEYARD ≥ 85 % Kronen-Pixel;
+  **Gegen-Gate:** im Fenster ≥ 2 verschiedene XL-Keys, kein Key
+  > 60 % Anteil (Review P3-M15).
+- Spieler-unter-Laub, Beweiszelle UNTER EINER xl_b-KRONE
+  (span [4,3], §5.5): Kopf-Fenster = oberste 16 Sprite-Zeilen
+  (KRONEN_HEAD_ROWS_GP6 = 16, span-generisch hergeleitet, Review
+  P3-B5/P1-M8); `verdeckt_kopf ≥ 100` UND
+  `verdeckt_kopf / silhouette_kopf ≥ 0,75`.
+  Kontrollen: silhouette_kopf > 0; kronenfreie Kachel → 0;
+  A-gegen-A → 0.
+- Kein Rechtsrand-Ploppen (§5.4, Smoke-Beleg).
 
-### M5 Kontaktschatten-Abdeckung (Verfahren T6 §4e)
+### M5 Kontaktschatten-Abdeckung
 
-- Geometrie (Smoke, additiv): JEDE Klasse Spieler/Skelett/Ghul/
-  Grufthund/Rostpanzer/Boss/Vase/Urne/Truhe hat ≥ 8 sichtbare
-  Schatten-Texel UNTER der Fußkante (IST: 0 überall außer Boss 18).
-- Bild: ΔL ≥ 6 auf ≥ 8 Texeln unter der Fußkante, in mindestens
-  zwei Karten (außen + innen), Entity-da/weg-Differenzmaske.
-Positiv-Kontrolle: der Boss (heute 18) muss grün sein.
-Negativ-Kontrollen: Projektil → 0; Frame-gegen-sich-selbst → 0.
+- Geometrie (Smoke additiv): jede Klasse ≥ 8 sichtbare
+  Schatten-Texel UNTER der Fußkante (Prüfer bestätigt: 11..18
+  erreichbar).
+- Bild: ΔL ≥ 6 auf ≥ 8 Texeln unter der Fußkante, außen + innen;
+  **Innen-Messort in einem Fackelkegel (a ≤ 0,15), Vignetten-Zone
+  d > 90 px vom Bildzentrum ausgeschlossen** (Review P2-M-9: ohne
+  Kegel ist ΔL 6 innen arithmetisch unerreichbar).
+Positiv-Kontrolle: Boss grün. Negativ: Projektil → 0;
+Frame-gegen-sich-selbst → 0.
 
 ---
 
-## §2 PAKET L — Licht-Quantisierung (Hebel 1)
+## §2 PAKET L — Licht-Quantisierung
 
-**Weg: Landkarte T1 Option (d)** — das Offscreen-Lichtbild wird
-rechnerisch als quantisiertes Stufenbild gebaut, nicht mehr per
-arc-Stanzen. Präzedenz: Vignette-Bake hud.js:454-509.
-
-2.1 **Stufen-Konstante** in lighting.js (exportiert):
-`LIGHT_STEPS = 12` Stufen der Restdunkelheit, gleichverteilt
-zwischen 0 und 1: `quantizeLight(f)` rundet auf k/12. Diese eine
-Funktion ist die Quelle für Overlay (2.3), lightAt (§4.1) und
-Tint-Stufen (§4.2) — Drift ausgeschlossen.
+2.1 **RELATIVE Quantisierung (Kern-Korrektur, Review P3-B1):**
+`LIGHT_STEPS = 12`; `quantizeLight(rest) = round(rest·12)/12` auf
+der REST-Helligkeit rest ∈ [0,1] (Produkt der Licht-Profile,
+OHNE ambient). `a = ambient · quantizeLight(rest)`. Damit:
+Stanz-Alpha `X = 1 − quantizeLight(rest) ∈ [0,1]` (nie negativ),
+Fernfeld exakt a = ambient, jeder Kegel trägt 13 Stufen unabhängig
+vom Karten-Ambient, Gradient-Schnitt 8+ Sprünge möglich.
+quantizeLight wird GENAU EINMAL auf das fertige PRODUKT
+`rest = Π rest_l` angewandt (nie je Licht; Review P2-M-2).
 
 2.2 **Pure Funktion** `lightRuns(lights, camera, ambient, timeSec,
-viewW, viewH)` in lighting.js (Node-testbar, additiv): rechnet je
-2×2-Block die kombinierte Restdunkelheit `a = ambient · Π rest_l`
-(Ring-Profil aus einer Lookup-Tabelle, die das bisherige
-PUNCH_RINGS-Kumulativ 1/0,82/0,64/0,461/0,299/0,15/0 auf 12 Stufen
-verfeinert), quantisiert per quantizeLight + Bayer-4×4 auf
-Blockebene, und liefert waagerechte LÄUFE gleicher Stufe
-`{x, y, w, h:2, stufe}`. Rechnen NUR innerhalb der
-Licht-Bounding-Boxen; außerhalb gilt Stufe "voll ambient".
-Flicker-Radius wird auf GANZE 2-px-Schritte gerundet (nimmt den
-Subpixel-Shimmer, T1 §2d); der Anti-Kornkreis-Jitter rWob geht in
-die Lookup-Distanz ein und BLEIBT (T1 §5d).
+viewW, viewH)` in lighting.js: liefert eine **paarweise DISJUNKTE
+Partition** der Vereinigung aller Licht-Bounding-Boxen (jeder
+Texel wird GENAU EINMAL gestanzt — mehrfaches destination-out
+erzeugte die Zwischenstufen neu, Review P3-M2) als
+Scanline-Segmente `{x, y, w, h:2, k}` je 2-px-Zeile:
+**Ringband-Läufe, NICHT je 2×2-Block** — Bayer nur als
+±1-Block-SAUM an den Stufengrenzen (Review P2-B2: Voll-Bayer
+zerschlägt die Läufe auf ~7800/Frame = 10,4 ms; Saum-Bayer ist
+Ziel ≤ 1200 Läufe). Flicker-Radius auf ganze 2-px-Schritte
+gerundet; rWob-Jitter in der Lookup-Distanz bleibt.
+**KEIN Frame-Cache** (Review P2-B3: Invalidierung ~100 %/Frame,
+bewegte Lichter machen jeden Schlüssel falsch) — es wird jeden
+Frame gerechnet; die Kosten steuert die Lauf-Obergrenze.
 
-2.3 **draw()**: Ambient-Fill UNVERÄNDERT als erste Operation
-(Detektor-Sonde, §0.2). Danach statt arc-Stanzen: für jeden Lauf
-`destination-out`-fillRect mit `rgba(0,0,0,X)` bei globalAlpha=1,
-X = 1 − a/ambient je Stufe. Abschluss `ctx.drawImage(off,0,0)`
-unverändert 3-arg. Frame-Cache: Läufe nur neu berechnen, wenn sich
-ganzzahlige Kamera oder ein quantisierter Radius geändert hat.
+2.3 **draw()**: Ambient-Fill unverändert zuerst (Detektor-Sonde).
+Danach je Lauf destination-out-fillRect `rgba(0,0,0,X)` bei
+globalAlpha=1, X = 1 − k/12. `ctx.drawImage(off,0,0)` 3-arg.
+(Alpha-Mathematik vom Prüfer bestätigt: dst_a = a, Rundung ±0,002.)
 
-2.4 **Performance-Budget (Phase 0, VOR dem Build bindend):**
-Browser-Messung auf 8124, CATACOMBS-Worst-View (12 Fackeln),
-300 Frames: Licht-Pass gesamt Mittel ≤ 3,0 ms, P95 ≤ 6,0 ms.
-Entschärfungsstufen in dieser Reihenfolge, falls gerissen:
-(1) Cache aggressiver (Flicker-Radius auf 4-px-Schritte),
-(2) Bayer nur an Stufengrenzen ±1 Block, (3) NUR DANN als
-sanktionierte Ausnahme: 160×90-Offscreen + 5-arg-drawImage
-(Stub-verträglich belegt, T1 §5d-2; die 3-arg-Regel §0.3 bekommt
-dafür eine dokumentierte Einzelausnahme NUR für diesen einen
-Aufruf). Reicht auch das nicht → STOPP, Eskalation an den Hauptloop.
+2.4 **Performance-Gate (Phase 0, bindend, Review P2-B1):**
+Worst-View ist CATACOMBS Kamera (96,72) mit **20 Fackeln +
+Spielerlicht** (25 Fackeln gesamt auf der Karte — die Rev-1-Zahl
+12 war falsch). P0a misst zuerst die BESTANDS-Baseline (heutiger
+Punch+Warm-Pass) am selben View über 300 Frames. Gate für den
+Umbau: **Mittel ≤ 1,35 × Baseline, P95 ≤ 1,5 × Baseline, UND
+≤ 1200 fillRect-Läufe je Frame** (Aufruf-Protokoll §2.7).
+Entschärfungskette: (1) Bayer-Saum entfällt (nur harte
+Stufengrenzen), (2) sanktionierte Einzelausnahme
+160×90-Offscreen + EIN 5-arg-drawImage (stub-sicher belegt,
+Prüfer bestätigt), (3) STOPP + Eskalation Hauptloop.
 
-2.5 **Warm-Pass bleibt** (GLOW/FLOOR/HOT_RINGS sind schon gestuft),
-aber: `pulse` wird auf 5 feste Werte quantisiert (0,5/0,625/0,75/
-0,875/1,0) — die letzte stufenlose Zeitmodulation fällt.
+2.5 **Warm-Pass bleibt arc-basiert**, `pulse` auf 5 feste Werte
+quantisiert (0,5/0,625/0,75/0,875/1,0).
 
-2.6 **HOT_RINGS wandern an den Docht** (cy−3 → cy+2), im
-Gleichschritt mit dem Flammen-Umbau §6.6; der GP5-Weiß-Stresstest
-wird danach wiederholt (0 reine Weiß-Texel außerhalb Kernradius).
+2.6 **HOT_RINGS an den Docht, korrekt verortet (Review P1-B4/
+P3-B3):** Bodenfackeln `hotY = cy − 2` (Grid-Zeile 6, im neuen
+Kernbereich); Wandfackeln `hotY = cy − 4` (Zeile 4 — die
+Wandflamme endet eine Zeile höher). NIE cy+2 (das wäre der
+Pfosten/die Ziegelwand). Weiß-Stresstest danach wiederholen.
 
-2.7 Smoke additiv (§7.F): quantizeLight-Wertemenge (genau 13 Werte
-0..1), lightRuns-Determinismus, Läufe ⊆ Bounding-Boxen,
-Stufen ⊆ Deklarationsliste, Radius-Rundung, 5-Argument-Verbot
-(bzw. Einzelausnahme) per Aufrufprotokoll.
-
----
-
-## §3 PAKET B — Belichtungs-Sockel (Hebel 2)
-
-**Kernbefund bindend (T2 §4): Ambient allein kann draußen nie 40
-erreichen — die Palette deckelt bei 31,9.** Deshalb Doppelzug:
-
-3.1 **Paletten-Offset AUSSEN (Variante "Offset", T2 §4.3):**
-Gras-Rampe +15,1 L → e 47,0 / E 61,1 / a 82,8 / m 104,5 / K 111,2 /
-A 129,2 ('D' 156,8 bleibt harter Deckel). Dunkeltöne k/n/0/*/+
-bleiben UNTEN (Silhouetten-Kontrast). **Wasser-Rampe im
-GLEICHSCHRITT:** w 47 (kühlerer Farbort erhalten, T2 §4.3-Zitat),
-Kamm:Tal ≈ 2,3:1 → '=' ≈ 108; Auflagen: '=' < 'A', kein Wasserton
-hellster Ton im Frame, Sättigung unter 'A'. Wiesenlicht-Klassen
-(6 Grids) werden auf ±2..4 L um das NEUE Pool-Mittel (~50)
-zusammengezogen — das erledigt zugleich Restliste 5a (Steppdecke).
-Der 47er-Pool selbst wird NUR per Offset verschoben, seine innere
-Streuung (±3 L, bereits konform) bleibt.
-
-3.2 **Ambient-Werte** (die EINZIGE Flusstest-Änderung, §7.A):
-GRAVEYARD 0,45 → **0,22** · CATACOMBS 0,78 → **0,55** ·
-FLUESTERGRUFT 0,85 → **0,52** · BOSS_KAMMER 0,66 → **0,48**.
-Alle vier Werte bleiben paarweise VERSCHIEDEN (die Flusstests
-unterscheiden Karten am ambientAlpha — Gleichstände würden
-Assertions entwerten). Modell-/Sweep-Prognose der Mediane: 38,9 /
-41,2 / ~34,6 / ~39,8 — alle in den M1-Bändern.
-
-3.3 **Testfreie Begleit-Hebel:** Vignette VIG_STEP 0,09 → 0,06
-(Max-Alpha 0,30; Bayer-Muster bleibt); ambientTints dürfen je Karte
-in Runde 2/3 zur Feinjustierung ±4 L / wärmer variiert werden
-(deklarationspflichtig); FLUESTERGRUFT erhält 2 extraLights im
-Kanalraum (Muster map_bosskammer.js:99, flicker 0,5, r ≤ 88).
-FLUESTERGRUFT bleibt per M1-Band die dunkelste Karte
-(Rollen-Erhalt "dunkelste Ebene" über das Band, nicht über 0,85).
-
-3.4 Highlight-Anteil M1 (≥0,5 % außen) kommt aus dem Offset selbst
-('A' 129,2 liegt über 128), aus Kronen-Spitzlichtern (§5) und dem
-Teich-Specular (§6.4) — NICHT aus Weiß.
+2.7 Smoke additiv (GP6-§7F): quantizeLight-Wertemenge (13 Werte),
+lightRuns-Determinismus, Disjunktheit ("keine zwei Läufe
+überlappen"), Läufe ⊆ Bounding-Box-Union, k ⊆ 0..12,
+Radius-Rundung, Lauf-Zählung ≤ 1200 am Testlicht-Setup,
+drawImage-Argumentzahl-Protokoll.
 
 ---
 
-## §4 PAKET S — Sprite-Beleuchtung + Kontaktschatten (Hebel 3)
+## §3 PAKET B — Belichtungs-Sockel
 
-4.1 **`lightAt(lights, wx, wy, ambient, timeSec)`** als reine
-Funktion in lighting.js, Rückgabe `{f, warm}` (f = 1−Restdunkelheit
-via EXAKT derselben Lookup+quantizeLight wie §2; warm = 0..1 aus
-den Glow-Ringen, nur flicker ≥ 0,8). Abtastpunkt ist der
-Schatten-Anker (cx, Fußkante−1) — Sprite-Licht und Schatten teilen
-denselben Weltpunkt.
+3.1 **Paletten-Offset:** ADDITIV je Kanal (+c für ΔL = +15,1;
+eine Operation, Soll-Hex-Tabelle aus P0b ist bindend für Art UND
+check_gfx6_art; Review P3-m1). Gras-Rampe: e 47,0 / E 61,1 /
+a 82,8 / m 104,5 / K 111,2 / A 129,2; 'D' 156,8 Deckel; k/n/0/*/+
+bleiben unten. **Wasser-Rampe VOLLSTÄNDIG (Review P3-M9):**
+w 47,0 / W 67,3 / 9 87,7 / '=' 108,0 (gleichmäßige Schritte);
+Ordnungs-Auflage `k < w = e < W < 9 < '=' < A < D`; 'w' behält
+den kühleren Farbort (B > G). **Folge-Anpassungen (Pflicht):**
+(a) `water_mid_calm`: 'k' → '+' (35,5) als Tiefen-Schleier, sonst
+verdoppelt sich der Zonensprung (Review P3-M14); (b) Back-Kronen-
+Rim ('E'-Texel in tree_canopy_back_*) auf einen Misch-Ton ~10 L
+über '+' umsetzen — der GP5-R2-Entscheid gegen den Stahlband-
+Defekt bleibt gewahrt; Jury-Deklaration (Review P3-M11);
+(c) shore_*-Dämpfung wird RELATIV formuliert: Kachelmittel
+shore_s/e/w ≥ 8 L UNTER shore_n nach Offset (Review P3-B4).
+**Globalität deklariert (Review P3-M10):** Die Rampen-Töne stecken
+auch in Innen-Grids (brick_moss, stone_floor-'m', sarcophagus,
+torch_wall …) — dieses Mit-Aufhellen ist GEWOLLT (Moos/Akzente
+leuchten leicht); die §3.2-Innen-Prognosen bleiben gültig, weil
+'t' unverändert ist und die Moos-Anteile < 3 % Fläche stellen;
+Jury-Deklaration. Wiesenlicht-Klassen (6 Grids) auf ±2..4 L um
+das neue Pool-Mittel ~50. Der 47er-Pool nur per Offset.
 
-4.2 **Tint-Masken + Fassaden-ctx** (T3 §4.5, testneutral):
-`buildTintMask(grid, palette, toneHex)` additiv in
-sprite_factory.js — identische Alpha-Form, ein Farbton, gebaut mit
-fillStyle bei globalAlpha=1, LAZY und damit nach main.js:71.
-Je Sprite drei Masken: WARM-L (Ton 216,114,42, Helligkeits-Rampe
-von links gebacken), WARM-R (von rechts), KALT (ambientTint-Ton,
-flach). Fassaden-ctx um die renderables-Schleife main.js:672:
-erster drawImage = Original (Wächter B), danach optional
-Masken-Draw source-over mit stufigem globalAlpha:
-warm-Alpha ∈ {0, 0,12, 0,24, 0,36} nach warm-Stufe, Seite nach
-Fackelrichtung; kalt-Alpha ∈ {0, 0,08, 0,16} nach Dunkel-Stufe.
-KEIN 'lighter' auf Sprites (Weiß-Sättigungs-Lehre GP5). Nach jedem
-Masken-Draw globalAlpha=1. Level-Up-Ring, Drops, Projektile: ohne
-Tint (Deklaration).
+3.2 **Ambient (einzige Flusstest-Änderung §7.A):** GRAVEYARD
+0,45→**0,22** · CATACOMBS 0,78→**0,55** · FLUESTERGRUFT
+0,85→**0,52** · BOSS_KAMMER 0,66→**0,48** (paarweise
+verschieden). Median-Prognosen (Prüfer-modellbestätigt): 39,2 /
+41,2 / 34,6 / 39,8.
 
-4.3 **Kontaktschatten-Standardprofil** bekommt die Boss-Lösung:
-SHADOW_DY [0,1,2] → **[−1,0,1,2]**, SHADOW_W [0,90, 0,95, 0,7,
-0,4], SHADOW_A [0,30, 0,40, 0,20, 0,10]. BIG-Profil unverändert.
-Damit erfüllen alle Klassen M5 (Zeile −1 liegt unter der Fußkante
-und ist nie vom eigenen Sprite verdeckt). Der gegenphasig blinkende
-Schatten beim Unverwundbar-Blinken bleibt (deklariert, kein Umbau).
+3.3 **Testfreie Begleit-Hebel:** Vignette VIG_STEP 0,09→0,06,
+VIG_MAX_LEVEL bleibt 5, Profil auf a_max = 0,30 reskaliert
+(Review P1-m2). **ambientTint-Feinjustierung NUR zu helleren/
+wärmeren Tönen und nur solange die betroffene M1-Zeile mit
+≥ 1,5 L Median-Reserve grün bleibt** (Review P2-M-7; die
+FLUESTERGRUFT-Reserve ist klein). FLUESTERGRUFT: 2 extraLights im
+Kanalraum (flicker 0,5, r ≤ 88).
 
-4.4 Smoke additiv (§7.F): Schatten-Texel-Geometrie je Klasse
-(≥ 8 unter Fußkante), lightAt-Determinismus + Wertemenge,
-Masken-Bau erst nach TILE_ART (Erzeugungsindex-Beweis).
+3.4 **Highlight-Quellen (Render-Ebene, Review P2-B4):** außen
+zählt L>96 (Träger: 'A' 129→103 Render, 'D'-Wegtexel, Kronen-
+Spitzlichter, Fackelkegel-Kerne); innen L>128 (Träger: Kegel-Kerne
+mit vollem Palettenwert). Die E1-Eichung in P0b macht die Ziele
+erreichbar UND fix.
 
 ---
 
-## §5 PAKET K — Kronen-Maßstab (Hebel 4)
+## §4 PAKET S — Sprite-Beleuchtung + Kontaktschatten
 
-5.1 **Drei XL-Klassen** (Art-Canvas EXAKT span·16, T4 Fußnote A):
-`tree_canopy_xl_a` span [3,2] 48×32, `tree_canopy_xl_b` span [4,3]
-64×48, `tree_canopy_xl_c` span [3,2] 48×32, jeweils + gespiegelte
-`_m`-Fassung. Tinten-Bbox-Ziele: M4. Blattcluster mit Trennlinien
-(dunkle 'k'/'n'-Nähte zwischen Ballen), Spitzlicht-Tier oben links
-(Hauptlichtrichtung GP4-R3), Werteumfang der neuen Gras-Rampe §3.1.
-Erzeugung über Generator `.tmp/gen_crowns_gp6.mjs` (Präzedenz
-gen_crowns_gp5r2), Verifikation im Skript.
+4.1 **`lightAt(lights, wx, wy, ambient, timeSec)`** pure in
+lighting.js, Rückgabe `{f, warm}`; f über DIESELBE Lookup +
+quantizeLight wie §2. **Abtastung mit UNGEJITTERTEM Radius (ohne
+Flacker-wob) + 1-Stufen-Hysterese** (Stufenwechsel erst, wenn der
+Rohwert die Grenze um ≥ 0,5 Stufenbreiten überschreitet) — sonst
+stroboskopiert die stehende Figur mit 4 Wechseln/s (Review
+P2-M-5). Abtastpunkt = Schatten-Anker (cx, Fußkante−1).
 
-5.2 **Sway = gebackene Scher-Posen** (T4 Weg B, EIN drawImage pro
-Zelle — smoke:695-697 bleibt unangetastet): neues Legendenfeld
-`swayPoses: [8 Einträge]` mit den 5 echten Posen art/sh1/sh2/sh1m/
-sh2m in der Folge [0,+1,+2,+1,0,−1,−2,−1]; Scherung zeilenweise
-nach Höhe gebacken (Unterkante fix). Auswertung über NEUE pure
-Funktion `swayPose8(tx,ty,timeSec,rate)` (additiv; SWAY_DX und
-smoke:2390 bleiben unberührt). Validierung in createTilemap:
-swayPoses nur auf span>1-Defs, Länge 8, poses[0]===art, alle Keys
-existent; die anim/variants-Sperre auf span bleibt bestehen und
-swayPoses ist von ihr ausgenommen. Ruhelage timeSec=0 ist byte-
-gleich zu heute (alle Anker-/Determinismus-Tests messen bei t=0).
-ANCHOR_CLAMP: jeder XL-Key W=4, `_m`-Fassungen identisch —
-KEIN Rückfall auf Default 14.
+4.2 **Tint-Masken + Fassade (korrigierter Bauort, Review
+P2-M-10/P1-M9):** Die Fassade wird beim BAU der renderables
+(main.js:665-670) als ctx-Argument in die Zeichen-Closures
+injiziert (eine Fassade "um die Schleife" erreicht die lexikalisch
+gebundenen ctx nicht). renderables tragen `{fy, ax, ay, tint}`;
+`tint:false` für Drops und Projektile; Props (Vase/Urne/Truhe)
+werden GETÖNT; Level-Up-Ring läuft nach der Schleife am echten
+ctx (tint-frei, deklariert). **Masken-Registry** `Map<canvas,
+{name, grid}>` wird beim gfx-Bau mitgeführt (additiv, die Fassade
+sieht nur Canvases). `buildTintMask(grid, palette, toneDunkel,
+toneHell, richtung)` in sprite_factory.js: identische Alpha-Form,
+je SPALTE einer von ZWEI Tönen (Rampe für die
+Halbseiten-Modellierung — ein einzelner Ton kann keine Rampe,
+Review P2-M-3), globalAlpha=1, lazy nach main.js:71. Je Sprite:
+WARM-L, WARM-R (Töne 216,114,42 hell / 176,88,34 dunkel), KALT
+(ambientTint-Paar). Draw: Original zuerst (Wächter B), dann Maske
+source-over, warm-Alpha ∈ {0, 0,12, 0,24, 0,36} (Stufe aus
+quantisiertem warm mit Hysterese), kalt-Alpha ∈ {0, 0,08, 0,16}.
+KEIN 'lighter' auf Sprites. `window.__noTint` schaltet die
+Masken-Draws ab (Rig-Kontrolle M3). Nach jedem Masken-Draw
+globalAlpha=1.
 
-5.3 **XL-Schatten als EIN-Draw-Bake** (T4 §5.2): je XL-Klasse ein
-`canopy_shadow_xl_[a|b|c]` (sw·16 × 32, Silhouetten-Projektion mit
-Randerosion statt 50-%-Schachbrett, Töne 'k'-basiert mit
-Bayer-25-%-Dichte — erledigt zugleich Restliste 5b), gezeichnet an
-EINER Stelle, Versatz +2/+2 (Lichtrichtung oben-links). Kleine
-2×2-Kronen behalten canopy_shadow (Bestand), aber der Zeichen-Ort
-wandert in einen ZWEITEN Durchgang nach den Bodenkacheln desselben
-Fensters (behebt den dx>0-Anschnitt-Riss, T4 Schwäche 3).
-canopy_shadow selbst wird von Schachbrett auf Bayer-25 % über 'k'
-umgebaut. Schatten scheren NICHT mit.
+4.3 **Kontaktschatten-Standardprofil:** SHADOW_DY [−1,0,1,2],
+SHADOW_W [0,90, 0,95, 0,7, 0,4], SHADOW_A [0,30, 0,40, 0,20,
+0,10]. BIG unverändert. Blink-Verhalten deklariert.
 
-5.4 **Culling-Fix rechts:** `txEnd = min(wTiles−1, tx1+1)` im
-Over-Zweig (T4 §1.4, reproduzierter Defekt). Sanktionierte
-Alt-Test-Änderung §7.E.
+4.4 Smoke additiv: Schatten-Geometrie je Klasse, lightAt-
+Determinismus + Wertemenge + Hysterese, Masken-Erzeugungsindex.
 
-5.5 **GRAVEYARD_OVER_ROWS neu** per Generator `.tmp/gen_over_gp6.mjs`:
-zwei geschlossene XL-Dächer (Nord-Wald um (31,9), Süd-West um
-(12,22)), Rest-Bestand aus 2×2/Back-Kronen ausgedünnt; Hänge-Kronen
-B/C nur noch als Rand-Füller ≤ 6 Stück. Guards: Zeile 12 Spalten
-0..20 bleibt leer, Spalte 21 leer, keine span-Zeichen in
-Ground-rows, Stammdeckung span-generisch. Beweiszelle für M4:
-unter dem Nord-Dach, vom Spawn erreichbar (Kandidaten-Rechnung wie
-T4 §3.4; die Szene wird in shot_gfx6.py auf die neue Zelle gelegt).
-sol/geo-Hashes sind von OVER_ROWS unberührt (T4 §2.2-7).
+---
+
+## §5 PAKET K — Kronen-Maßstab
+
+5.1 **XL-Klassen:** tree_canopy_xl_a [3,2] 48×32, xl_b [4,3]
+64×48, xl_c [3,2] 48×32, je + `_m`. Tinten-Bbox-Ziele M4.
+Blattcluster-Trennlinien mit 'n'-Nähten (nicht 'k' — L<16-Budget,
+Review P2-M-8), Spitzlicht oben links. Generator
+.tmp/gen_crowns_gp6.mjs.
+
+5.2 **Sway = gebackene Scher-Posen, EIN Draw pro Zelle:**
+Legendenfeld `swayPoses` (Länge 8, Folge [0,+1,+2,+1,0,−1,−2,−1],
+5 echte Posen, poses[0]===art, alle Keys existent, nur auf
+span>1). Auswahl über neue pure Funktion `swayPose8` (§0.6).
+**Bei gesetztem swayPoses entfällt die ax-Translation des
+Span-Zweigs (tilemap.js:931) ersatzlos** (sonst schert UND
+wackelt die Krone; Review P2-m-1); Hänge-Kronen (:955) unberührt.
+Ruhelage t=0 byte-gleich (Prüfer bestätigt: swayPhase-Index ist
+bei t=0 für alle Cluster 0, sofern swayPose8 %8 rechnet).
+ANCHOR_CLAMP: alle 6 XL-Keys W=4.
+
+5.3 **Kronen-Schatten:** `canopy_shadow_xl_[a|b|c]` als
+EIN-Draw-Bake, Maß EXAKT sw·16 × 32 (xl_b: 64×32 — steht in der
+§7.G-Maßtabelle, Review P1-B3), Silhouetten-Projektion mit
+Randerosion, Töne 'n'/'0' in Bayer-25 % (nicht 'k'; Review
+P3-m7). `_m`-Kronen ziehen denselben (ungespiegelten) Schatten-
+Key — deklariert. **Versatz = anchorOffset der Krone PLUS
+(+2,+2)** (Lichtrichtung; ein fixer Versatz ohne anchorOffset
+risse ab, Review P1-M5). **ALLE Kronen-Schatten (canopy_shadow
+UND canopy_shadow_xl_*) zeichnet ein ZWEITER Durchgang NACH allen
+Bodenkacheln, Fringes, Shore-, Bank- und Depth-Overlays des
+Fensters** (sonst übermalen Nachbarkacheln bis zu 87 % des
+XL-Bakes; Review P2-M-6). canopy_shadow selbst: Schachbrett →
+Bayer-25 % über 'n'/'0'.
+
+5.4 **Culling-Fix rechts**, exakt: `const txEnd = over ?
+Math.min(wTiles-1, tx1+1) : tx1;` (Ground bleibt unverändert,
+Review P3-m2).
+
+5.5 **GRAVEYARD_OVER_ROWS neu** (Generator gen_over_gp6.mjs):
+zwei geschlossene XL-Dächer (Nord um (31,9) MIT xl_b — die
+M4-Beweiszelle liegt UNTER einer xl_b-Krone —, Süd-West um
+(12,22)), 2×2/Back ausgedünnt, B/C ≤ 6. **Guards zeilenexplizit:
+Spalte 21 leer in ALLEN Zeilen 0..12; Zeile 12 leer in ALLEN
+Spalten 0..21** (Review P1-m8); keine span-Zeichen in Ground-rows;
+Stammdeckung span-generisch. sol/geo unberührt (Prüfer bestätigt).
 
 ---
 
 ## §6 PAKET R — Restliste-Politur
 
-6.1 **Kanal-Uferring:** DREI neue Grids `water_shallow_vert`,
-`_vert_v1`, `_vert_v2` (water_mid-Formensprache, KOLLISIONSFREIES
-Präfix — `water_shallow_v` ist wegen der `${base}_v${vi}`-Ableitung
-VERBOTEN, T5 §1) + EINE Legendenzeile map_fluestergruft.js:97:
-`depthOverlays: ['water_shallow_vert', 'water_mid']`. Friedhofsteich
-unberührt. Messgate: Kanal-Ufer-Anisotropie längs ≥ 2,0 (IST
-0,84/1,11; Mitte 3,97 als Positiv-Kontrolle).
+6.1 **Kanal-Uferring:** `water_shallow_vert`, `_vert_v1`,
+`_vert_v2` (kollisionsfreies Präfix, Ableitung geprüft) + EINE
+Legendenzeile map_fluestergruft.js:97. Gate: Ufer-Anisotropie
+längs ≥ 2,0 (Positiv-Kontrolle: Mitte 3,97).
 
-6.2 **Boss-Kratzer kalt:** floor_decal_crack verliert 'T' und das
-'m'-Erbstück; Kratzer als 'L'+'k'-Dither (kalt, R−B ≤ −6 je Ton).
-Messgate: Δ(R−B) Kratzer-gegen-Boden im gerenderten Bild ≤ +8
-(IST +20..27; Lit-Dither-Blinken T5-Hypothese B wird durch die
-Messung im 9-Lauf-Modus mit erfasst und im Jury-Material erklärt).
+6.2 **Boss-Kratzer kalt:** 'T' und 'm' raus, 'L'+'k'-Dither.
+Gate: Δ(R−B) Kratzer-gegen-Boden ≤ +8 (9-Lauf-Modus;
+Lit-Dither-Blinken wird im Jury-Material erklärt).
 
-6.3 **Wegsporn ans Wasser:** NEUE Legendenzeile (unbenutztes
-Zeichen) mit Weg-Ton-Art `path_pebbles` und EXAKT den
-Emissions-Flags von 'p' (fringeSource, fringeSet 'grass', bankSet
-'g', solid false); ROWS-Tausch NUR an (28,15) und (29,15)
-'p'→neues Zeichen. KEIN Tausch auf '=' (T5-Risikomessung: reißt
-die Ufer-Emission um). Beleg: fringe/shore/bank-Emissionsvektoren
-der 6 Nachbarzellen VOR/NACH byte-identisch (Node-Probe im
-Integrator-Auftrag); sol (solid false→false) und geo (keine
-Fackel/Spawn/Portal-Zelle) unberührt — im Smoke-Lauf bewiesen.
+6.3 **Wegsporn:** neue Legendenzeile (unbenutztes Zeichen,
+`path_pebbles`, EXAKT die 'p'-Flags: solid false, fringeSource,
+fringeSet 'grass', bankSet 'g'); ROWS-Tausch NUR (28,15)+(29,15)
+'p'→neu. Belegstellen für den Integrator: GRAVEYARD_ROWS
+maps.js (Zeile 82 der ROWS-Liste, ty=15), Hash-Definitionen
+smoke:1998-2008; Prüfer hat sol/geo-Neutralität verifiziert
+(keine Fackel/Spawn/Portal-Zelle betroffen). Emissions-
+Byte-Beweis der 6 Nachbarzellen im Integrator-Auftrag.
+shot_gfx6-Wegsporn-Gate zieht Soll-Legende + Arts nach (§1).
 
-6.4 **Teich:** Specular-Tier zurück — 4..6 Texel '=' (neuer Wert
-~108) pro Flachring-Kachel NUR auf water_shallow/_v1/_v2
-(24 Ring-0-Kacheln, T5 §4a), Ziel 96..144 Specular-Texel im
-Teich-Fenster. Ufer-Entregelung an shore_n/s/e/w + shore_diag_*:
-(a) Lichtrichtung: shore_n behält die helle W-Zeile, shore_s/e/w
-dämpfen auf ≤ 48 L; (b) höchstens EINE durchgehende Konturlinie je
-Kachel (heute 3); (c) Lückenraster je Kachelrichtung verschieden
-(kein 6-7-px-Gleichtakt N==S); (d) shore_diag: die 4-Zeilen-
-Wiederholung brechen, keine 2 vollen Spalten. Emissions-LOGIK
-(smoke:2171-2232) bleibt byte-unberührt — nur Grid-INHALTE ändern
-sich (T5-Risikomatrix P4b).
+6.4 **Teich:** (a) Specular: 4..6 '='-Texel je Ring-0-Kachel als
+ISOLIERTE Cluster (Größe 1..4, nicht in den obersten 4
+Kachelzeilen) ZUSÄTZLICH zum bestehenden 26-Texel-Uferband —
+Bezugsfläche fürs Gate ist TEICH_RECT (4 Ring-0-Kacheln → 16..24
+Cluster-Texel), Zählweise: Zielton-Toleranz 6 + Clustergröße,
+getrennt vom Ufer-Band (Review P3-M7 — die Rev-1-Zahl 96..144
+gehörte zur 24-Kachel-Fläche, nicht zum Fenster); die 4
+water_*-Frames BEHALTEN ihre '='-Tupfer, das alte
+check_gfx-'='-Gate (≥20 über water_*) bleibt und das neue
+Specular-Gate läuft GETRENNT auf water_shallow* (Review P1-M6).
+(b) Ufer-Entregelung shore_n/s/e/w + shore_diag: höchstens EINE
+durchgehende Konturlinie je Kachel; Lückenraster je Richtung
+verschieden; shore_diag ohne 4-Zeilen-Wiederholung, keine 2
+vollen Spalten; Helligkeits-Ordnung RELATIV: shore_s/e/w ≥ 8 L
+unter shore_n (§3.1c). Emissions-LOGIK byte-unberührt.
 
-6.5 **Gras:** 5a über §3.1 (Wiesenlicht-Zusammenzug). 5c
-Halm-Größenklassen: 'u'- und 'j'-Pools von n=3 auf n=5 erweitern
-(zwei neue Größenstufen je Pool; 5 ist ungerade und teilerfremd ✓;
-variants[0]===art bleibt).
+6.5 **Gras:** Wiesenlicht über §3.1; 'u'/'j'-Pools n 3→5 (zwei
+neue Größenstufen, ungerade, teilerfremd, variants[0]===art).
 
-6.6 **Flammen-Wertegefälle:** Kern '1' wandert an den Docht
-(Zeilen 5..7), Spitze wird 'o'/'r'-dominant und schmaler; Silhouette
-bleibt ≤ 5 breit, Fläche ±20 % (Gates in check_gfx6_art). HOT_RINGS
-ziehen mit (§2.6). Für alle 6 Fackel-Grids.
+6.6 **Flammen:** Kern '1' an den Docht — Bodenfackeln Zeilen
+5..7, WANDFACKELN Zeilen 3..5 (deren Flamme endet früher; ein
+'1' in Zeile 6/7 läge im Metallgehäuse, Review P3-B3); Spitze
+'o'/'r'-dominant, Silhouette ≤ 5 breit, Fläche ±20 %. HOT_RINGS
+gemäß §2.6.
 
-6.7 **HUD:** (a) XP-Leiste eigene Farbidentität — Rinne dunkles
-Moosgrün (~L 30), Füllrampe grün-golden 8 Zeilen, Kontrast Rinne→
-Füllung ≥ 100 L (IST 65,6; Vorbild Boss-Balken 125). (b) GOLD-/
-Trank-ZIFFERN als 3×5-Pixelziffern per fillRect ÜBER dem
-fillText-Wert: der fillText-Aufruf bleibt UNVERÄNDERT bestehen
-(Flusstest-Sonde 'GOLD <n>'), wird aber von einem panel-farbenen
-Deckrechteck + Pixelziffern überdeckt; Deklaration im Jury-Prompt.
-Nur die WERT-Spalte, das Wort GOLD bleibt fillText. (c) Boss-Lag-
-Streifen bekommt die 8-Zeilen-Rampe (entsättigte BOSS_FILL_RAMP-
-Schwester) statt Flachton. Alles fillRect-only, keine neuen
-Teilalpha-fillRects auf Offscreens, GOTT-Anzeige unangetastet.
+6.7 **HUD:** (a) XP-Leiste: Maße UNVERÄNDERT (xh=5, Innenhöhe
+3 px — eine 8-Zeilen-Rampe ist dort unmöglich, Review P1-B1/
+P3-B6): **3-Zeilen-Rampe** hell/mittel/dunkel in EIGENEM Farbort
+Moosgrün, Rinne dunkles Moosgrün ~L 25, hellste Rampenzeile
+≥ L 125 → Kontrast ≥ 100 L. (b) GOLD-/Trank-Ziffern: 3×5-
+Pixelziffern per fillRect über der WERT-Spalte; BEIDE
+fillText-Züge (hud.js:155 UND :157, Kontur+Fill) bleiben
+unverändert als Test-Sonde und werden von ZWEI Deckrechtecken
+überdeckt (eines je Panel-Farbband, Grenze y 15; Geometrie als
+feste Konstanten im Code hergeleitet, kein measureText;
+Sichtprüfung im Jury-Material; Review P2-m-3/P3-m3). GOLD-Θ auf
+Game-Over/Sieg-Schirmen bleibt (bewusste Auslassung,
+Deklarationsliste; Review P3-m4). (c) Boss-Lag-Streifen: 8-Zeilen-
+Rampe (der Boss-Balken hat Innenhöhe 8 — dort passt sie).
+Alles fillRect-only, GOTT-Anzeige unangetastet.
 
 ---
 
-## §7 TEST-ÄNDERUNGS-KATALOG (abschließend — sonst NICHTS)
+## §7 TEST-ÄNDERUNGS-KATALOG (abschließend)
 
-**A. Flusstests — GENAU 13 Wert-Anpassungen** (GP3-Muster T2 §2.4/2.5):
-- check_main_slice1.mjs ~202/246/283: `0.45` → `0.22` (3 Zeilen);
-  ~229/236: `0.78` → `0.55` (2 Zeilen).
-- check_boss_slice3.mjs ~143/172/185/244/264: `0.66` → `0.48`
-  (5 Zeilen); ~157/165/277: `0.85` → `0.52` (3 Zeilen).
-PRO ZEILE dürfen BEIDE Wert-Vorkommen angepasst werden (Assertion-
-Literal UND Meldungs-String derselben Zeile); die Folgezeilen 158/
-278 sind interpoliert und werden NICHT angefasst. Assertion-Struktur
-und alles Übrige byte-identisch. check_inventory_slice2.mjs: NULL.
-Abnahme per git-diff-Beweis. Das Kontingent gilt danach erneut als
-VERBRAUCHT.
+**A. Flusstests — GENAU 13 Wert-Anpassungen** (zeilengenau von
+zwei Prüfern verifiziert): check_main ~202/246/283 `0.45`→`0.22`,
+~229/236 `0.78`→`0.55`; check_boss ~143/172/185/244/264
+`0.66`→`0.48`, ~157/165/277 `0.85`→`0.52`. PRO ZEILE beide
+Wert-Vorkommen (Literal + Meldungs-String); Folgezeilen 158/278
+interpoliert → NICHT anfassen. check_inventory NULL. git-diff-
+Beweis. Kontingent danach VERBRAUCHT.
 
-**B. tools/smoke_test.mjs:1996** AMBIENT auf 0.22/0.55/0.52/0.48 +
-die zwei Kommentarzeilen :1975/:1994-1995 (Marker `GP6-§7B`).
+**B. smoke:1996** AMBIENT 0.22/0.55/0.52/0.48 + Kommentare
+:1975/:1994-1995 (`GP6-§7B`).
 
-**C. smoke:658-666** Stammdeckung span-generisch (Fenster aus
-legend[ch].span, Zeichenliste aus der Legende) (`GP6-§7C`).
+**C. smoke-Bestand (Marker):** C1 `smoke:658-666` Stammdeckung
+span-generisch. C2/C3/C4: die drei tilemap-Bestandsstellen aus
+§0.9 spiegeln sich in `smoke:1762-1799` (Schattenzeile ay+sh über
+sw Spalten, XL-Ein-Draw; die Koordinaten-Assertions sind
+reihenfolge-unabhängig — der Zweitpass allein bräuchte KEINE
+Test-Änderung, Review P1-m1) und `smoke:1875-1968` (ANCHOR_CLAMP-
+Klassen W=4, Culling-Rand tx1+1).
 
-**D. smoke:1762-1799** Kronen-Schatten: Schattenzeile ay+sh über sw
-Spalten, XL-Ein-Draw, Zweitpass-Reihenfolge (Koordinaten-Assertions
-bleiben lagegleich) (`GP6-§7D`).
+**F. ADDITIVE NEUE Blöcke** (`GP6-§7F`): §2.7-Liste, swayPose8 +
+swayPoses-Validierung (+ Translation-Entfall-Beweis), Schatten-
+Geometrie je Klasse, XL-Existenz + Bbox, canopy_shadow_xl-
+Emission + Zweitpass-Beleg, water_shallow_vert-Verdrahtung,
+Wegsporn-Legende + Emissions-Byte-Gleichheit, Tint-Masken-Index,
+lightAt-Hysterese.
 
-**E. smoke:1875-1968** Anker-Klassen-Tabelle + rechter Culling-Rand
-tx1+1 (`GP6-§7E`).
+**G. check_gfx6_art.mjs ersetzt check_gfx5_art.mjs** (Muster
+SPEC_GRAFIKPASS_5.md:52 — Rev-1-Verweis "§0.8" war falsch,
+Review P2-m-4): portierte Wächter; Maßtabelle **{16×16, 32×32,
+48×32, 64×48, 64×32}**; NEW_TONES = P0b-Offset-Tabelle;
+Palettenumfang exakt 61+3 (§0.11); Flammen-Gate Docht-Kern
+(Boden 5..7 / Wand 3..5); Kratzer-Gate ('T'/'m'-frei + kalt);
+Kronen-Bbox; Specular-Cluster-Zählung §6.4a; '='-Bestands-Gate
+auf water_* bleibt.
 
-**F. ADDITIVE NEUE Blöcke** (Marker `GP6-§7F`, kein Bestandstest):
-quantizeLight/lightRuns/lightAt (§2.7, §4.4), swayPose8 + swayPoses-
-Validierung, Schatten-Texel-Geometrie je Klasse, XL-Existenz +
-Bbox-Mindestmaße, canopy_shadow_xl-Emission, water_shallow_vert-
-Verdrahtung, Wegsporn-Legende + Emissions-Byte-Gleichheit,
-Tint-Masken-Erzeugungsindex.
-
-**G. check_gfx6_art.mjs ERSETZT check_gfx5_art.mjs** (§0.8-Muster):
-portiert alle Wächter; NEU: Maßtabelle {16, 32, 48×32, 64×48} statt
-16/32-Dichotomie; NEW_TONES auf die Offset-Palette; Flammen-Gate
-auf Docht-Kern umgestellt; Kratzer-Gate: kein 'T'/'m' + R−B-Kälte;
-Kronen-Bbox-Gate (M4); Specular-Zählung 4..6/Kachel.
-
-**H. Verboten bleibt:** fringeOverlays-Bytes, sol/geo, Stub-
-Erweiterungen, jede nicht oben gelistete Bestandszeile.
+**H. Verboten:** fringeOverlays-Bytes, sol/geo, Stub-
+Erweiterungen, jede nicht gelistete Bestandszeile.
 
 ---
 
 ## §8 BUILD-TOPOLOGIE (alle Ausführenden Opus, exklusiver Besitz)
 
-**Phase 0 (parallel):**
-P0a Perf-Probe §2.4 auf 8124 (Prototyp lightRuns als .tmp-Skript,
-Budget-Entscheid dokumentieren — bei Rot: Entschärfungskette).
-P0b Generatoren: gen_crowns_gp6.mjs (XL + Posen + Schatten-Bakes),
-gen_over_gp6.mjs (OVER_ROWS + Guards + Beweiszellen-Rechnung),
-Paletten-Offset-Rechner (Soll-Hex-Tabelle für Art).
+**Phase 0 (parallel, Ergebnisse BINDEND vor Phase 1):**
+P0a: Perf — Bestands-Baseline am Worst-View (Kamera (96,72),
+20+1 Lichter), dann lightRuns-Prototyp (Ringband + Bayer-Saum),
+Gate §2.4; PLUS E2-Vormessung (Glow-IST, freistehende Fackel).
+P0b: Offset-Rechner → Soll-Hex-Tabelle (bindend); E1-Vormessung
+(Simulation auf palette_pur-Bildern); Generator-Entwürfe
+gen_crowns_gp6 + gen_over_gp6 (inkl. Beweiszellen-Rechnung).
+→ Hauptloop trägt E1/E2 als Rev 2.1 ein, committet, DANN Phase 1.
 
-**Phase 1 (parallel):**
-ART: art/sprites.js + art/palette.js — §3.1 Rampen, §5.1 XL-Kronen
-+ Posen + XL-Schatten, §6.1 water_shallow_vert, §6.4 Teich/Ufer,
-§6.5 Halme, §6.6 Flammen, §6.2 Kratzer, path_pebbles.
-ENGINE-A: core/lighting.js (§2 komplett, §4.1 lightAt, §2.6
-HOT_RINGS) + world/tilemap.js (§5.2 swayPose8/swayPoses, §5.3
-Schatten-Zweitpass + XL-Schatten, §5.4 Culling).
+**Phase 1 (parallel):** ART (sprites.js + palette.js: §3.1
+komplett inkl. Folge-Anpassungen a/b/c, §5.1, §6.1, §6.4, §6.5,
+§6.6, §6.2, path_pebbles) · ENGINE-A (lighting.js §2 + §4.1;
+tilemap.js §5.2/§5.3/§5.4).
 
-**Phase 2:** ENGINE-B: main.js (§4.2 Fassade + Masken-Verwaltung,
-§4.3 Schatten-Profil), core/sprite_factory.js (buildTintMask),
-ui/hud.js (§6.7, §3.3 Vignette), world/maps.js + map_*.js (§3.2
-ambient, §3.3 Tint/extraLights, §5.5 OVER_ROWS, §6.1 Legendenzeile,
-§6.3 Wegsporn-Legende+ROWS).
+**Phase 2:** ENGINE-B (main.js §4.2-Fassade + Registry + §4.3;
+sprite_factory buildTintMask; hud.js §6.7 + §3.3-Vignette;
+maps.js + map_*.js §3.2/§3.3/§5.5/§6.1/§6.3).
 
-**Phase 3:** INTEGRATOR: §7 komplett (sanktionierte Zeilen,
-additive Blöcke, check_gfx6_art), alles grün: syntax, smoke 3×,
-3 Flusstests, check_gfx6_art; Emissions-Byte-Beweis §6.3.
+**Phase 3:** INTEGRATOR (§7 komplett, Emissions-Byte-Beweis,
+alles grün: syntax, smoke 3×, 3 Flusstests, check_gfx6_art,
+probe_god).
 
-**Phase 4:** PROOF: .tmp/shot_gfx6.py — alle M1-M5-Gates mit
-Kontrollen, 13+ Szenen (GP5-Kameras + neue Beweiszellen), 9 Crops
-4-6×, Sway-/Flammen-Strips, Ergebnis-JSON.
+**Phase 4:** PROOF (.tmp/shot_gfx6.py mit §1-Nachzugsliste,
+M1-M5 + Kontrollen, Szenen/Crops/Strips/Gradient-Schnitt).
 
-Nach jeder Phase: Hauptloop prüft + committet grün.
+Nach jeder Phase: Hauptloop prüft + committet.
 
 ---
 
-## §9 JURY (3 direkte Opus-Agenten, PNG-Lesen freigegeben)
+## §9 JURY (3 direkte Opus-Agenten)
 
-Aufgaben-Verschiebung ggü. GP5: Die Jury (a) prüft die MESSUNGEN
-(misst das Gate das Richtige? Fenster valide? Kontrollen echt?),
-(b) liefert Sichtbefunde auf Crops/Strips (neue Prio-0-Defekte),
-(c) vergibt die 10er-Note INFORMATIV. Deklarationsliste im Prompt:
-bewusste Entscheide (fillText-Überdeckung §6.7b, Schatten-Blinken
-§4.3, Hänge-Kronen-Rest §5.5, Lit-Dither-Blinken §6.2, ambientTint-
-Feinjustierung §3.3, Einzelausnahme 5-arg falls §2.4-3 zog).
-Material: Vollszenen + 9 Crops + Strips + Gradient-Schnitt-Bild +
-Messreport. Max. 3 Runden; Runde N+1 baut NUR Jury-Prio-0 +
-rote Messziele. Nach Runde 3: Ergebnis an Michael.
+Prüfen die MESSUNGEN, liefern Sichtbefunde, Note informativ.
+Deklarationsliste: fillText-Überdeckung + GOLD-Θ auf
+Game-Over/Sieg (§6.7b), Schatten-Blinken (§4.3), Hänge-Kronen-
+Rest + ungespiegelte _m-Schatten (§5.3/5.5), Lit-Dither-Blinken
+(§6.2), ambientTint-Regel (§3.3), Innen-Grids erben den Offset
+(§3.1), Back-Kronen-Rim-Neumischung (§3.1b), Level-Up-Ring/Drops/
+Projektile tint-frei — Props getönt (§4.2), 5-arg-Einzelausnahme
+falls §2.4-2 zog. Material: Vollszenen, 9 Crops 4-6×, Strips,
+Gradient-Schnitt, Messreport. Max 3 Runden; danach Ergebnis an
+Michael.
 
 ## §10 ABNAHME
 
-Grün = M1-M5 vollständig + Jury ohne neuen Prio-0 + alle Suiten
-grün (syntax, smoke 3×, 3 Flusstests MIT genau den §7.A-Zeilen per
-git-diff belegt, check_gfx6_art) + Übergabe in uebergaben/ +
-Commit. Die 10er-Note wird berichtet, entscheidet aber nicht.
+M1-M5 grün + Jury ohne neuen Prio-0 + Suiten grün (syntax, smoke
+3×, 3 Flusstests mit GENAU §7.A per git-diff, check_gfx6_art,
+**.tmp/probe_god.mjs**) + Übergabe + Commit. Note informativ.
