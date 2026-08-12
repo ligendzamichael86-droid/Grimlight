@@ -77,7 +77,10 @@ export const BOSS_KAMMER = {
   portals: [
     { ...tileRect(9, 10, 2, 1), target: 'FLUESTERGRUFT', spawn: tc(20, 20), bossLocked: true },
   ],
-  ambient: 0.66,          // Grafikpass 3 §4.2: 0.70 -> 0.66 (jetzt UMGESETZT; die fuenf sanktionierten check_boss_slice3.mjs-Zeilen sind laut §5.1 mitgezogen)
+  // GRAFIKPASS 6 §3.2 (GP6-§7A): 0.66 -> 0.48. Median-Prognose 39,8
+  // (M1-Band 38..48). Die fuenf sanktionierten Zeilen 143/172/185/244/264 in
+  // .tmp/check_boss_slice3.mjs sind mitgezogen.
+  ambient: 0.48,          // Grafikpass 3 §4.2: 0.70 -> 0.66 (GP6 §3.2: -> 0.48; die sanktionierten check_boss_slice3.mjs-Zeilen sind laut §7.A mitgezogen)
   // Grafikpass 3 §2.3/§4.2: rotbraune Drohung (Boss-Arena).
   ambientTint: '#120608',
   playerLightRadius: 52,

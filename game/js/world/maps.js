@@ -644,7 +644,12 @@ export const GRAVEYARD = {
   portals: [
     { ...tileRect(32, 2, 2, 1), target: 'CATACOMBS', spawn: tc(6, 4) },
   ],
-  ambient: 0.45,
+  // GRAFIKPASS 6 §3.2 BELICHTUNGS-SOCKEL (GP6-§7A): 0.45 -> 0.22. Die
+  // Paletten-Offsets (§3.1) heben die Grundtoene um +15 L an; ohne die
+  // Ambient-Absenkung frisst das Dunkel-Overlay den Gewinn wieder auf.
+  // Median-Prognose 39,2 (M1-Band 38..46). Die drei sanktionierten
+  // .tmp/check_main_slice1.mjs-Zeilen (202/246/283) sind mitgezogen.
+  ambient: 0.22,
   // Grafikpass 3 §2.3/§4.2: Farbtemperatur des Dunkel-Overlays (blauviolette Nacht).
   ambientTint: '#0a0a18',
   playerLightRadius: 40,
@@ -712,7 +717,10 @@ export const CATACOMBS = {
   // Flusstest-Zeilen in .tmp/check_main_slice1.mjs sind laut §5.1 mitgezogen,
   // sodass der Test gruen bleibt). Der GP2-"ZURUECKGENOMMEN"-Vermerk ist damit
   // erledigt.
-  ambient: 0.78,
+  // GRAFIKPASS 6 §3.2 (GP6-§7A): 0.78 -> 0.55. Median-Prognose 41,2
+  // (M1-Band 40..50); die zwei sanktionierten Zeilen 229/236 in
+  // .tmp/check_main_slice1.mjs sind mitgezogen.
+  ambient: 0.55,
   // Grafikpass 3 §2.3/§4.2: kaltes Blau (Katakomben-Steinkaelte).
   ambientTint: '#06080f',
   playerLightRadius: 52,

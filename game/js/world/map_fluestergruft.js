@@ -167,7 +167,11 @@ export const FLUESTERGRUFT = {
     { ...tileRect(3, 2), target: 'CATACOMBS', spawn: tc(34, 12) },
     { ...tileRect(20, 21), target: 'BOSS_KAMMER', spawn: tc(10, 9), requires: 'boss_key' },
   ],
-  ambient: 0.85,          // dunkelste Ebene
+  // GRAFIKPASS 6 §3.2 (GP6-§7A): 0.85 -> 0.52, weiterhin die dunkelste Ebene.
+  // Median-Prognose 34,6 (M1-Band 33..44; der Kanal traegt 7,1 % Wasser-Rampe,
+  // §3.1). Die drei sanktionierten Zeilen 157/165/277 in
+  // .tmp/check_boss_slice3.mjs sind mitgezogen.
+  ambient: 0.52,          // dunkelste Ebene
   // Grafikpass 3 §2.3/§4.2: gruenschwarzes Grabwasser (Farbtemperatur der Gruft).
   ambientTint: '#04100c',
   playerLightRadius: 52,

@@ -653,17 +653,34 @@ let fightWorld = null;
     overChars.every((ch) => !GRAVEYARD.torchChars.includes(ch)));
 
   // Jeder Stamm trägt eine Krone: 'B' (canopy_bottom) auf der Stamm-Zelle ODER
-  // die Zelle liegt in der 2x2-Span-Fläche eines Anker-Zeichens. Grafikpass 3
+  // die Zelle liegt in der Span-Fläche eines Anker-Zeichens. Grafikpass 3
   // §5.2.2b: die gespiegelten Kronen Q/V/X decken Stämme gleichwertig.
-  const trunkCovered = (x, y) => {
-    if (over[y][x] === 'B') return true;
-    for (let ay = Math.max(0, y - 1); ay <= y; ay++) {
-      for (let ax = Math.max(0, x - 1); ax <= x; ax++) {
-        if ('MNOQVX'.includes(over[ay][ax])) return true; // Anker deckt 2x2
+  //
+  // GP6-§7C1 SPAN-GENERISCH. Bisher standen hier zwei fest verdrahtete
+  // Annahmen, die mit §5.1 beide falsch geworden sind:
+  //   (1) das Fenster war fix 2x2 (`y-1..y` / `x-1..x`) — die XL-Kronen haben
+  //       span [3,2] und [4,3], ein xl_b-Anker deckt also 4x3 Zellen;
+  //   (2) die Ankerliste war das Literal 'MNOQVX' — die XL-Anker heissen
+  //       '1'..'6' (§5.5) und die Back-Kuppen Y/Z/A fehlten ohnehin.
+  // Beides kommt jetzt AUS DER LEGENDE: Zeichenliste = alle Eintraege mit
+  // `span`, Fenster = deren eigenes [sw,sh]. Damit traegt der Test jede
+  // kuenftige Groessenklasse ohne erneute Aenderung. Die Deckungsregel selbst
+  // ist unveraendert: ein Anker bei (ax,ay) deckt ax..ax+sw-1 / ay..ay+sh-1.
+  const spanChars = Object.keys(GRAVEYARD.legend).filter((ch) => GRAVEYARD.legend[ch].span);
+  const coveredGrid = Array.from({ length: over.length }, () => new Array(over[0].length).fill(false));
+  for (let ay = 0; ay < over.length; ay++) {
+    for (let ax = 0; ax < over[ay].length; ax++) {
+      if (!spanChars.includes(over[ay][ax])) continue;
+      const [sw, sh] = GRAVEYARD.legend[over[ay][ax]].span;
+      for (let dy = 0; dy < sh; dy++) {
+        for (let dx = 0; dx < sw; dx++) {
+          const cy = ay + dy, cx = ax + dx;
+          if (cy < coveredGrid.length && cx < coveredGrid[cy].length) coveredGrid[cy][cx] = true;
+        }
       }
     }
-    return false;
-  };
+  }
+  const trunkCovered = (x, y) => over[y][x] === 'B' || coveredGrid[y][x];
   let trunksCovered = true;
   GRAVEYARD.rows.forEach((row, y) => [...row].forEach((ch, x) => {
     if (ch === 'T' && !trunkCovered(x, y)) trunksCovered = false;
@@ -1687,24 +1704,53 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       frames.every((f) => f.uniform));
   }
 
-  // --- Grid-Maße: 16×16 (Span-Kronen 32×32), alle Zeilen gleich lang ---
+  // --- Grid-Maße: MASSTABELLE {16×16, 32×32, 48×32, 64×48, 64×32} ---
   {
     // Grafikpass 3 §5.2.2: um die drei gespiegelten Kronen (ebenfalls 32×32) auf
     // 6 Einträge erweitert — sonst schlägt die 16×16-Annahme auf ihnen fehl.
-    const spanKeys = [
-      'tree_canopy_2x2_a', 'tree_canopy_2x2_b', 'tree_canopy_2x2_c',
-      'tree_canopy_2x2_am', 'tree_canopy_2x2_bm', 'tree_canopy_2x2_cm',
-      // (erlaubte Alt-Test-Aenderung #3, GP4-§5): + Back-Kronen (32x32, §2.8/§3.3a).
-      'tree_canopy_back_a', 'tree_canopy_back_b', 'tree_canopy_back_c',
+    //
+    // GP6-§7G MASSTABELLE. Der alte Test kannte genau ZWEI Masse (16 und 32)
+    // und fuehrte die 32er als AUFZAEHLUNG. Mit §5.1/§5.3 gibt es jetzt fuenf
+    // Klassen, und die Zahl der Keys je Klasse ist gross (5 Posen x 2 Spiegel
+    // x 3 Kronen = 30 XL-Grids) — eine Aufzaehlung waere in jeder Runde neu zu
+    // pflegen. Die Zuordnung laeuft deshalb ueber das KEY-MUSTER:
+    //   tree_canopy_xl_b(_m)(_r1|_r2|_l1|_l2)   64x48  (§5.1 span [4,3])
+    //   canopy_shadow_xl_b                      64x32  (§5.3 Bake sw*16 x 32)
+    //   tree_canopy_xl_a/_c(_m)(_Pose)          48x32  (§5.1 span [3,2])
+    //   canopy_shadow_xl_a / _xl_c              48x32  (§5.3, sw = 3)
+    //   tree_canopy_2x2_* / tree_canopy_back_*  32x32  (Bestand)
+    //   alles uebrige                           16x16
+    // Die Schatten-Bakes sind NICHT so hoch wie ihre Krone: §5.3 legt die Hoehe
+    // auf feste 32 px fest (der Schatten liegt flach auf dem Boden), nur die
+    // Breite folgt sw. Genau das trennt 64x32 von 64x48.
+    const MASSTABELLE = [
+      [/^tree_canopy_xl_b(_m)?(_[rl][12])?$/, 64, 48],
+      [/^canopy_shadow_xl_b$/, 64, 32],
+      [/^tree_canopy_xl_[ac](_m)?(_[rl][12])?$/, 48, 32],
+      [/^canopy_shadow_xl_[ac]$/, 48, 32],
+      [/^tree_canopy_2x2_[abc]m?$/, 32, 32],
+      [/^tree_canopy_back_[abc]$/, 32, 32],
     ];
+    const massOf = (name) => {
+      for (const [re, w, h] of MASSTABELLE) if (re.test(name)) return [w, h];
+      return [16, 16];
+    };
     let dimBad = null;
     for (const [name, grid] of Object.entries(TILE_ART)) {
-      const size = spanKeys.includes(name) ? 32 : 16;
-      if (grid.length !== size) { dimBad = `${name}: ${grid.length} Zeilen (erwartet ${size})`; break; }
-      for (const row of grid) if (row.length !== size) { dimBad = `${name}: Zeilenbreite ${row.length} (erwartet ${size})`; break; }
+      const [wantW, wantH] = massOf(name);
+      if (grid.length !== wantH) { dimBad = `${name}: ${grid.length} Zeilen (erwartet ${wantH})`; break; }
+      for (const row of grid) if (row.length !== wantW) { dimBad = `${name}: Zeilenbreite ${row.length} (erwartet ${wantW})`; break; }
       if (dimBad) break;
     }
-    check('TILE_ART-Grids 16×16 (Span-Kronen 32×32), Zeilen gleich lang', dimBad === null, dimBad || '');
+    check('TILE_ART-Grids nach der §7.G-Masstabelle {16×16, 32×32, 48×32, 64×48, 64×32}, Zeilen gleich lang',
+      dimBad === null, dimBad || '');
+    // Gegen-Gate: die Tabelle darf nicht LEER laufen (ein Tippfehler im Muster
+    // wuerde jede XL-Kachel still auf 16x16 pruefen und der Test waere rot —
+    // aber ein Muster, das NICHTS trifft, faellt sonst nicht auf).
+    const klassen = new Set(Object.keys(TILE_ART).map((n) => massOf(n).join('x')));
+    check('§7.G Masstabelle: alle fuenf Klassen sind wirklich belegt',
+      ['16x16', '32x32', '48x32', '64x48', '64x32'].every((k) => klassen.has(k)),
+      [...klassen].join(','));
   }
 
   // --- Quelltext-Wächter: kein Zufall/Zeitstempel in world/*.js und art/*.js ---
@@ -1797,6 +1843,85 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       `zellen=${JSON.stringify(shadowAt)} erwartet dx=${dxS} dy=${dyS}`);
     const overShadow = drawKeys(tmS, { x: 0, y: 0 }, 0, 'over').filter((k) => k === 'canopy_shadow');
     check('Kronen-Schatten: der Over-Pass zeichnet keinen canopy_shadow', overShadow.length === 0);
+
+    // =====================================================================
+    // GP6-§7D — SPAN-GENERISCHE ERWEITERUNG. Der Bestandsfall oben bleibt
+    // WORT FUER WORT stehen (dieselben Koordinaten, dieselbe Formel, dieselbe
+    // Anker-Klasse W=2) — er ist die Lagegleichheits-Referenz. Ergaenzt werden
+    // die beiden Faelle, die §5.1/§5.3 neu eingefuehrt haben:
+    //   (D1) span != [2,2]: die Schattenzeile ist ay+sh (nicht fix ay+2) und
+    //        laeuft ueber sw Spalten (nicht fix 2).
+    //   (D2) shadowArt gesetzt: statt sw Einzelkacheln GENAU EIN Draw des
+    //        Bake-Keys, Versatz anchorOffset + (+2,+2) (§5.3).
+    // Der Zweitpass (§5.3/§7.C3) braucht hier keine eigene Assertion — die
+    // Koordinaten-Assertions sind reihenfolge-UNABHAENGIG (Review P1-m1); die
+    // Reihenfolge selbst prueft der additive §7F-Block (h) ueber die
+    // Stub-Aufrufreihenfolge gegen die Bodenkacheln.
+    // =====================================================================
+    const offOf = (tx, ty, W) => ({
+      dx: Math.max(-W, Math.min(W, variantIndex(tx + 1013, ty + 571, 29) - 14)),
+      dy: (variantIndex(tx + 421, ty + 907, 17) % 9) - 4,
+    });
+    // --- (D1) span [3,2] OHNE shadowArt: Zeile ay+sh ueber sw Spalten -------
+    {
+      const AX3 = 1, AY3 = 1, SW3 = 3, SH3 = 2;
+      const o3 = Array.from({ length: N }, () => Array(N).fill('.'));
+      o3[AY3][AX3] = 'G';
+      const leg3 = {
+        '.': { art: 'grass' },
+        // Art-Key steht NICHT in ANCHOR_CLAMP -> Default-Klammer W=14 (§4.C2).
+        G: { art: 'crown_span_3x2_probe', span: [SW3, SH3], solid: false },
+      };
+      const tm3 = createTilemap(gRows, leg3, o3.map((r) => r.join('')));
+      const at3 = [];
+      tm3.draw({
+        canvas: { width: N * 16, height: N * 16 },
+        drawImage: (img, sx, sy) => { if (img === 'canopy_shadow') at3.push([sx, sy]); },
+      }, { x: 0, y: 0 }, anyTiles, 0, 'ground');
+      const o3off = offOf(AX3, AY3, 14);
+      const soll3 = [];
+      for (let d = 0; d < SW3; d++) soll3.push([(AX3 + d) * 16 + o3off.dx, (AY3 + SH3) * 16 + o3off.dy]);
+      check('GP6-§7D Kronen-Schatten span-generisch: [3,2]-Anker legt GENAU sw=3 canopy_shadow-Kacheln',
+        at3.length === SW3, `${at3.length} Kacheln`);
+      check('GP6-§7D Kronen-Schatten span-generisch: Zeile ay+sh, Spalten ax..ax+sw-1, Anker-Offset §4.C2',
+        soll3.every(([x, y]) => at3.some(([sx, sy]) => sx === x && sy === y)),
+        `ist=${JSON.stringify(at3)} soll=${JSON.stringify(soll3)}`);
+    }
+    // --- (D2) shadowArt gesetzt: EIN Draw, Versatz anchorOffset + (+2,+2) ---
+    {
+      const AXB = 1, AYB = 1, SWB = 4, SHB = 3;
+      const oB = Array.from({ length: N }, () => Array(N).fill('.'));
+      oB[AYB][AXB] = 'B';
+      const legB = {
+        '.': { art: 'grass' },
+        B: {
+          art: 'tree_canopy_xl_b', span: [SWB, SHB], solid: false,
+          shadowArt: 'canopy_shadow_xl_b',
+        },
+      };
+      const tmB = createTilemap(gRows, legB, oB.map((r) => r.join('')));
+      const bake = [];
+      let einzel = 0;
+      tmB.draw({
+        canvas: { width: N * 16, height: N * 16 },
+        drawImage: (img, sx, sy) => {
+          if (img === 'canopy_shadow_xl_b') bake.push([sx, sy]);
+          if (img === 'canopy_shadow') einzel++;
+        },
+      }, { x: 0, y: 0 }, anyTiles, 0, 'ground');
+      // W=4: 'tree_canopy_xl_b' steht in ANCHOR_CLAMP (§5.2).
+      const offB = offOf(AXB, AYB, 4);
+      check('GP6-§7D XL-Schatten: GENAU EIN Draw des shadowArt-Bakes (kein sw-Kachel-Band)',
+        bake.length === 1, `${bake.length} Draws`);
+      check('GP6-§7D XL-Schatten: KEINE canopy_shadow-Einzelkacheln daneben', einzel === 0, `${einzel}`);
+      check('GP6-§7D XL-Schatten: Versatz = anchorOffset(W=4) PLUS (+2,+2), Zeile ay+sh (§5.3)',
+        bake.length === 1
+        && bake[0][0] === AXB * 16 + offB.dx + 2
+        && bake[0][1] === (AYB + SHB) * 16 + offB.dy + 2,
+        `ist=${JSON.stringify(bake[0])} soll=[${AXB * 16 + offB.dx + 2},${(AYB + SHB) * 16 + offB.dy + 2}]`);
+      const overBake = drawKeys(tmB, { x: 0, y: 0 }, 0, 'over').filter((k) => String(k).startsWith('canopy_shadow'));
+      check('GP6-§7D XL-Schatten: der Over-Pass zeichnet auch den Bake nicht', overBake.length === 0);
+    }
   }
 
   // --- Wasser-Tiefen-Overlay (§8b.1): synthetisches Wasserbecken. createTilemap
@@ -1939,6 +2064,36 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       sP.x === AX * 16 + dxOf(AX, AY, 14), `sx=${sP.x} erwartet=${AX * 16 + dxOf(AX, AY, 14)}`);
     check('Anker-Offset §4.C2: dy ist klassen-UNABHAENGIG (identisch fuer alle vier)',
       sN.y === s1.y && sY.y === s1.y && sP.y === s1.y);
+    // -------------------------------------------------------------------
+    // GP6-§7C4 — SECHSTE ANKER-KLASSE: die XL-Kronen, ANCHOR_CLAMP W = 4.
+    // Der Bestand oben laeuft unveraendert weiter; hier kommt nur die neue
+    // Zeile der Klassen-Tabelle dazu. Begruendung der 4 (§5.2): die XL-Kronen
+    // stehen im geschlossenen Dach (§5.5) mit Spalten-Pitch 2, also 16 px
+    // Ueberlappung — ein Versatz bis +-14 wie bei den Back-Kuppen risse dort
+    // Loecher, +-4 streut das Raster ohne die Ueberlappung aufzubrauchen.
+    // Geprueft wird ALLE SECHS Keys einzeln (der Clamp haengt am ART-Key, ein
+    // vergessener _m-Eintrag fiele sonst nicht auf) und ZUSAETZLICH, dass die
+    // Klammer wirklich BINDET, also enger ist als der Default W=14.
+    {
+      const XL = [
+        ['1', 'tree_canopy_xl_a', [3, 2]], ['2', 'tree_canopy_xl_a_m', [3, 2]],
+        ['3', 'tree_canopy_xl_b', [4, 3]], ['4', 'tree_canopy_xl_b_m', [4, 3]],
+        ['5', 'tree_canopy_xl_c', [3, 2]], ['6', 'tree_canopy_xl_c_m', [3, 2]],
+      ];
+      const dx4 = dxOf(AX, AY, 4);
+      const dx14 = dxOf(AX, AY, 14);
+      let xlBad = null;
+      for (const [ch, art, span] of XL) {
+        const legXL = { '.': { art: 'grass' }, [ch]: { art, span, solid: false } };
+        const sXL = capXY(createTilemap(gRows, legXL, mkOver(ch)), art);
+        if (sXL.x !== AX * 16 + dx4) { xlBad = `${art}: sx=${sXL.x} erwartet=${AX * 16 + dx4}`; break; }
+        if (sXL.y !== AY * 16 + dyA) { xlBad = `${art}: sy=${sXL.y} erwartet=${AY * 16 + dyA}`; break; }
+      }
+      check('GP6-§7C4 Anker-Offset: alle SECHS XL-Keys ziehen ANCHOR_CLAMP W=4',
+        xlBad === null, xlBad || `dx=${dx4}`);
+      check('GP6-§7C4 Anker-Offset: die W=4-Klammer BINDET an diesem Ort (enger als der Default W=14)',
+        Math.abs(dx4) <= 4 && Math.abs(dx14) > 4, `dx(W=4)=${dx4} dx(W=14)=${dx14}`);
+    }
     // CULLING (§4.C2, NUR der Over-Zweig): txStart 1 Spalte weiter links (dx>0
     // zieht Anker von links herein), tyEnd +1 (dy<0 zieht Anker von unten herein),
     // beide weiterhin auf 0..wTiles-1 / 0..hTiles-1 geklammert.
@@ -1972,8 +2127,8 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
 // Abschnitt 36 "Gameplay-Neutralität GP3" (NEU, §5.2.3): Soliditaets-Raster +
 // Geometrie (playerSpawn/alle Gegner-/Prop-Spawns/Portale/torch-findTiles-
 // Positionen) aller 4 Maps gegen eingebettete Golden-Fingerprints von 204e28f
-// (per git archive 204e28f generiert). Ambient-Werte exakt 0.45/0.78/0.85/0.66
-// (die EINZIGEN erlaubten Zahlaenderungen, §4.2). particles.js: Node-Import,
+// (per git archive 204e28f generiert). Ambient-Werte exakt 0.22/0.55/0.52/0.48
+// (GP6-§7B; die EINZIGEN erlaubten Zahlaenderungen). particles.js: Node-Import,
 // harte Obergrenze 60, update ohne Browser lauffaehig.
 // ===========================================================================
 {
@@ -1991,9 +2146,12 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     FLUESTERGRUFT: { sol: '0cca3204f83878b54c5390aa1bc9c4159424f5424b1a749d6dad4e47fc273489', geo: '2ac0a890e545869220fec7fa8256da51192c2bc4a07bc8d8d68fb7a669f6fa7c' },
     BOSS_KAMMER: { sol: 'ebe999cf1e6023c6d169fa24a205e224c1dc36e4424938063cdedf045c7d611c', geo: 'a7d72c33f00b83c8d974e5d3161ca2315b7d0a24aa77f24204f386bb558885eb' },
   };
-  // Neue Ambient-Zielwerte (§4.2): GRAVEYARD unveraendert, CATACOMBS 0.82->0.78,
-  // FLUESTERGRUFT unveraendert, BOSS_KAMMER 0.70->0.66.
-  const AMBIENT = { GRAVEYARD: 0.45, CATACOMBS: 0.78, FLUESTERGRUFT: 0.85, BOSS_KAMMER: 0.66 };
+  // GP6-§7B — BELICHTUNGS-SOCKEL §3.2. Die Paletten-Offsets (§3.1) heben die
+  // Grundtoene um +15 L; ohne die Ambient-Absenkung frisst das Dunkel-Overlay
+  // den Gewinn wieder auf. Alle vier Werte sind paarweise VERSCHIEDEN (Spec):
+  // GRAVEYARD 0.45->0.22, CATACOMBS 0.78->0.55, FLUESTERGRUFT 0.85->0.52,
+  // BOSS_KAMMER 0.66->0.48. sol/geo bleiben byte-identisch (§0.4).
+  const AMBIENT = { GRAVEYARD: 0.22, CATACOMBS: 0.55, FLUESTERGRUFT: 0.52, BOSS_KAMMER: 0.48 };
   const sha = (s) => createHash('sha256').update(s).digest('hex');
   const solHash = (def) =>
     sha(def.rows.map((row) => [...row].map((ch) => (def.legend[ch] && def.legend[ch].solid ? '1' : '0')).join('')).join('\n'));
@@ -2788,6 +2946,670 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       check('§6#4l water_mid-Varianten: der Gruft-Kanal zeichnet Basis UND _v1 UND _v2',
         seen6.has('water_mid') && seen6.has('water_mid_v1') && seen6.has('water_mid_v2'),
         [...seen6].join(','));
+    }
+  }
+}
+
+// ===========================================================================
+// GP6-§7F — ADDITIVE NEUE BLOECKE (a)-(j). KEIN Bestandstest wird hier
+// angefasst; alles steht am DATEIENDE und importiert die neuen Symbole
+// DYNAMISCH, damit nicht einmal die Import-Zeile am Dateikopf wandert.
+// Abgedeckt: §2.7 (Licht-Quantisierung), §4.1/§4.4 (lightAt, Tint-Index),
+// §4.3/M5 (Kontaktschatten-Geometrie), §5.1/M4 (XL-Existenz + Bbox),
+// §5.2 (swayPoses/swayPose8), §5.3 (Bake-Emission + Zweitpass),
+// §6.1 (Kanal-Uferring), §6.3 (Wegsporn).
+// ===========================================================================
+{
+  const { quantizeLight, lightRuns, lightAt, LIGHT_STEPS } =
+    await import('../game/js/core/lighting.js');
+  const { swayPose8, swayPhase, CROWN_POSE_RATE } =
+    await import('../game/js/world/tilemap.js');
+  const anyTilesF = new Proxy({}, { get: (_, k) => k });
+
+  // ---------------------------------------------------------------------
+  // (a) §2.1 quantizeLight: GENAU 13 Werte, exakt k/12, deterministisch.
+  // ---------------------------------------------------------------------
+  {
+    const werte = new Set();
+    for (let i = 0; i <= 20000; i++) werte.add(quantizeLight(i / 20000));
+    check('§7F(a) quantizeLight: genau 13 verschiedene Werte (LIGHT_STEPS+1)',
+      werte.size === 13 && LIGHT_STEPS === 12, `${werte.size} Werte, LIGHT_STEPS=${LIGHT_STEPS}`);
+    const soll = [];
+    for (let k = 0; k <= 12; k++) soll.push(k / 12);
+    check('§7F(a) quantizeLight: die Werte liegen exakt auf dem Raster k/12',
+      soll.every((v) => [...werte].some((w) => Math.abs(w - v) < 1e-12)));
+    check('§7F(a) quantizeLight: Randwerte 0 und 1 exakt',
+      quantizeLight(0) === 0 && quantizeLight(1) === 1);
+    // Determinismus = PURITAET: 1000 Wiederholungen derselben Eingaben in
+    // wechselnder Reihenfolge liefern identische Ergebnisse (kein Zustand).
+    let detA = true;
+    const probe = [0, 0.037, 0.5, 0.5001, 0.917, 1];
+    const ref = probe.map(quantizeLight);
+    for (let i = 0; i < 1000; i++) {
+      for (let j = probe.length - 1; j >= 0; j--) if (quantizeLight(probe[j]) !== ref[j]) detA = false;
+    }
+    check('§7F(a) quantizeLight: deterministisch/pure (1000 Wiederholungen, wechselnde Reihenfolge)', detA);
+  }
+
+  // ---------------------------------------------------------------------
+  // (b) §2.2/§2.3 lightRuns + Eimer-Buendelung.
+  // ---------------------------------------------------------------------
+  {
+    const VW = 320, VH = 180, RUN_H = 4;
+    const camF = { x: 0, y: 0 };
+    // EIN Licht, flicker 0 -> die Bounding-Box ist exakt berechenbar.
+    const eins = [{ x: 160, y: 90, radius: 72, flicker: 0 }];
+    const voll = lightRuns(eins, camF, 0.55, 0, VW, VH, { emitK12: true });
+    const ohne = lightRuns(eins, camF, 0.55, 0, VW, VH);
+
+    check('§7F(b) lightRuns: jede Laufhoehe ist h === 4 (§2.2 4-px-Zeilen)',
+      voll.every((r) => r.h === RUN_H), `abweichend: ${voll.filter((r) => r.h !== RUN_H).length}`);
+    check('§7F(b) lightRuns: x und w liegen auf dem 2-px-Raster',
+      voll.every((r) => r.x % 2 === 0 && r.w % 2 === 0 && r.w > 0));
+    check('§7F(b) lightRuns: k ⊆ 0..12',
+      voll.every((r) => Number.isInteger(r.k) && r.k >= 0 && r.k <= LIGHT_STEPS));
+
+    // Erwartete Bounding-Box (Formel woertlich aus §2.2, NICHT importiert):
+    // r auf ganze 2-px-Schritte gerundet, Block-Raster 2 px in x / 4 px in y.
+    const rE = Math.round(72 / 2) * 2;
+    const cxE = 160, cyE = 90;
+    const BW = VW >> 1, BH = Math.ceil(VH / RUN_H);
+    const bx0 = Math.max(0, (cxE - rE) >> 1), bx1 = Math.min(BW - 1, (cxE + rE) >> 1);
+    const by0 = Math.max(0, Math.floor((cyE - rE) / RUN_H)), by1 = Math.min(BH - 1, Math.floor((cyE + rE) / RUN_H));
+    const boxX0 = bx0 * 2, boxX1 = (bx1 + 1) * 2, boxY0 = by0 * RUN_H, boxY1 = (by1 + 1) * RUN_H;
+    check('§7F(b) lightRuns: alle Laeufe liegen INNERHALB der Bounding-Box-Vereinigung',
+      voll.every((r) => r.x >= boxX0 && r.x + r.w <= boxX1 && r.y >= boxY0 && r.y + r.h <= boxY1),
+      `box=[${boxX0},${boxY0}]..[${boxX1},${boxY1}]`);
+
+    // DISJUNKTHEIT + VOLLE PARTITION: mit emitK12 muss JEDER Texel der Box
+    // GENAU EINMAL gestanzt werden (§2.2 "jeder Texel genau einmal").
+    {
+      const bw = (boxX1 - boxX0) / 2, bh = (boxY1 - boxY0) / RUN_H;
+      const zaehler = new Int32Array(bw * bh);
+      let ausserhalb = 0;
+      for (const r of voll) {
+        for (let px = r.x; px < r.x + r.w; px += 2) {
+          const ix = (px - boxX0) / 2, iy = (r.y - boxY0) / RUN_H;
+          if (ix < 0 || ix >= bw || iy < 0 || iy >= bh) { ausserhalb++; continue; }
+          zaehler[iy * bw + ix] += 1;
+        }
+      }
+      const doppelt = zaehler.filter((v) => v > 1).length;
+      const luecke = zaehler.filter((v) => v === 0).length;
+      check('§7F(b) lightRuns (emitK12): paarweise DISJUNKT — kein Block zweimal gestanzt',
+        doppelt === 0 && ausserhalb === 0, `doppelt=${doppelt} ausserhalb=${ausserhalb}`);
+      check('§7F(b) lightRuns (emitK12): VOLLE Partition — kein Block der Box bleibt uebrig',
+        luecke === 0, `Luecken=${luecke}`);
+    }
+
+    // k = 12 (Stanz-Alpha X = 0) wird OHNE Flag unterdrueckt — und nur die.
+    check('§7F(b) lightRuns: OHNE emitK12 kommt kein k === 12 mehr vor (No-Op-Unterdrueckung §2.2)',
+      ohne.every((r) => r.k !== LIGHT_STEPS) && voll.some((r) => r.k === LIGHT_STEPS));
+    check('§7F(b) lightRuns: die Unterdrueckung entfernt AUSSCHLIESSLICH k===12-Laeufe',
+      JSON.stringify(ohne) === JSON.stringify(voll.filter((r) => r.k !== LIGHT_STEPS)));
+
+    // Determinismus (pure, KEIN Cache §2.2): drei Aufrufe, identisches Ergebnis.
+    check('§7F(b) lightRuns: deterministisch/pure (drei Aufrufe byte-gleich, kein Frame-Cache)',
+      JSON.stringify(lightRuns(eins, camF, 0.55, 0.5, VW, VH))
+      === JSON.stringify(lightRuns(eins, camF, 0.55, 0.5, VW, VH))
+      && JSON.stringify(lightRuns(eins, camF, 0.55, 0.5, VW, VH))
+      === JSON.stringify(lightRuns(eins, camF, 0.22, 0.5, VW, VH)));
+
+    // RADIUS-RUNDUNG auf ganze 2-px-Schritte (§2.2): r(71) === r(72) === 72,
+    // r(70) === 70. Also muessen 71 und 72 dieselbe Laufmenge liefern, 70 nicht.
+    {
+      const j = (rad) => JSON.stringify(lightRuns([{ x: 160, y: 90, radius: rad, flicker: 0 }], camF, 0.55, 0, VW, VH));
+      check('§7F(b) lightRuns: Flicker-Radius rastet auf ganze 2-px-Schritte (71 und 72 identisch)',
+        j(71) === j(72));
+      check('§7F(b) lightRuns: die Rasterung vergroebert nicht zu stark (70 != 72)', j(70) !== j(72));
+    }
+
+    // LAUF-DECKEL <= 2000 am WORST-SETUP (§2.4): CATACOMBS, Kamera (112,80),
+    // alle Fackeln (r 72, flicker 1) + Spielerlicht. Lichter-Muster woertlich
+    // nach .tmp/gp6_p0a_karte.mjs nachgebaut (Fackelmitte = Kachelmitte).
+    {
+      const TORCH_R = 72, TILE_F = 16;
+      const fackeln = [];
+      CATACOMBS.rows.forEach((row, ty) => [...row].forEach((ch, tx) => {
+        if (CATACOMBS.torchChars.includes(ch)) {
+          fackeln.push({ x: tx * TILE_F + TILE_F / 2, y: ty * TILE_F + TILE_F / 2, radius: TORCH_R, flicker: 1 });
+        }
+      }));
+      const camW = { x: 112, y: 80 };
+      const worst = [...fackeln, { x: camW.x + VW / 2, y: camW.y + VH / 2, radius: CATACOMBS.playerLightRadius, flicker: 0.3 }];
+      let maxLaeufe = 0, maxT = 0;
+      for (let i = 0; i < 300; i++) {
+        const n = lightRuns(worst, camW, CATACOMBS.ambient, i / 60, VW, VH).length;
+        if (n > maxLaeufe) { maxLaeufe = n; maxT = i / 60; }
+      }
+      check('§7F(b) §2.4 Lauf-Deckel: Worst-View CATACOMBS (112,80), 300 Frames -> <= 2000 Laeufe',
+        maxLaeufe <= 2000, `max=${maxLaeufe} bei t=${maxT.toFixed(3)} (${worst.length} Lichter)`);
+      check('§7F(b) Worst-Setup ist wirklich der Worst-View (>= 20 Lichter im Spiel)',
+        worst.length >= 20, `${worst.length} Lichter`);
+    }
+
+    // ---- EIMER-BUENDELUNG + Detektor-Sonde ueber einen Canvas-Stub --------
+    {
+      const mkStub = (canvas) => {
+        const log = [];
+        const st = { a: 1, gco: 'source-over', fill: '' };
+        return {
+          canvas, log,
+          get globalAlpha() { return st.a; },
+          set globalAlpha(v) { st.a = v; },
+          get globalCompositeOperation() { return st.gco; },
+          set globalCompositeOperation(v) { st.gco = v; },
+          get fillStyle() { return st.fill; },
+          set fillStyle(v) { st.fill = v; log.push({ op: 'setFill', v, gco: st.gco }); },
+          clearRect() {},
+          fillRect(x, y, w, h) { log.push({ op: 'fillRect', x, y, w, h, alpha: st.a, fill: st.fill, gco: st.gco }); },
+          drawImage(img, ...args) { log.push({ op: 'drawImage', img, args }); },
+          // save/restore BEWUSST als No-Op (wie der Boss-Flusstest-Stub): so
+          // faellt auf, wenn sich die Composite-Hygiene auf restore verlaesst
+          // statt gco/alpha explizit zurueckzusetzen (§0.3).
+          save() {}, restore() {},
+          beginPath() {}, arc() {}, fill() {},
+        };
+      };
+      let offCtx = null;
+      const offCanvas = { width: 0, height: 0, getContext: () => (offCtx = mkStub(offCanvas)) };
+      const mainCanvas = { width: VW, height: VH, ownerDocument: { createElement: () => offCanvas } };
+      const mainCtx = mkStub(mainCanvas);
+      const lightsD = [
+        { x: 100, y: 60, radius: 72, flicker: 1 },
+        { x: 220, y: 120, radius: 72, flicker: 1 },
+        { x: 160, y: 90, radius: 40, flicker: 0.3 },
+      ];
+      const lg = createLighting(VW, VH);
+      lg.draw(mainCtx, camF, lightsD, 0.55, 0.25, '#06080f');
+
+      const oLog = offCtx.log;
+      const oFill = oLog.filter((o) => o.op === 'fillRect');
+      const teil = oFill.filter((o) => o.alpha > 0 && o.alpha < 1);
+      check('§7F(b) §0.2 Detektor: GENAU EIN Teilalpha-fillRect auf dem Offscreen',
+        teil.length === 1, `${teil.length}`);
+      check('§7F(b) §0.2 Detektor: dieser Teilalpha-fillRect ist der ERSTE fillRect ueberhaupt (Ambient-Fill)',
+        oFill.length > 1 && oFill[0] === teil[0] && oFill[0].alpha === 0.55
+        && oFill[0].w === VW && oFill[0].h === VH, JSON.stringify(oFill[0] || null));
+      check('§7F(b) §2.3 alle Stanz-fillRects laufen bei globalAlpha === 1 (Deckung im rgba-String)',
+        oFill.slice(1).every((o) => o.alpha === 1 && o.gco === 'destination-out' && /^rgba\(0,0,0,/.test(o.fill)));
+      const stanzFills = oLog.filter((o) => o.op === 'setFill' && o.gco === 'destination-out');
+      check('§7F(b) §2.3 EIMER-BUENDELUNG: hoechstens 13 fillStyle-Wechsel im Stanz-Block',
+        stanzFills.length <= 13, `${stanzFills.length} Wechsel bei ${oFill.length - 1} Stanz-Rechtecken`);
+      check('§7F(b) §2.3 EIMER: die Buendelung spart wirklich (deutlich mehr Rechtecke als Wechsel)',
+        oFill.length - 1 > stanzFills.length * 2, `${oFill.length - 1} Rechtecke / ${stanzFills.length} Wechsel`);
+      check('§7F(b) §0.3 Composite-Hygiene: der Offscreen steht danach auf source-over / Alpha 1',
+        offCtx.globalCompositeOperation === 'source-over' && offCtx.globalAlpha === 1);
+      check('§7F(b) §0.3 Composite-Hygiene: der HAUPT-ctx steht danach auf source-over / Alpha 1 (ohne restore)',
+        mainCtx.globalCompositeOperation === 'source-over' && mainCtx.globalAlpha === 1);
+      const di = mainCtx.log.filter((o) => o.op === 'drawImage');
+      check('§7F(b) §0.3 drawImage-Argumentzahl: das Overlay wird 3-argumentig gezeichnet',
+        di.length === 1 && di[0].args.length === 2 && di[0].args[0] === 0 && di[0].args[1] === 0,
+        di.map((o) => o.args.length + 1).join(','));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (c) §4.1 lightAt: Determinismus, 12er-Raster, Hysterese.
+  // ---------------------------------------------------------------------
+  {
+    const lts = [
+      { x: 100, y: 100, radius: 72, flicker: 1 },
+      { x: 180, y: 130, radius: 40, flicker: 0.3 },
+    ];
+    const a1 = lightAt(lts, 130, 110, 0.55, 0);
+    const a2 = lightAt(lts, 130, 110, 0.55, 0);
+    const a3 = lightAt(lts, 130, 110, 0.55, 99.5); // timeSec ist BEWUSST unbenutzt
+    check('§7F(c) lightAt: deterministisch/pure (zwei Aufrufe identisch)',
+      a1.f === a2.f && a1.warm === a2.warm && a1.a === a2.a);
+    check('§7F(c) lightAt: UNGEJITTERT — timeSec aendert das Ergebnis nicht (§4.1a, kein Stroboskop)',
+      a3.f === a1.f && a3.warm === a1.warm, `f ${a1.f} vs ${a3.f}`);
+    let rasterOk = true, warmOk = true;
+    for (let x = 30; x < 300; x += 3) {
+      for (let y = 30; y < 200; y += 7) {
+        const r = lightAt(lts, x, y, 0.55, 0);
+        if (Math.abs(r.f * LIGHT_STEPS - Math.round(r.f * LIGHT_STEPS)) > 1e-9) rasterOk = false;
+        if (Math.abs(r.warm * LIGHT_STEPS - Math.round(r.warm * LIGHT_STEPS)) > 1e-9) warmOk = false;
+        if (r.f < 0 || r.f > 1 || r.warm < 0 || r.warm > 1) rasterOk = false;
+        if (Math.abs(r.a - 0.55 * (1 - r.f)) > 1e-9) rasterOk = false;
+      }
+    }
+    check('§7F(c) lightAt: f liegt auf dem 12er-Raster, 0..1, und a === ambient*(1-f)', rasterOk);
+    check('§7F(c) lightAt: warm liegt auf demselben 12er-Raster', warmOk);
+    // HYSTERESE (§4.1b): zwei benachbarte Abtastpunkte, deren ROH-Stufen sich
+    // um genau 1 unterscheiden. OHNE prev kippt f; MIT prev bleibt es stehen —
+    // genau das verhindert das Flattern der stehenden Figur an der Stufengrenze.
+    let A = null, B = null;
+    for (let x = 40; x < 172 && !B; x++) {
+      const p = lightAt(lts, x, 100, 0.55, 0);
+      const q = lightAt(lts, x + 1, 100, 0.55, 0);
+      if (p.f !== q.f) { A = { x, r: p }; B = { x: x + 1, r: q }; }
+    }
+    check('§7F(c) lightAt: es gibt ueberhaupt eine Stufengrenze zum Messen', !!B,
+      B ? `bei x=${A.x}->${B.x} (f ${A.r.f} -> ${B.r.f})` : 'keine gefunden');
+    if (B) {
+      const mitPrev = lightAt(lts, B.x, 100, 0.55, 0, A.r);
+      check('§7F(c) lightAt HYSTERESE: mit prev bleibt die Stufe stehen (kein Flattern an der Grenze)',
+        mitPrev.f === A.r.f, `ohne prev ${B.r.f}, mit prev ${mitPrev.f}, vorher ${A.r.f}`);
+      check('§7F(c) lightAt HYSTERESE: ohne prev kippt dieselbe Stelle sehr wohl (Gegenprobe)',
+        B.r.f !== A.r.f);
+      // Die Hysterese darf nicht EINFRIEREN: zwei Stufen Abstand kippt trotzdem.
+      const weit = lightAt(lts, 100, 100, 0.55, 0);
+      const fern = lightAt(lts, 100, 100, 0.55, 0, { f: 0, warm: 0 });
+      check('§7F(c) lightAt HYSTERESE: bei > 1 Stufe Abstand wird trotzdem nachgezogen (kein Einfrieren)',
+        Math.abs(weit.f * LIGHT_STEPS - 0) <= 1 || fern.f !== 0,
+        `roh ${weit.f}, mit prev(f=0) ${fern.f}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (d) §5.2 swayPoses-Validierung, swayPose8-Ruhelage, Translation-Entfall.
+  // ---------------------------------------------------------------------
+  {
+    const N2 = 10;
+    const gr = Array.from({ length: N2 }, () => '.'.repeat(N2));
+    const ov = (ch) => {
+      const g = Array.from({ length: N2 }, () => Array(N2).fill('.'));
+      g[3][3] = ch;
+      return g.map((r) => r.join(''));
+    };
+    const posen = (a) => [a, a + '_r1', a + '_r2', a + '_r1', a, a + '_l1', a + '_l2', a + '_l1'];
+    const wirft = (leg) => {
+      try { createTilemap(gr, leg, ov('S')); return false; } catch { return true; }
+    };
+    check('§7F(d) swayPoses-Validierung: Laenge != 8 wirft',
+      wirft({ '.': { art: 'grass' }, S: { art: 'kr', span: [3, 2], solid: false, swayPoses: posen('kr').slice(0, 7) } }));
+    check('§7F(d) swayPoses-Validierung: poses[0] !== art wirft',
+      wirft({ '.': { art: 'grass' }, S: { art: 'kr', span: [3, 2], solid: false, swayPoses: ['kr_r1', ...posen('kr').slice(1)] } }));
+    check('§7F(d) swayPoses-Validierung: span = 1 (bzw. kein span) wirft',
+      wirft({ '.': { art: 'grass' }, S: { art: 'kr', span: [1, 1], solid: false, swayPoses: posen('kr') } })
+      && wirft({ '.': { art: 'grass' }, S: { art: 'kr', solid: false, swayPoses: posen('kr') } }));
+    check('§7F(d) swayPoses-Validierung: die GUELTIGE Fassung wirft NICHT (Gegenprobe)',
+      !wirft({ '.': { art: 'grass' }, S: { art: 'kr', span: [3, 2], solid: false, swayPoses: posen('kr') } }));
+
+    // RUHELAGE: swayPose8 ist bei t = 0 fuer JEDEN Cluster 0 -> poses[0] === art
+    // -> das Bild ist byte-gleich zum Basis-Grid (§5.2).
+    let ruheOk = true;
+    for (let tx = 0; tx < 64 && ruheOk; tx++) {
+      for (let ty = 0; ty < 64; ty++) if (swayPose8(tx, ty, 0, CROWN_POSE_RATE) !== 0) { ruheOk = false; break; }
+    }
+    check('§7F(d) swayPose8: bei timeSec = 0 liefert JEDER Cluster Index 0 (byte-gleiche Ruhelage)', ruheOk);
+    const idx = new Set();
+    for (let tx = 0; tx < 16; tx++) for (let ti = 0; ti < 40; ti++) idx.add(swayPose8(tx, 3, ti / 8, CROWN_POSE_RATE));
+    check('§7F(d) swayPose8: der Index laeuft ueber die volle Acht-Folge 0..7',
+      idx.size === 8 && [...idx].every((v) => Number.isInteger(v) && v >= 0 && v <= 7), [...idx].sort().join(','));
+
+    // TRANSLATION-ENTFALL (§5.2): derselbe Anker, dieselbe Zeit — OHNE
+    // swayPoses traegt ax den swayPhase-Versatz, MIT swayPoses NICHT.
+    const legOhne = { '.': { art: 'grass' }, S: { art: 'kr', span: [3, 2], solid: false } };
+    const legMit = { '.': { art: 'grass' }, S: { art: 'kr', span: [3, 2], solid: false, swayPoses: posen('kr') } };
+    const tmOhne = createTilemap(gr, legOhne, ov('S'));
+    const tmMit = createTilemap(gr, legMit, ov('S'));
+    const xAt = (tm, t) => {
+      let x = null;
+      tm.draw({
+        canvas: { width: N2 * 16, height: N2 * 16 },
+        drawImage: (img, sx) => { if (String(img).startsWith('kr')) x = sx; },
+      }, { x: 0, y: 0 }, anyTilesF, t, 'over');
+      return x;
+    };
+    const basisX = xAt(tmOhne, 0); // t = 0: swayPhase-Versatz ist ueberall 0
+    let tSway = null;
+    for (let i = 1; i < 600 && tSway === null; i++) if (xAt(tmOhne, i / 60) !== basisX) tSway = i / 60;
+    check('§7F(d) Translation-Entfall: es gibt eine Zeit, zu der die Boe den Bestands-Anker WIRKLICH versetzt',
+      tSway !== null, tSway === null ? 'keine gefunden' : `t=${tSway.toFixed(4)}, dx=${xAt(tmOhne, tSway) - basisX}`);
+    if (tSway !== null) {
+      check('§7F(d) §5.2 Translation-Entfall: MIT swayPoses bleibt ax auf dem reinen anchorOffset (kein swayPhase-Versatz)',
+        xAt(tmMit, tSway) === basisX && xAt(tmOhne, tSway) !== basisX,
+        `mit=${xAt(tmMit, tSway)} ohne=${xAt(tmOhne, tSway)} basis=${basisX}`);
+      check('§7F(d) §5.2 Translation-Entfall: MIT swayPoses ist ax ueber die ganze Boe KONSTANT',
+        [0, 0.1, 0.35, 0.6, 0.9, 1.4, 2.1].every((t) => xAt(tmMit, t) === basisX));
+      // ... und die Krone bewegt sich trotzdem: die POSE wechselt.
+      const gezeichnet = new Set();
+      for (let i = 0; i < 200; i++) {
+        tmMit.draw({
+          canvas: { width: N2 * 16, height: N2 * 16 },
+          drawImage: (img) => { if (String(img).startsWith('kr')) gezeichnet.add(String(img)); },
+        }, { x: 0, y: 0 }, anyTilesF, i / 30, 'over');
+      }
+      check('§7F(d) §5.2: die Bewegung steckt in der POSE — alle fuenf echten Posen werden gezeichnet',
+        gezeichnet.size === 5, [...gezeichnet].sort().join(','));
+    }
+    // Und: EIN Draw je Over-Zelle bleibt EIN Draw (kein Doppel-Zeichnen).
+    {
+      let n = 0;
+      tmMit.draw({
+        canvas: { width: N2 * 16, height: N2 * 16 },
+        drawImage: (img) => { if (String(img).startsWith('kr')) n++; },
+      }, { x: 0, y: 0 }, anyTilesF, 0.7, 'over');
+      check('§7F(d) §5.2: GENAU EIN drawImage je Posen-Over-Zelle', n === 1, `${n} Draws`);
+    }
+    // swayPhase selbst bleibt unberuehrt (Bestandsformel, Gegen-Wache).
+    check('§7F(d) swayPhase (Bestand) bleibt bei t = 0 auf Schritt 0 / dx 0',
+      swayPhase(5, 7, 0, 1.6).step === 0 && swayPhase(5, 7, 0, 1.6).dx === 0);
+  }
+
+  // ---------------------------------------------------------------------
+  // (e) §4.3 / M5 KONTAKTSCHATTEN-GEOMETRIE je Klasse.
+  //     Die Profil-Konstanten stehen hier WOERTLICH wie in main.js §4.3 (sie
+  //     werden NICHT importiert — main.js ist nicht Node-importierbar, und so
+  //     fliegt jede stille Profil-Aenderung auf). Rechnung wie
+  //     .tmp/gp6_shadow_coverage.mjs: Kamera (0,0), Sprite horizontal
+  //     zentriert und mit den Fuessen auf der AABB-Unterkante; gezaehlt werden
+  //     Schatten-Texel in Zeilen KOMPLETT UNTER dem Sprite.
+  // ---------------------------------------------------------------------
+  {
+    const R = Math.round;
+    const SW_STD = [0.90, 0.95, 0.7, 0.4], SDY_STD = [-1, 0, 1, 2];
+    const SW_BIG = [0.90, 0.95, 0.85, 0.65, 0.40], SDY_BIG = [-1, 0, 1, 2, 3];
+    const KLASSEN = [
+      ['Spieler', 12, 14, 'player_down_0'], ['Skelett', 12, 14, 'skeleton_0'],
+      ['Ghul', 14, 14, 'ghoul_0'], ['Grufthund', 14, 12, 'hound_0'],
+      ['Rostpanzer', 14, 16, 'rust_0'], ['Boss Grabwaechter', 20, 24, 'warden_idle'],
+      ['Vase', 12, 12, 'vase'], ['Urne', 12, 12, 'urn'], ['Truhe', 16, 14, 'chest_closed'],
+    ];
+    const unterFuss = (w, h, key) => {
+      const g = SPRITES[key];
+      if (!g) return -1;
+      const iw = g[0].length, ih = g.length;
+      const big = w >= 18 && h >= 20;
+      const ws = big ? SW_BIG : SW_STD, dys = big ? SDY_BIG : SDY_STD;
+      const cx = w / 2, baseY = h - 1;
+      const sx = R(w / 2 - iw / 2), sy = R(h - ih);
+      let unten = 0;
+      for (let i = 0; i < ws.length; i++) {
+        const sw = Math.max(1, R(w * ws[i]));
+        const x0 = R(cx - sw / 2), y = R(baseY) - dys[i];
+        if (y <= sy + ih - 1) continue;          // Zeile liegt noch HINTER dem Sprite
+        for (let x = x0; x < x0 + sw; x++) {
+          const gx = x - sx, gy = y - sy;
+          const verdeckt = gy >= 0 && gy < ih && gx >= 0 && gx < iw && g[gy][gx] !== '.';
+          if (!verdeckt) unten++;
+        }
+      }
+      return unten;
+    };
+    let schlecht = null;
+    const werte = [];
+    for (const [label, w, h, key] of KLASSEN) {
+      const n = unterFuss(w, h, key);
+      werte.push(`${label} ${n}`);
+      if (n < 8 && schlecht === null) schlecht = `${label} (${key}): nur ${n} sichtbare Texel unter der Fusskante`;
+    }
+    check('§7F(e) M5 Kontaktschatten: JEDE Klasse hat >= 8 sichtbare Schatten-Texel UNTER der Fusskante',
+      schlecht === null, schlecht || werte.join(' | '));
+    check('§7F(e) §4.3 Standardprofil hat VIER Zeilen und die unterste liegt UNTER der Fusskante (dy -1)',
+      SW_STD.length === 4 && SDY_STD.length === 4 && SDY_STD[0] === -1);
+    // Negativ-Kontrolle: ohne die -1-Zeile faellt mindestens eine Klasse durch —
+    // die neue Zeile ist also wirklich der Traeger des Messziels.
+    {
+      const ohne = KLASSEN.map(([, w, h, key]) => {
+        const g = SPRITES[key];
+        const iw = g[0].length, ih = g.length;
+        const big = w >= 18 && h >= 20;
+        const ws = (big ? SW_BIG : SW_STD).slice(1), dys = (big ? SDY_BIG : SDY_STD).slice(1);
+        const cx = w / 2, baseY = h - 1, sx = R(w / 2 - iw / 2), sy = R(h - ih);
+        let unten = 0;
+        for (let i = 0; i < ws.length; i++) {
+          const sw = Math.max(1, R(w * ws[i])), x0 = R(cx - sw / 2), y = R(baseY) - dys[i];
+          if (y <= sy + ih - 1) continue;
+          for (let x = x0; x < x0 + sw; x++) {
+            const gx = x - sx, gy = y - sy;
+            if (!(gy >= 0 && gy < ih && gx >= 0 && gx < iw && g[gy][gx] !== '.')) unten++;
+          }
+        }
+        return unten;
+      });
+      check('§7F(e) Negativ-Kontrolle: OHNE die dy=-1-Zeile faellt das Messziel durch (die Zeile traegt M5)',
+        ohne.some((n) => n < 8), ohne.join(','));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (f) §5.1 / M4 XL-EXISTENZ + Tinten-Bbox + Bake-Masse.
+  // ---------------------------------------------------------------------
+  {
+    const XL_BASIS = ['tree_canopy_xl_a', 'tree_canopy_xl_a_m', 'tree_canopy_xl_b',
+      'tree_canopy_xl_b_m', 'tree_canopy_xl_c', 'tree_canopy_xl_c_m'];
+    const POSE_SUFFIX = ['', '_r1', '_r2', '_l1', '_l2'];
+    const fehlt = [];
+    for (const b of XL_BASIS) for (const s of POSE_SUFFIX) if (!TILE_ART[b + s]) fehlt.push(b + s);
+    check('§7F(f) §5.1: alle 30 XL-Kronen-Grids (6 Keys x 5 Posen) existieren',
+      fehlt.length === 0, fehlt.join(','));
+    const bbox = (g) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+      g.forEach((row, y) => [...row].forEach((c, x) => {
+        if (c === '.') return;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }));
+      return x1 < 0 ? [0, 0] : [x1 - x0 + 1, y1 - y0 + 1];
+    };
+    const gross = XL_BASIS.filter((k) => TILE_ART[k]).map((k) => [k, ...bbox(TILE_ART[k])]);
+    const ab40 = gross.filter(([, w, h]) => w >= 40 && h >= 28);
+    const ab56 = gross.filter(([, w, h]) => w >= 56 && h >= 40);
+    check('§7F(f) M4: >= 3 Kronen-Keys mit Tinten-Bbox >= 40x28',
+      ab40.length >= 3, gross.map(([k, w, h]) => `${k} ${w}x${h}`).join(' | '));
+    check('§7F(f) M4: >= 1 Kronen-Key mit Tinten-Bbox >= 56x40',
+      ab56.length >= 1, ab56.map(([k, w, h]) => `${k} ${w}x${h}`).join(' | ') || 'keiner');
+    // §5.3: der Bake ist EXAKT sw*16 x 32 — die Hoehe folgt NICHT der Krone.
+    for (const [key, sw] of [['canopy_shadow_xl_a', 3], ['canopy_shadow_xl_b', 4], ['canopy_shadow_xl_c', 3]]) {
+      const g = TILE_ART[key];
+      check(`§7F(f) §5.3 ${key}: Masse exakt ${sw * 16}x32`,
+        !!g && g.length === 32 && g.every((r) => r.length === sw * 16),
+        g ? `${g[0].length}x${g.length}` : 'FEHLT');
+      if (g) {
+        check(`§7F(f) §5.3 ${key}: nur die Toene 'n'/'0' und Transparenz (kein 'k', §5.3)`,
+          [...g.join('')].every((c) => c === '.' || c === 'n' || c === '0'),
+          [...new Set(g.join('').replace(/\./g, ''))].join(''));
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (g) §5.3 canopy_shadow_xl-EMISSION: Ein-Draw im ZWEITPASS nach den
+  //     Bodenkacheln, Versatz anchorOffset + (+2,+2).
+  // ---------------------------------------------------------------------
+  {
+    const N3 = 10;
+    const grRows = Array.from({ length: N3 }, () => '.'.repeat(N3));
+    const AX7 = 2, AY7 = 2, SW7 = 4, SH7 = 3;
+    const oG = Array.from({ length: N3 }, () => Array(N3).fill('.'));
+    oG[AY7][AX7] = 'B';
+    const legG = {
+      '.': { art: 'grass' },
+      B: { art: 'tree_canopy_xl_b', span: [SW7, SH7], solid: false, shadowArt: 'canopy_shadow_xl_b' },
+    };
+    const tmG = createTilemap(grRows, legG, oG.map((r) => r.join('')));
+    const folge = [];
+    tmG.draw({
+      canvas: { width: N3 * 16, height: N3 * 16 },
+      drawImage: (img, sx, sy) => folge.push({ k: String(img), sx, sy }),
+    }, { x: 0, y: 0 }, anyTilesF, 0, 'ground');
+    const bakeIdx = folge.findIndex((o) => o.k === 'canopy_shadow_xl_b');
+    const letzteKachel = folge.map((o) => o.k).lastIndexOf('grass');
+    check('§7F(g) §5.3 canopy_shadow_xl wird im GROUND-Pass GENAU EINMAL gezeichnet',
+      folge.filter((o) => o.k === 'canopy_shadow_xl_b').length === 1);
+    check('§7F(g) §5.3 ZWEITPASS: der Bake kommt NACH allen Bodenkacheln des Fensters',
+      bakeIdx > letzteKachel && letzteKachel >= 0,
+      `Bake bei ${bakeIdx}, letzte Bodenkachel bei ${letzteKachel} von ${folge.length}`);
+    const dxG = Math.max(-4, Math.min(4, variantIndex(AX7 + 1013, AY7 + 571, 29) - 14));
+    const dyG = (variantIndex(AX7 + 421, AY7 + 907, 17) % 9) - 4;
+    const bakeOp = folge[bakeIdx];
+    check('§7F(g) §5.3 Versatz = anchorOffset PLUS (+2,+2) (Lichtrichtung oben-links)',
+      !!bakeOp && bakeOp.sx === AX7 * 16 + dxG + 2 && bakeOp.sy === (AY7 + SH7) * 16 + dyG + 2,
+      bakeOp ? `ist=(${bakeOp.sx},${bakeOp.sy}) soll=(${AX7 * 16 + dxG + 2},${(AY7 + SH7) * 16 + dyG + 2})` : '-');
+    // Realbezug: die echte GRAVEYARD-Karte emittiert die Bakes auch wirklich.
+    {
+      const tmR = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, GRAVEYARD.overRows);
+      const bakes = new Set();
+      let bakeMin = Infinity, kachelMax = -1, i = 0;
+      tmR.draw({
+        canvas: { width: tmR.wPx, height: tmR.hPx },
+        drawImage: (img) => {
+          const k = String(img);
+          if (k.startsWith('canopy_shadow_xl_')) { bakes.add(k); if (i < bakeMin) bakeMin = i; }
+          else if (!k.startsWith('canopy_shadow')) kachelMax = i;
+          i++;
+        },
+      }, { x: 0, y: 0 }, anyTilesF, 0, 'ground');
+      check('§7F(g) GRAVEYARD emittiert alle drei XL-Bakes im Ground-Pass',
+        bakes.size === 3, [...bakes].sort().join(','));
+      check('§7F(g) GRAVEYARD: KEIN Kronen-Schatten vor der letzten Bodenkachel (Zweitpass, §5.3)',
+        bakeMin > kachelMax, `erster Bake bei ${bakeMin}, letzte Bodenkachel bei ${kachelMax}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (h) §6.1 water_shallow_vert-VERDRAHTUNG.
+  // ---------------------------------------------------------------------
+  {
+    // WICHTIG: hier KEINE Proxy-Kachelquelle. Der depthArt-Pass zieht seine
+    // _v1/_v2-Variante nur, wenn die Quelle den Key WIRKLICH BESITZT
+    // (hasOwnProperty, tilemap.js) — ein Proxy, der jeden Namen beantwortet,
+    // faellt bewusst auf die Basis zurueck. Also eine echte Key-Tabelle aus
+    // TILE_ART, genau wie im Bestandstest §6#4l.
+    const echteQuelle = {};
+    for (const k of Object.keys(TILE_ART)) echteQuelle[k] = k;
+    const zieheKeys = (def) => {
+      const tm = createTilemap(def.rows, def.legend, def.overRows || null);
+      const out = [];
+      tm.draw({
+        canvas: { width: tm.wPx, height: tm.hPx },
+        drawImage: (img) => out.push(String(img)),
+      }, { x: 0, y: 0 }, echteQuelle, 0, 'ground');
+      return out;
+    };
+    const HOR = /^water_shallow(_v[12])?$/;
+    const VER = /^water_shallow_vert(_v[12])?$/;
+    const kF = zieheKeys(FLUESTERGRUFT);
+    const kG = zieheKeys(GRAVEYARD);
+    check('§7F(h) §6.1 Gruft-Kanal: NULL horizontale water_shallow-Kacheln mehr',
+      kF.filter((k) => HOR.test(k)).length === 0, `${kF.filter((k) => HOR.test(k)).length}`);
+    check('§7F(h) §6.1 Gruft-Kanal: der vertikale Uferring wird wirklich gezogen',
+      kF.filter((k) => VER.test(k)).length > 0, `${kF.filter((k) => VER.test(k)).length} Kacheln`);
+    check('§7F(h) §6.1: die _v1/_v2-Streuung des depthArt-Passes greift auf dem neuen Basis-Key',
+      ['water_shallow_vert', 'water_shallow_vert_v1', 'water_shallow_vert_v2'].every((k) => kF.includes(k)),
+      [...new Set(kF.filter((k) => VER.test(k)))].join(','));
+    check('§7F(h) §6.1 Gegen-Gate: der FRIEDHOFSTEICH bleibt UNVERAENDERT horizontal',
+      kG.filter((k) => HOR.test(k)).length > 0 && kG.filter((k) => VER.test(k)).length === 0,
+      `horiz=${kG.filter((k) => HOR.test(k)).length} vert=${kG.filter((k) => VER.test(k)).length}`);
+    check('§7F(h) §6.1: die drei vertikalen Uferring-Grids existieren in TILE_ART',
+      ['water_shallow_vert', 'water_shallow_vert_v1', 'water_shallow_vert_v2']
+        .every((k) => TILE_ART[k] && TILE_ART[k].length === 16 && TILE_ART[k].every((r) => r.length === 16)));
+  }
+
+  // ---------------------------------------------------------------------
+  // (i) §6.3 WEGSPORN 'P': Flags byte-gleich 'p', Emissions-Byte-Gleichheit
+  //     der Nachbarzellen, sol/geo unberuehrt.
+  // ---------------------------------------------------------------------
+  {
+    const legP = GRAVEYARD.legend['P'];
+    const legKlein = GRAVEYARD.legend['p'];
+    const FLAGS = ['solid', 'fringeSource', 'fringeSet', 'fringeTarget', 'shorePrefix', 'bankSet', 'depthOverlays', 'span', 'variants', 'anim', 'animRate', 'animSync', 'sway', 'swayPoses', 'shadowArt'];
+    const flagBild = (d) => JSON.stringify(FLAGS.map((f) => (f in d ? d[f] : null)));
+    check("§7F(i) §6.3 'P' traegt EXAKT die Flags von 'p' (nur der art-Key unterscheidet sich)",
+      flagBild(legP) === flagBild(legKlein),
+      `P=${flagBild(legP)} p=${flagBild(legKlein)}`);
+    check("§7F(i) §6.3 'P' zeigt auf das eigene Grid path_pebbles, 'p' weiter auf pebble_small",
+      legP.art === 'path_pebbles' && legKlein.art === 'pebble_small' && !!TILE_ART.path_pebbles);
+    // Fundorte + Gegenprobe-Karte mit 'P' -> 'p' zurueckgetauscht.
+    const orte = [];
+    GRAVEYARD.rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === 'P') orte.push([x, y]); }));
+    check("§7F(i) §6.3 GENAU ZWEI 'P'-Zellen, beide auf ty = 15 (Trittsteine (28,15)/(29,15))",
+      orte.length === 2 && orte.every(([, y]) => y === 15) && orte.map(([x]) => x).join(',') === '28,29',
+      JSON.stringify(orte));
+    const rowsAlt = GRAVEYARD.rows.map((r) => r.replace(/P/g, 'p'));
+    const tmNeu = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, GRAVEYARD.overRows);
+    const tmAlt = createTilemap(rowsAlt, GRAVEYARD.legend, GRAVEYARD.overRows);
+    // EMISSIONS-BYTE-GLEICHHEIT: fringe/shore/bank je Zelle ueber die GANZE
+    // Karte (strenger als die geforderten 6 Nachbarzellen).
+    let emitBad = null;
+    for (let ty = 0; ty < GRAVEYARD.rows.length && !emitBad; ty++) {
+      for (let tx = 0; tx < GRAVEYARD.rows[0].length; tx++) {
+        const a = JSON.stringify([fringeOverlays(tmNeu.defAt, tx, ty), shoreEdges(tmNeu.defAt, tx, ty), bankOverlays(tmNeu.defAt, tx, ty)]);
+        const b = JSON.stringify([fringeOverlays(tmAlt.defAt, tx, ty), shoreEdges(tmAlt.defAt, tx, ty), bankOverlays(tmAlt.defAt, tx, ty)]);
+        if (a !== b) { emitBad = `(${tx},${ty}) neu=${a} alt=${b}`; break; }
+      }
+    }
+    check('§7F(i) §6.3 Emissions-BYTE-GLEICHHEIT: fringe/shore/bank aller Zellen identisch zum p-Stand',
+      emitBad === null, emitBad || '');
+    // ... und die einzige Differenz im Ground-Pass sind die zwei Kachel-Keys.
+    {
+      const zieh = (tm) => {
+        const out = [];
+        tm.draw({ canvas: { width: tm.wPx, height: tm.hPx }, drawImage: (img) => out.push(String(img)) },
+          { x: 0, y: 0 }, anyTilesF, 0, 'ground');
+        return out;
+      };
+      const kN = zieh(tmNeu), kA = zieh(tmAlt);
+      const diff = [];
+      for (let i = 0; i < Math.max(kN.length, kA.length); i++) if (kN[i] !== kA[i]) diff.push(`${i}:${kA[i]}->${kN[i]}`);
+      check('§7F(i) §6.3 Ground-Pass: GENAU zwei Draws unterscheiden sich, pebble_small -> path_pebbles',
+        diff.length === 2 && diff.every((d) => d.endsWith('pebble_small->path_pebbles')), diff.join(' | '));
+    }
+    // sol/geo: der Tausch ist gameplay-neutral (§0.4 STOPP-Signal-Wache).
+    {
+      const shaF = (s) => createHash('sha256').update(s).digest('hex');
+      const solF = (rows, legend) => shaF(rows.map((row) => [...row].map((ch) => (legend[ch] && legend[ch].solid ? '1' : '0')).join('')).join('\n'));
+      check('§7F(i) §6.3 sol-Hash: der P-Tausch aendert das Soliditaets-Raster NICHT',
+        solF(GRAVEYARD.rows, GRAVEYARD.legend) === solF(rowsAlt, GRAVEYARD.legend));
+      const geoF = (tm, def) => shaF(JSON.stringify({
+        p: def.playerSpawn, sk: def.skeletonSpawns, gh: def.ghoulSpawns,
+        en: def.enemySpawns || [], pr: def.propSpawns, po: def.portals,
+        torch: def.torchChars.map((ch) => [ch, tm.findTiles(ch)]),
+      }));
+      check('§7F(i) §6.3 geo-Hash: Spawns/Portale/torch-findTiles unberuehrt',
+        geoF(tmNeu, GRAVEYARD) === geoF(tmAlt, GRAVEYARD));
+      check('§7F(i) §6.3 sol/geo entsprechen weiterhin den §36-Goldenen von 204e28f',
+        solF(GRAVEYARD.rows, GRAVEYARD.legend) === '432b1c3217d1e70a560f98392f54fc29b021e3f86042283ee7fb5c4ec917b4a9'
+        && geoF(tmNeu, GRAVEYARD) === '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e');
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (j) §4.2/§4.4 TINT-MASKEN-ERZEUGUNGSINDEX: die Masken entstehen NACH den
+  //     TILE_ART-Canvases (§0.2 "neue Canvases erst NACH main.js:71").
+  //     Headless nachgestellt: ein document-Stub zaehlt jeden erzeugten
+  //     Canvas, danach laeuft die Bau-Reihenfolge von main.js:55-71 nach.
+  // ---------------------------------------------------------------------
+  {
+    const { buildSprite, buildAll, buildTintMask } = await import('../game/js/core/sprite_factory.js');
+    const erzeugt = [];
+    const vorherDoc = globalThis.document;
+    globalThis.document = {
+      createElement: () => {
+        const c = {
+          width: 0, height: 0,
+          getContext: () => ({ globalAlpha: 1, fillStyle: '', fillRect() {} }),
+        };
+        erzeugt.push(c);
+        return c;
+      },
+    };
+    try {
+      const gfxF = buildAll(SPRITES, PALETTE);
+      const nachSprites = erzeugt.length;
+      buildSprite(SPRITES.player_down_0, PALETTE, { flipX: true });
+      const nachFlips = erzeugt.length;
+      buildAll(TILE_ART, PALETTE);
+      const nachTiles = erzeugt.length;
+      const maske = buildTintMask(SPRITES.player_down_0, PALETTE, '#b05822', '#d8722a', 'L');
+      const maskIdx = erzeugt.indexOf(maske);
+      check('§7F(j) §4.2 Masken-Erzeugungsindex liegt NACH allen SPRITES-, Flip- und TILE_ART-Canvases',
+        maskIdx >= nachTiles && nachTiles > nachFlips && nachFlips > nachSprites,
+        `Sprites ${nachSprites} -> Flips ${nachFlips} -> Tiles ${nachTiles} -> Maske ${maskIdx}`);
+      check('§7F(j) §4.2 Maske traegt exakt die Sprite-Masse',
+        maske.width === SPRITES.player_down_0[0].length && maske.height === SPRITES.player_down_0.length,
+        `${maske.width}x${maske.height}`);
+      check('§7F(j) §4.2 keine Maske entsteht VOR den Tiles (Zaehlung deckungsgleich)',
+        nachTiles === Object.keys(SPRITES).length + 1 + Object.keys(TILE_ART).length,
+        `${nachTiles} vs ${Object.keys(SPRITES).length + 1 + Object.keys(TILE_ART).length}`);
+      check('§7F(j) §4.2 buildAll(SPRITES) liefert je Sprite genau einen Canvas',
+        Object.keys(gfxF).length === Object.keys(SPRITES).length);
+    } finally {
+      if (vorherDoc === undefined) delete globalThis.document;
+      else globalThis.document = vorherDoc;
     }
   }
 }
