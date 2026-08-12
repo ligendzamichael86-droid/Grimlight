@@ -494,6 +494,19 @@ const ANCHOR_CLAMP = {
   tree_canopy_2x2_am: 2,
   tree_canopy_2x2_c: 2,
   tree_canopy_2x2_cm: 2,
+  // GRAFIKPASS 6 §5.2 — die sechs XL-Kronen (§5.1: xl_a/xl_c span [3,2] 48x32,
+  // xl_b span [4,3] 64x48, je + '_m'). W = 4: sie sind BREITER als die
+  // 2x2-Fronten und stehen im geschlossenen Dach (§5.5) mit Spalten-Pitch 2,
+  // also 16 px Ueberlappung. Ein Versatz bis +-14 px wie bei den Back-Kuppen
+  // risse dort Loecher ins Dach (in der ersten Layout-Fassung des
+  // P0b-Generators nachgewiesen), +-4 px streut das Spaltenraster, ohne die
+  // Ueberlappung aufzubrauchen. Neue Schluessel stehen am ENDE (§0.5).
+  tree_canopy_xl_a: 4,
+  tree_canopy_xl_a_m: 4,
+  tree_canopy_xl_b: 4,
+  tree_canopy_xl_b_m: 4,
+  tree_canopy_xl_c: 4,
+  tree_canopy_xl_c_m: 4,
 };
 const ANCHOR_CLAMP_DEFAULT = 14; // Front ohne Stammdeckung
 
@@ -586,6 +599,43 @@ export function swayPhase(tx, ty, timeSec, rate) {
   return { step, dx: SWAY_DX[step] };
 }
 
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 §5.2 — SWAY ALS GEBACKENE SCHER-POSEN.
+//
+// WARUM eine zweite Funktion neben swayPhase: eine 64x48-Krone, die als
+// GANZES um +-1 px wandert, liest als Ruckeln, nicht als Wind — die Silhouette
+// muss sich aendern. Scherung im Renderer ist verboten (Transform-Verbot
+// GP4 §0, und die Flusstest-Stubs haben translate/rotate gar nicht), also
+// liegt jede Pose als eigenes Grid in der Art (Generator .tmp/gen_crowns_gp6):
+// die Legende fuehrt sie im Feld `swayPoses` (Laenge 8, Folge der Auslenkungen
+// [0,+1,+2,+1,0,-1,-2,-1] -> 5 echte Posen, poses[0] === def.art). Gezeichnet
+// wird weiterhin GENAU EIN drawImage je Over-Zelle.
+//
+// swayPose8 liefert den Index in diese Acht-Folge. Sie ist rein ZEITBASIERT
+// nach dem swayPhase-Muster (§0.6): derselbe 2x2-Cluster-Hash mit
+// SWAY_CLUSTER_N = 7 als BRUCHTEIL-Phasenversatz, dann Modulo 8 auf dem
+// Zeitschritt. AUSDRUECKLICH KEIN variantIndex mit n = 8 (n muss ungerade und
+// teilerfremd zu den anderen n am selben Ort sein — 8 waere beides nicht).
+// Kein Zufall, kein Zeitstempel (§0.6).
+//
+// RUHELAGE: bei timeSec = 0 ist p = shift/7 < 1, also step = 0 fuer JEDEN
+// Cluster -> poses[0] === def.art -> das Bild ist byte-gleich zum Basis-Grid.
+export function swayPose8(tx, ty, timeSec, rate) {
+  const shift = variantIndex(
+    Math.floor(tx / 2) + 331,
+    Math.floor(ty / 2) + 733,
+    SWAY_CLUSTER_N
+  );
+  const p = timeSec * rate + shift / SWAY_CLUSTER_N;
+  return ((Math.floor(p) % 8) + 8) % 8;
+}
+
+// Schritte pro Sekunde der Posen-Boe. 3.2 = CROWN_SWAY_RATE * 2: acht Posen
+// statt vier Schritte bei GLEICHER Zykluslaenge 2,5 s — die Posen-Kronen
+// wiegen sich also im selben Takt wie die Bestands-Boe (swayPhase) und das
+// Gras (animRate 0.8 x 2 Frames).
+export const CROWN_POSE_RATE = 3.2;
+
 // Sway-Kachel? Explizites Legenden-Flag `sway: true` gewinnt (Engine-B kann es
 // setzen); sonst die Bestands-Heuristik: langsame, NICHT synchrone anim-Kacheln
 // (animRate <= 1) sind Wiege-Deko. Fackeln (animRate-Default 6) und Wasser
@@ -617,6 +667,38 @@ export function createTilemap(rows, legend, overRows = null) {
         for (let ty = 0; ty < hTiles; ty++) {
           if (rows[ty].indexOf(ch) !== -1) throw new Error(`createTilemap: span-Zeichen '${ch}' (w>1/h>1) kommt in den GROUND-rows vor (Ground bleibt 1x1)`);
         }
+      }
+    }
+    // GRAFIKPASS 6 §5.2 — swayPoses (gebackene Scher-Posen, siehe swayPose8).
+    // Bewusst NICHT von der span-Sperre "span (>1) mit variants/anim" erfasst:
+    // swayPoses ist ein EIGENER Weg mit eigener Validierung, die anim-Sperre
+    // bleibt unangetastet. Datenfehler laut sichtbar machen wie die span-
+    // Waechter oben.
+    if (def.swayPoses) {
+      const p = def.swayPoses;
+      if (!Array.isArray(p) || p.length !== 8) {
+        throw new Error(`createTilemap: swayPoses von '${ch}' muss ein Array der Laenge 8 sein (ist ${Array.isArray(p) ? p.length : typeof p})`);
+      }
+      if (!def.span || (def.span[0] <= 1 && def.span[1] <= 1)) {
+        throw new Error(`createTilemap: swayPoses an '${ch}' ohne span > 1 (Posen gibt es nur fuer Gross-Kronen)`);
+      }
+      if (p[0] !== def.art) {
+        throw new Error(`createTilemap: swayPoses[0] von '${ch}' (${p[0]}) != def.art (${def.art})`);
+      }
+      for (let i = 0; i < p.length; i++) {
+        if (typeof p[i] !== 'string' || p[i] === '') {
+          throw new Error(`createTilemap: swayPoses[${i}] von '${ch}' ist kein Art-Key (${JSON.stringify(p[i])})`);
+        }
+      }
+    }
+    // §5.3 — shadowArt: EIN-Draw-Schattenbake (sw*16 x 32) statt der
+    // sw Einzelkacheln. Nur an span-Defs sinnvoll (der Bake ist span-breit).
+    if (def.shadowArt !== undefined) {
+      if (typeof def.shadowArt !== 'string' || def.shadowArt === '') {
+        throw new Error(`createTilemap: shadowArt von '${ch}' ist kein Art-Key (${JSON.stringify(def.shadowArt)})`);
+      }
+      if (!def.span) {
+        throw new Error(`createTilemap: shadowArt an '${ch}' ohne span (der XL-Schattenbake ist span-breit)`);
       }
     }
   }
@@ -763,7 +845,22 @@ export function createTilemap(rows, legend, overRows = null) {
   // sich zwei Anker auf derselben Schattenzelle, gewinnt der spaeter gelesene
   // (Zeilen-/Spaltenreihenfolge, deterministisch) — wie bisher beim booleschen
   // Raster, das nur EINEN Schatten pro Zelle kannte.
+  // GRAFIKPASS 6 §5.3 — XL-SCHATTEN ALS EIN-DRAW. Traegt der Anker-Def das
+  // Legendenfeld `shadowArt` (z. B. 'canopy_shadow_xl_b'), wird KEINE Reihe aus
+  // sw Einzelkacheln gemerkt, sondern EIN span-breiter Bake (sw*16 x 32,
+  // §7.G-Masstabelle). Zwei Gruende:
+  //   (1) Ein einzelner Bake kann von keiner Nachbar-Bodenkachel in der MITTE
+  //       angeschnitten werden (nur an den Aussenraendern) — das war der
+  //       gemessene Riss von bis zu 14 px zwischen den Schattenkacheln.
+  //   (2) Der Bake traegt die Silhouetten-PROJEKTION seiner Krone, nicht ein
+  //       globales Schachbrett; das geht nur klassenweise, also je Key.
+  // VERSATZ = anchorOffset der Krone PLUS (+2,+2) (Lichtrichtung oben-links;
+  // ein fixer Versatz OHNE anchorOffset risse den Schatten von der Krone ab).
+  // '_m'-Kronen ziehen denselben, UNGESPIEGELTEN Bake (deklariert, §9).
+  // Ohne shadowArt bleibt alles wie im Bestand: eine 'canopy_shadow'-Zeile
+  // ueber sw Spalten mit dem blossen Anker-Offset.
   const shadowCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
+  const shadowSpanCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
   for (let ty = 0; ty < overCells.length; ty++) {
     for (let tx = 0; tx < wTiles; tx++) {
       const def = overCells[ty][tx];
@@ -772,6 +869,10 @@ export function createTilemap(rows, legend, overRows = null) {
       const shy = ty + sh;
       if (shy < 0 || shy >= hTiles) continue;
       const off = anchorOffset(def, tx, ty);
+      if (def.shadowArt) {
+        shadowSpanCells[shy][tx] = { key: def.shadowArt, dx: off.dx + 2, dy: off.dy + 2 };
+        continue;
+      }
       for (let dx = 0; dx < sw; dx++) {
         const shx = tx + dx;
         if (shx < 0 || shx >= wTiles) continue;
@@ -900,11 +1001,17 @@ export function createTilemap(rows, legend, overRows = null) {
     // nach oben, ihr Anker kann eine Zeile UNTER dem Fenster stehen -> tyEnd +1.
     // Nach oben deckt das bestehende -1 (GP3) das dy bis +4 px weiterhin ab.
     // Beide Grenzen bleiben auf 0..wTiles-1 / 0..hTiles-1 geklammert.
+    // GRAFIKPASS 6 §5.4 CULLING-FIX RECHTS: der Anker-Offset kann eine Krone
+    // auch nach LINKS ziehen (dx < 0), ihr Anker steht dann eine Spalte weiter
+    // RECHTS als das Fenster reicht — bis zu 14 px Kronenrand poppten am
+    // rechten Bildrand herein (reproduziert, Landkarte §6). Ground bleibt
+    // unveraendert bei tx1 (dort gibt es keinen Anker-Offset).
     const tyStart = over ? Math.max(0, ty0 - (maxSpanH - 1) - 1) : ty0;
     const txStart = over ? Math.max(0, tx0 - (maxSpanW - 1) - 1) : tx0;
     const tyEnd = over ? Math.min(hTiles - 1, ty1 + 1) : ty1;
+    const txEnd = over ? Math.min(wTiles - 1, tx1 + 1) : tx1;
     for (let ty = tyStart; ty <= tyEnd; ty++) {
-      for (let tx = txStart; tx <= tx1; tx++) {
+      for (let tx = txStart; tx <= txEnd; tx++) {
         const def = over ? overCells[ty][tx] : cells[ty][tx];
         if (!def) continue;
         const sx = Math.round(tx * TILE - camX);
@@ -928,7 +1035,12 @@ export function createTilemap(rows, legend, overRows = null) {
           // der statische Anker-Offset (§4.C2) bleibt damit exakt wie geprueft.
           // Der canopy_shadow im Ground-Pass schwingt bewusst NICHT mit: der
           // Schlagschatten liegt auf dem Boden, nur die Krone wiegt sich.
-          ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx;
+          // GRAFIKPASS 6 §5.2: Traegt der Def swayPoses, ENTFAELLT diese
+          // Translation ERSATZLOS. Die Pose ist bereits geschert; zusaetzlich
+          // die ganze Krone zu verschieben hiesse, sie schert UND wackelt —
+          // die Scherung wuerde von der Translation ueberdeckt und der
+          // Stammansatz (die byte-fixe Unterkante der Posen) risse ab.
+          if (!def.swayPoses) ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx;
         } else if (over) {
           // GATE-FIX R2 (Jury-Auftrag "Kronen halbe Amplitude", Nachtrag): die
           // 16x16-HAENGE-KRONEN ('B'/'C'/'K' in GRAVEYARD_OVER_LEGEND) haben
@@ -954,7 +1066,17 @@ export function createTilemap(rows, legend, overRows = null) {
           // Determinismus-Tests (die bei t = 0 messen) bleiben unberuehrt.
           ax += swayPhase(tx, ty, timeSec, CROWN_SWAY_RATE).dx * HANG_SWAY_AMP;
         }
-        const img = tileCanvases[artFor(def, tx, ty, timeSec)];
+        // GRAFIKPASS 6 §5.2: im OVER-Zweig waehlt ein gesetztes swayPoses die
+        // Pose statt def.art (Acht-Folge, Index aus swayPose8). artFor bleibt
+        // unberuehrt — es ist der GEMEINSAME Pfad von Ground und Over, und
+        // span-Defs kommen dort ohnehin nur bis def.art. Fehlt ein Posen-Grid
+        // in der Kachelquelle, zeichnet die if(img)-Wache wie bei jedem anderen
+        // fehlenden Key still nichts (Art liefert die Keys, geprueft wird das
+        // in check_gfx6_art).
+        const artKey = (over && def.swayPoses)
+          ? def.swayPoses[swayPose8(tx, ty, timeSec, CROWN_POSE_RATE)]
+          : artFor(def, tx, ty, timeSec);
+        const img = tileCanvases[artKey];
         if (img) ctx.drawImage(img, ax, ay);
         if (!over && def.fringeTarget) {
           for (const key of fringeOverlays(defAt, tx, ty)) {
@@ -1013,15 +1135,48 @@ export function createTilemap(rows, legend, overRows = null) {
             : tileCanvases[depthArt[ty][tx]];
           if (dimg) ctx.drawImage(dimg, sx, sy);
         }
-        // Grafikpass 2 §8a.4: Kronen-Schlagschatten im GROUND-Pass NACH
-        // Tile+Fringes (unter den Entities), auf den aus overCells abgeleiteten
-        // Zellen. Fehlt der Art-Key noch, wird still nichts gezeichnet.
-        // Grafikpass 5 §4.C2: DERSELBE Anker-Offset wie die Krone (der Schatten
-        // bleibt unter ihr stehen).
-        if (!over && shadowCells[ty][tx]) {
-          const shimg = tileCanvases['canopy_shadow'];
-          const soff = shadowCells[ty][tx];
-          if (shimg) ctx.drawImage(shimg, sx + soff.dx, sy + soff.dy);
+      }
+    }
+    // -----------------------------------------------------------------------
+    // Grafikpass 2 §8a.4: Kronen-Schlagschatten im GROUND-Pass (unter den
+    // Entities), auf den aus overCells abgeleiteten Zellen. Fehlt der Art-Key
+    // noch, wird still nichts gezeichnet.
+    // Grafikpass 5 §4.C2: DERSELBE Anker-Offset wie die Krone (der Schatten
+    // bleibt unter ihr stehen).
+    //
+    // GRAFIKPASS 6 §5.3 — ZWEITER DURCHGANG. Der Schatten wurde bisher INNERHALB
+    // der Kachelschleife gezeichnet, direkt nachdem seine eigene Zelle fertig
+    // war. Die Schleife laeuft ty/tx aufsteigend, also zeichnet die Nachbarzelle
+    // rechts/unten ihre OPAKE Bodenkachel DANACH und schneidet den Schatten ab:
+    // bei dx > 0 klaffte ein bis zu 14 px breiter senkrechter Riss zwischen den
+    // Schattenkacheln (reproduziert), und ein XL-Bake wuerde bis zu 87 %
+    // uebermalt. Deshalb laufen ALLE Kronen-Schatten (canopy_shadow UND
+    // canopy_shadow_xl_*) jetzt in einem eigenen Durchgang NACH allen
+    // Bodenkacheln, Fringes, Shore-, Bank- und Depth-Overlays des Fensters.
+    // Die Zell-Zuordnung und die Koordinaten sind unveraendert — nur die
+    // Reihenfolge wandert.
+    if (!over) {
+      // Das Fenster der EINZELKACHELN bleibt exakt das der Bodenschleife
+      // (tx0..tx1 / ty0..ty1) — byte-gleiche Draw-Menge, nur spaeter. Der
+      // XL-Bake ist bis zu 4 Kacheln breit, sein Anker kann also links/oberhalb
+      // des Fensters stehen und trotzdem hineinragen; dafuer laeuft der
+      // Durchgang ueber dasselbe erweiterte Startfenster wie der Over-Layer.
+      const shTxStart = Math.max(0, tx0 - (maxSpanW - 1) - 1);
+      const shTyStart = Math.max(0, ty0 - 1);
+      for (let ty = shTyStart; ty <= ty1; ty++) {
+        for (let tx = shTxStart; tx <= tx1; tx++) {
+          const sx = Math.round(tx * TILE - camX);
+          const sy = Math.round(ty * TILE - camY);
+          const span = shadowSpanCells[ty][tx];
+          if (span) {
+            const ximg = tileCanvases[span.key];
+            if (ximg) ctx.drawImage(ximg, sx + span.dx, sy + span.dy);
+          }
+          if (tx >= tx0 && ty >= ty0 && shadowCells[ty][tx]) {
+            const shimg = tileCanvases['canopy_shadow'];
+            const soff = shadowCells[ty][tx];
+            if (shimg) ctx.drawImage(shimg, sx + soff.dx, sy + soff.dy);
+          }
         }
       }
     }

@@ -1,6 +1,55 @@
 // Grimlight-Palette — düstere Diablo-Stimmung, SNES-Rampen.
 // Slice 1.5: 4-5-Ton-Rampen pro Material (Messlatte Secret of Mana).
 // Bestehende Zeichen behalten ihre Rolle, neue Zeichen ergänzen die Rampen.
+//
+// =============================================================================
+// GRAFIKPASS 6 §3.1 — BELICHTUNGS-SOCKEL (Paletten-Offset). GUELTIGER STAND.
+// =============================================================================
+// ACHTUNG BEIM LESEN: alle Luminanz-/Saettigungszahlen in den aelteren
+// Kommentarbloecken weiter unten (GP3/GP4/GP5-R2/GP5-R3) sind HISTORISCH und
+// beschreiben den jeweiligen Pass-Stand. Verbindlich ist AUSSCHLIESSLICH die
+// Tabelle hier oben plus die Inline-Kommentare an den zehn Schluesseln.
+//
+// Zehn Toene sind ADDITIV je Kanal angehoben (Quelle: .tmp/gp6_offset_tabelle.json,
+// erzeugt von .tmp/gp6_p0b_offset.mjs, in SPEC_GRAFIKPASS_6.md §3.1 eingefroren).
+// Rec.601-Gewichte summieren zu 1 -> bei kanalgleicher Addition ist DeltaL = c
+// EXAKT; die Kanaldifferenzen und damit der Farbort bleiben unveraendert.
+// KEIN neuer Schluessel (§0.11): 61 alnum + 3 Symbole bleiben exakt.
+//
+//   Ton | Rampe  | alt      | NEU      | Offset | L alt | L NEU  | S NEU
+//   ----+--------+----------+----------+--------+-------+--------+------
+//    e  | Gras   | #19241d  | #28332c  |  +15   |  31,9 |  46,9  | 0,216
+//    E  | Gras   | #253522  | #344431  |  +15   |  46,0 |  61,1  | 0,279
+//    a  | Gras   | #394d30  | #485c3f  |  +15   |  67,7 |  82,7  | 0,315
+//    m  | Gras   | #506341  | #5f7250  |  +15   |  89,4 | 104,4  | 0,298
+//    K  | Gras   | #586c38  | #677b47  |  +15   |  96,1 | 111,1  | 0,423
+//    A  | Gras   | #66804a  | #758f59  |  +15   | 114,1 | 129,1  | 0,378
+//    w  | Wasser | #162325  | #263335  |  +16   |  31,3 |  47,3  | 0,283
+//    W  | Wasser | #203336  | #36494c  |  +22   |  45,7 |  67,7  | 0,289
+//    9  | Wasser | #2a4347  | #465f63  |  +28   |  60,0 |  88,0  | 0,293
+//    =  | Wasser | #345358  | #56757a  |  +34   |  74,3 | 108,3  | 0,295
+//
+// AUFLAGEN (alle nachgerechnet, P0b):
+//  * Ordnungs-Auflage §3.1 erfuellt:
+//      k 18,3 < w 47,3 ~ e 46,9 (|Delta| 0,43 < 1 = kleinste 8-Bit-Stufe)
+//      < W 67,7 < 9 88,0 < '=' 108,3 < A 129,1 < D 156,8
+//  * Wasser-Schritte exakt gleichmaessig: 20,32 / 20,32 / 20,32 L.
+//  * 'w' behaelt den KUEHLEREN Farbort als 'e': w (38,51,53) hat B 53 > G 51,
+//    e (40,51,44) hat G 51 > B 44. Der Teich liest weiter nicht als Wiese.
+//  * Saettigung aller Wassertoene (0,283..0,295) < S('A') 0,378 — die
+//    GP3-R3-Auflage "kein Wasserpixel gesaettigter als das hellste Gras" gilt
+//    weiter, mit groesserem Abstand als vorher.
+//  * Kein Kanal ueber 255 (Maximum 143).
+//  * k / n / 0 / '*' / '+' und die Stein-Rampe t/T/L/D bleiben BEWUSST
+//    unverschoben (Silhouetten-Entscheid §3.1; das L<16-Band der Messziele
+//    ist darauf geeicht).
+// FOLGE-ANPASSUNGEN in art/sprites.js (§3.1a/b, GP6): water_mid_calm 'k' -> '+'
+// (sonst verdoppelt sich der Zonensprung gegen das neue 'w'), Back-Kronen-Rim
+// Variante C (E-Zeile -> '*', 'e'-Rim eine Zeile nach innen).
+// NACHZUG NOETIG (fremde Dateien, gemeldet): .tmp/check_gfx6_art.mjs
+// NEW_TONES = diese zehn Hex-Werte (§7.G) und .tmp/shot_gfx6.py GLANZ_RGB =
+// (0x56,0x75,0x7a) statt des GP5-R3-Werts (0x34,0x53,0x58).
+// =============================================================================
 export const PALETTE = {
   // Umriss & Schatten
   k: '#14101a', // Umriss, Fast-Schwarz
@@ -14,14 +63,17 @@ export const PALETTE = {
   // 'e' und trägt die Unterseite/Kern-Pockets der Großkronen (Volumen).
   0: '#0f1a12', // Laub sehr dunkel (Kronen-Tiefenton, Gfx2)
   // Gras (entsättigt, Friedhof): e -> E -> a -> K -> m -> A
-  e: '#19241d', // Gras sehr dunkel (Basiston). GP3-R2 JURY-3: +9% angehoben
-  //             (Farbton gehalten, uniforme Skalierung) — Gras-Ecken clippen
-  //             nicht mehr auf Fast-Schwarz unterm Lichtsystem. Sanktioniert.
-  E: '#253522', // Gras dunkel (Slice 1.5 R1: angehoben, überlebt das Licht)
-  a: '#394d30', // Gras mittel (Gfx2-R2 §8a.2: +12% aufgehellt, Farbton gehalten)
-  m: '#506341', // Moos / Grasbüschel hell (Gfx2-R2 §8a.2: +11% aufgehellt)
-  K: '#586c38', // Warmes Mittelgrün (NEU Gfx2-R2 §8a.2): Büschel-Akzent, sitzt a<K<A
-  A: '#66804a', // Gras/Moos Spitzlicht (R2: angehoben, trägt unterm Lichtsystem)
+  // GP6 §3.1: alle sechs Gras-Toene +15 je Kanal (DeltaL = +15,0 exakt).
+  e: '#28332c', // Gras sehr dunkel (Basiston), L 46,9. GP6 +15 (vorher #19241d,
+  //             L 31,9). GP3-R2 JURY-3 hatte ihn um 9% angehoben, damit die
+  //             Gras-Ecken unterm Lichtsystem nicht auf Fast-Schwarz clippen.
+  E: '#344431', // Gras dunkel, L 61,1. GP6 +15 (vorher #253522, L 46,0)
+  a: '#485c3f', // Gras mittel, L 82,7. GP6 +15 (vorher #394d30, L 67,7)
+  m: '#5f7250', // Moos / Grasbüschel hell, L 104,4. GP6 +15 (vorher #506341)
+  K: '#677b47', // Warmes Mittelgrün, L 111,1, sitzt a<K<A. GP6 +15 (vorher #586c38)
+  A: '#758f59', // Gras/Moos Spitzlicht, L 129,1 — Traeger der AUSSEN-Highlights
+  //             (§3.4: rendert bei ambient 0,22 auf L 103 > 96). GP6 +15
+  //             (vorher #66804a, L 114,1)
   // Erde (Wege, Fackelpfosten): z -> p -> v -> M -> P -> V
   z: '#332a23', // Erde dunkelst, Furchen (NEU 1.5)
   p: '#453a34', // Erde dunkel
@@ -56,6 +108,8 @@ export const PALETTE = {
   h: '#c29267', // Haut
   2: '#8f6647', // Haut-Schatten (NEU 1.5, Kapuzenschatten im Gesicht)
   // Wasser: w -> W -> 9 -> C (+ i als Glanzkante)
+  // ACHTUNG: die folgenden GP3-/GP5-Bloecke sind HISTORISCH. Gueltige Werte
+  // und Auflagen stehen im GP6-§3.1-Block am Dateikopf.
   // GP3-R3 (JURY Wasser, Prioritaet 1): Grundton 8-10% Richtung Gruen-Teal
   // gezogen (weg vom kalten Blaugrau-Fremdkoerper in der warmgruenen Palette,
   // M-K3c), Spitzen-Helligkeit/Saettigung um ~9% gesenkt (H-K5) -> Wasser ist
@@ -94,10 +148,15 @@ export const PALETTE = {
   //     .tmp/shot_gfx5.py:985 GLANZ_RGB = (0x3f,0x7a,0x70) ist ein GP3-Wert und
   //     zaehlt '='-Texel mit Toleranz 20 je Kanal — mit dem neuen '=' faellt
   //     das Glanz-Gate. Der Proof-Agent muss GLANZ_RGB auf #345358 ziehen.
-  w: '#162325', // Wasser sehr dunkel = WELLENTAL/Grundflaeche (GP5-R3)
-  W: '#203336', // Wasser mittel = Talflanke unter dem Kamm (GP5-R3)
-  9: '#2a4347', // Wasser-Zwischenblau = Wellenkamm (GP5-R3;
-  //             Kraeusel UND Tiefen-Overlays; klar unter Sprite-Helligkeit)
+  // GP6 §3.1: Wasser-Rampe je Ton mit EIGENEM ganzzahligen Kanal-Offset
+  // (+16/+22/+28/+34) auf gleichmaessige 20,32-L-Schritte gezogen. Farbort je
+  // Ton exakt erhalten (Kanaldifferenzen unveraendert).
+  w: '#263335', // Wasser sehr dunkel = WELLENTAL/Grundflaeche, L 47,3.
+  //             GP6 +16 (vorher #162325, L 31,3). Bleibt kuehler als 'e'.
+  W: '#36494c', // Wasser mittel = Talflanke unter dem Kamm, L 67,7.
+  //             GP6 +22 (vorher #203336, L 45,7)
+  9: '#465f63', // Wasser-Zwischenblau = Wellenkamm, L 88,0. GP6 +28 (vorher
+  //             #2a4347, L 60,0); Kraeusel UND Tiefen-Overlays
   // Katakomben-Stein (kalte Grau-Rampe): k -> t -> T -> L -> D
   // Gfx2-R3 §8b.3: t/T/L/D um ~10% aufgehellt (Farbton gehalten, Mobile-Lesbarkeit).
   t: '#2a2e36', // Katakomben-Stein dunkel (Bodenbasis). GP3-R2 §8c.4: +10%
@@ -135,13 +194,14 @@ export const PALETTE = {
   // GRAFIKPASS 4 (§3.6): genau 3 NEUE Symbol-Toene (Alnum voll, 'l' verboten).
   // Symbol-Keys sind ein eigener Namespace ggue. Map-Legenden ('=' ist zugleich
   // GRAVEYARD-Weg-Legendenzeichen — hier reine PALETTE-Rolle, kein Konflikt).
-  '=': '#345358', // Teich-Glanz = WELLENKAMM-Spitze. GP5-R3 auf Juror-Ziel
-  //               (48,74,72) gedaempft, s. Wasser-Rampe oben. Vorher (GP5-R2)
-  //               #466e67 (Luma 97,2), davor (GP3) #3f7a70. Jetzt Luma 74,3,
-  //               S 0,409. .tmp/check_gfx5_art.mjs friert den Hex-Wert in
-  //               NEW_TONES ein — der Waechter ist im ART-Besitz (Auftrag
-  //               GP5-R3) und wurde mitgezogen; .tmp/shot_gfx5.py:985
-  //               (Proof-Besitz) muss noch nachgezogen werden, s. oben.
+  '=': '#56757a', // Teich-Glanz = WELLENKAMM-Spitze. GP6 §3.1 +34 je Kanal:
+  //               Luma 108,3 (vorher #345358 / 74,3; GP5-R2 #466e67 / 97,2;
+  //               GP3 #3f7a70), S 0,295. Bleibt unter 'A' (129,1) und weit
+  //               unter 'D' (156,8) — Wasser ist NICHT der hellste Ton im Bild
+  //               (GP3-R3-Auflage). Der Hex-Wert ist in NEW_TONES eines
+  //               Art-Waechters eingefroren: .tmp/check_gfx6_art.mjs (§7.G,
+  //               Integrator) und .tmp/shot_gfx6.py GLANZ_RGB (Proof) muessen
+  //               auf #56757a stehen.
   '+': '#1a2a1b', // Kronen-Back dunkel 1 (zweite Kronenreihe, ~-20% Value ggue e).
   '*': '#141f15', // Kronen-Back dunkel 2 (tiefster Back-Kronen-Ton, unter '+').
   // GP4-R2 (Jury K2/M): kuehler Back-Kronen-Rim an der Oberkante. Der frozen
@@ -150,6 +210,9 @@ export const PALETTE = {
   // als Rim verwendet — eine Stufe blauer als das Ideal, aber ohne Testbruch.
   //
   // GRAFIKPASS 5 (§1.1/§1.6/§3.B4/§3.B6) — NUR Kommentar, KEIN neuer Ton.
+  // HISTORISCH: die Luminanzzahlen in diesem Block sind GP5-Staende. Gueltig
+  // ist der GP6-§3.1-Block am Dateikopf (e 46,9 | E 61,1 | a 82,7 | m 104,4 |
+  // K 111,1 | A 129,1 | w 47,3 | W 67,7 | 9 88,0 | '=' 108,3).
   // Die Palette bleibt bei 61 Alnum + 3 Symbolen ('='/'+'/'*'). Festgehalten
   // sind hier die Ton-Entscheide des Passes, weil sie sonst nur im Grid stehen:
   //  1. Der GP4-R2-Notbehelf 'C' als Back-Kronen-Rim ist ZURUECKGENOMMEN. Der
