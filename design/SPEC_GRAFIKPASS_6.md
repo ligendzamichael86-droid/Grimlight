@@ -1,4 +1,21 @@
-# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.1, 12.08.2026, Fable)
+# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.2, 12.08.2026, Fable)
+
+REV 2.2 = Rev 2.1 + drei MESS-Korrekturen nach dem ersten Proof-Lauf
+(design/GP6_PHASE4-Diagnose; Schwellen unverändert, nur Methoden):
+(K1) M2-Stufenzählung rastet auf die deklarierte Leiter
+{ambient·k/12} mit Toleranz ±0,015 (der 3-Kanal-Schätzer streut
+durch 8-Bit-Rundung ±0,014 und zerlegte jede echte Stufe in zwei
+0,01-Bins — Engine-Gegenprobe: exakt 13 Stufen; Kontrollen: A/A =
+1 Stufe, Engine-k-Folge = Positiv-Referenz). (K2) Gradient-Schnitt:
+"kein Plateau < 2 Blöcke" kollidierte mit dem in §2.2 PFLICHT-
+erhaltenen rWob-Jitter (Nominalbreite 2,25 Blöcke ± 1,44 px) —
+neue Regel: ≥ 8 Sprünge ≥ 0,04 UND ≥ 8 Plateaus ≥ 2 Blöcke,
+höchstens 3 Plateaus < 2 Blöcke. (K3) M3-Halbseiten-Metrik =
+Halbseiten(Tint) − Halbseiten(__noTint) am SELBEN Frame/Ort
+(NAH ≥ +6 L, FERN < 2 L — die wörtliche Rev-2.1-Kontrolle maß den
+Lichtfeld-Gradienten mit); Fern-Paar-Kontrolle auf zwei KEGELFREIE
+Orte (CATACOMBS hat beweisbar nur EIN kegelfreies Gebiet — zwei
+≥ 48 px entfernte sind dort nicht konstruierbar).
 
 REV 2.1 = Rev 2 + Phase-0-Ergebnisse (design/GP6_PHASE0.md):
 E1/E2 eingetragen, §2-Geometrie nach Messung entschieden (4-px-Läufe,
