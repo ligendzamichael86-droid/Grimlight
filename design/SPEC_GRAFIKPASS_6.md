@@ -1,4 +1,11 @@
-# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2, 12.08.2026, Fable)
+# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.1, 12.08.2026, Fable)
+
+REV 2.1 = Rev 2 + Phase-0-Ergebnisse (design/GP6_PHASE0.md):
+E1/E2 eingetragen, §2-Geometrie nach Messung entschieden (4-px-Läufe,
+harte Bänder OHNE Bayer im Lichtfeld, Lauf-Deckel 2000 statt des zum
+Zeitbudget inkonsistenten 1200), Worst-View korrigiert, Rim-Variante C,
+M1-Dunkel-Bänder und Goodhart-Gate an die Simulation geeicht.
+Ab hier sind ALLE Schwellen eingefroren.
 
 Grundlage: Michaels Entscheid OPTION A (design/DOSSIER_GRAFIKBLOCK.md),
 Landkarte design/GP6_LANDKARTE.md, adversarialer Review
@@ -102,21 +109,28 @@ Schwellen werden in P0 gemessen und als Rev 2.1 eingetragen:
 
 ### M1 Belichtung (feste Kameras aus Landkarte T2 §3)
 
-| Karte | Median-L | Highlight (E1) | Anteil L<16 |
+| Karte | Median-L | Highlight (E1, GEEICHT) | Anteil L<16 |
 |---|---|---|---|
-| GRAVEYARD (beide Szenen) | 38..46 | Anteil L>96 ≥ E1a | ≤ 3,0 % |
-| CATACOMBS | 40..50 | Anteil L>128 ≥ E1b | ≤ 6,0 % |
-| FLUESTERGRUFT | 33..44 | Anteil L>128 ≥ E1c | ≤ 8,0 % |
-| BOSS_KAMMER | 38..48 | Anteil L>128 ≥ E1d | ≤ 4,0 % |
+| GRAVEYARD (beide Szenen) | 38..46 | Anteil L>96 ≥ **1,01 %** | ≤ 3,0 % |
+| CATACOMBS | 40..50 | Anteil L>128 ≥ **1,94 %** | ≤ **10,0 %** |
+| FLUESTERGRUFT | 33..44 | Anteil L>128 ≥ **0,92 %** | ≤ **9,0 %** |
+| BOSS_KAMMER | 38..48 | Anteil L>128 ≥ **1,32 %** | ≤ **5,0 %** |
 
-Highlight außen auf L>96 (Break-even-Rechnung Review P2-B4/P3-B7:
-L>128 ist außen physikalisch nicht erreichbar — die Rev-1-Spalte
-war falsch). **E1-Formel:** P0b simuliert die Offset-Palette auf
-den palette_pur-Bildern + Ambient-Blend; E1x := max(1,25 × IST,
-0,6 × Simulationswert), je Karte, auf 2 Nachkommastellen.
+Highlight außen auf L>96 (Review P2-B4/P3-B7). E1 nach der
+Rev-2-Formel aus der P0b-Vormessung eingetragen (GRAVEYARD auf die
+ungünstigere Szene geeicht). HINWEIS an die Builder: Innen liefert
+der Paletten-Offset allein nur 1,62/0,81/1,12 % — die Lücke von
+0,33/0,11/0,21 pp MUSS aus Kegelkernen (§2.1), HOT_RINGS am Docht
+(§2.6) und Tint-Masken (§4.2) kommen (P0b-Warnung 1). Die
+L<16-Bänder innen sind auf die Simulation geeicht (P0b-Warnung 3:
+'k'/'t' bleiben bewusst unverschoben — Silhouetten-Entscheid §3.1;
+alle drei Bänder liegen unter dem IST und sind damit weiterhin
+Verbesserungs-Gates).
 **Goodhart-Gegen-Gate:** Highlight-Texel verteilen sich auf ≥ 3
 Palettenton-Klassen und ≥ 12 zusammenhängende Cluster; kein
-Einzelton stellt > 60 % (Review P3-M13). Positiv-Kontrolle:
+Einzelton stellt AUSSEN > 60 %, INNEN > 75 % (P0b-Warnung 2: der
+Stein-Spitzlicht-Ton 'D' stellt innen naturgemäß 62-69 % — die
+60er-Grenze wäre dort unabhängig von der Bildqualität rot). Positiv-Kontrolle:
 GP5-Archivbild reproduziert Median 24,9 ±0,5. Negativ-Kontrolle:
 Schwarzbild (Median < 5, Highlight 0).
 
@@ -140,10 +154,15 @@ Zeit eingefroren, fester Pulse.
   **≥ 8 und ≤ 13 Sprünge**, jeder ≥ 0,04 (0,55/12 = 0,0458 ✓),
   kein Plateau < 2 Blöcke (Review P2-B5: 2-px-Blöcke können keine
   3-px-Plateaus garantieren).
-- **Glow-Zone getrennt (E2):** distinkte (A−B)-Luminanzwerte auf
-  Block-Mitteln, EINE freistehende Fackel (kein zweiter Kegel in
-  d < 2r), Ring d ≤ 0,48·r, fester Pulse. **E2-Formel:** P0a misst
-  IST; E2 := max(24, 0,6 × IST), ganzzahlig (Review P3-M5).
+- **Glow-Zone getrennt (E2, GEEICHT): ≤ 24 distinkte
+  (A−B)-Luminanzwerte auf RASTER 1 L** (Raster-Festlegung P0a:
+  0,01-Raster misst Rauschen, IST wäre 294), Block-Mittel, Ring
+  d ≤ 0,48·r, fester Pulse. **Mess-Szene FEST:** GRAVEYARD-Fackel
+  tc(28,18) — CATACOMBS hat KEINE freistehende Fackel (P0a) —
+  Spieler auf (606,318), Kamera klemmt auf (320,204); Aufbau
+  erfüllt nachgewiesen Spielerlicht-Abstand ≥ 2r, Ring im Bild,
+  außerhalb Vignetten-Zone, HUD-frei. IST 35 → E2 = max(24, 21)
+  = **24**.
 Kontrollen: A-gegen-A → 1 Stufe; Fernzone → a == ambient ±0,01
 (exakt erfüllbar dank §2.1).
 
@@ -169,9 +188,11 @@ dE < 4.
 
 - Art (check_gfx6_art): ≥ 3 Kronen-Keys Tinten-Bbox ≥ 40×28,
   ≥ 1 mit ≥ 56×40.
-- Dach: bestes 48×32-Fenster GRAVEYARD ≥ 85 % Kronen-Pixel;
-  **Gegen-Gate:** im Fenster ≥ 2 verschiedene XL-Keys, kein Key
-  > 60 % Anteil (Review P3-M15).
+- Dach: bestes 48×32-Fenster GRAVEYARD, **das das Gegen-Gate
+  erfüllt** (≥ 2 XL-Keys, kein Key > 60 %), hat ≥ 85 %
+  Kronen-Pixel-Deckung (Formulierung nach P0b-§4b: sonst wären
+  Bestwert und Gegen-Gate gegeneinander unerfüllbar; der
+  P0b-Layout-Entwurf erreicht 100 % bei 4 Keys / max 54,7 %).
 - Spieler-unter-Laub, Beweiszelle UNTER EINER xl_b-KRONE
   (span [4,3], §5.5): Kopf-Fenster = oberste 16 Sprite-Zeilen
   (KRONEN_HEAD_ROWS_GP6 = 16, span-generisch hergeleitet, Review
@@ -210,34 +231,46 @@ quantizeLight wird GENAU EINMAL auf das fertige PRODUKT
 2.2 **Pure Funktion** `lightRuns(lights, camera, ambient, timeSec,
 viewW, viewH)` in lighting.js: liefert eine **paarweise DISJUNKTE
 Partition** der Vereinigung aller Licht-Bounding-Boxen (jeder
-Texel wird GENAU EINMAL gestanzt — mehrfaches destination-out
-erzeugte die Zwischenstufen neu, Review P3-M2) als
-Scanline-Segmente `{x, y, w, h:2, k}` je 2-px-Zeile:
-**Ringband-Läufe, NICHT je 2×2-Block** — Bayer nur als
-±1-Block-SAUM an den Stufengrenzen (Review P2-B2: Voll-Bayer
-zerschlägt die Läufe auf ~7800/Frame = 10,4 ms; Saum-Bayer ist
-Ziel ≤ 1200 Läufe). Flicker-Radius auf ganze 2-px-Schritte
-gerundet; rWob-Jitter in der Lookup-Distanz bleibt.
-**KEIN Frame-Cache** (Review P2-B3: Invalidierung ~100 %/Frame,
-bewegte Lichter machen jeden Schlüssel falsch) — es wird jeden
-Frame gerechnet; die Kosten steuert die Lauf-Obergrenze.
+Texel GENAU EINMAL gestanzt, Review P3-M2) als Scanline-Segmente
+`{x, y, w, h:4, k}` je **4-px-Zeile** mit **HARTEN Bandgrenzen —
+KEIN Bayer im Lichtfeld** (Phase-0-Entscheid nach Messung, GP6_
+PHASE0 P0a: der ±1-Block-Saum deckt 60 % des Fensters = faktisch
+Voll-Bayer bei Faktor-3-Kosten; die 4-px/12-Stufen/hart-Variante
+mit gebündeltem Zeichnen misst 1,00× Bestand bei 1605 Läufen.
+Die Bayer-Rastersprache tragen Vignette + Lit-Dither;
+Jury-Deklaration §9). **Rest-Profil FEST (P0a-Annahme A1
+bestätigt):** `rest(u) = clamp((u − 0,25)/0,75, 0, 1)` mit
+u = d/r — die lineare Interpolation der Bestands-Treppe.
+**k=12-Läufe (X=0) werden UNTERDRÜCKT** (No-Op-fillRects).
+Flicker-Radius auf ganze 2-px-Schritte gerundet; rWob-Jitter in
+der Lookup-Distanz bleibt. **KEIN Frame-Cache** (Review P2-B3) —
+jeden Frame rechnen; **Lauf-Deckel ≤ 2000/Frame** (konsistent zum
+1,35×-Zeitbudget bei ~0,95 µs je fillRect, P0a; der Rev-2-Deckel
+1200 war geometrisch unerreichbar — eine einzelne Fackel erzeugt
+1206 Läufe bei 2-px-Höhe).
 
 2.3 **draw()**: Ambient-Fill unverändert zuerst (Detektor-Sonde).
-Danach je Lauf destination-out-fillRect `rgba(0,0,0,X)` bei
-globalAlpha=1, X = 1 − k/12. `ctx.drawImage(off,0,0)` 3-arg.
-(Alpha-Mathematik vom Prüfer bestätigt: dst_a = a, Rundung ±0,002.)
+Danach die Läufe als destination-out-fillRect `rgba(0,0,0,X)` bei
+globalAlpha=1, X = 1 − k/12 — **gebündelt nach Stufe ("Eimer",
+P0a-Hebel A): 13 VORBERECHNETE rgba-Strings, Läufe nach k
+gruppiert gezeichnet, 13 fillStyle-Zuweisungen je Frame** (erlaubt,
+weil die Partition disjunkt ist → Reihenfolge frei; spart gemessen
+24-29 %). `ctx.drawImage(off,0,0)` 3-arg. (Alpha-Mathematik vom
+Prüfer bestätigt: dst_a = a, Rundung ±0,002.)
 
-2.4 **Performance-Gate (Phase 0, bindend, Review P2-B1):**
-Worst-View ist CATACOMBS Kamera (96,72) mit **20 Fackeln +
-Spielerlicht** (25 Fackeln gesamt auf der Karte — die Rev-1-Zahl
-12 war falsch). P0a misst zuerst die BESTANDS-Baseline (heutiger
-Punch+Warm-Pass) am selben View über 300 Frames. Gate für den
-Umbau: **Mittel ≤ 1,35 × Baseline, P95 ≤ 1,5 × Baseline, UND
-≤ 1200 fillRect-Läufe je Frame** (Aufruf-Protokoll §2.7).
-Entschärfungskette: (1) Bayer-Saum entfällt (nur harte
-Stufengrenzen), (2) sanktionierte Einzelausnahme
-160×90-Offscreen + EIN 5-arg-drawImage (stub-sicher belegt,
-Prüfer bestätigt), (3) STOPP + Eskalation Hauptloop.
+2.4 **Performance-Gate (GEMESSEN und ENTSCHIEDEN, GP6_PHASE0
+P0a):** Worst-View ist CATACOMBS Kamera **(112,80) mit 21
+Lichtern** (P0a-Gegenprobe; die Rev-2-Angabe (96,72)/„20 Fackeln"
+war ungenau: dort sind es 19 Fackeln + Spielerlicht). Baseline
+gemessen: 2,067 ms Mittel / 2,700 ms P95 → Limits **≤ 2,79 ms
+Mittel, ≤ 4,05 ms P95, ≤ 2000 Läufe**. Die beschlossene Geometrie
+(§2.2/§2.3: 4-px, 12 Stufen, hart, Eimer) misst im Harness
+**1,00× Mittel / 1,00× P95 / 1605 Läufe = GRÜN mit Reserve**.
+Phase 3/4 verifizieren das Gate am ECHTEN Umbau im Spiel.
+Rest-Entschärfungskette, falls der echte Umbau abweicht:
+(1) 8-px-Laufhöhe (gemessen 0,79×/825), (2) sanktionierte
+Einzelausnahme 160×90-Offscreen + EIN 5-arg-drawImage,
+(3) STOPP + Eskalation Hauptloop.
 
 2.5 **Warm-Pass bleibt arc-basiert**, `pulse` auf 5 feste Werte
 quantisiert (0,5/0,625/0,75/0,875/1,0).
@@ -251,7 +284,8 @@ Pfosten/die Ziegelwand). Weiß-Stresstest danach wiederholen.
 2.7 Smoke additiv (GP6-§7F): quantizeLight-Wertemenge (13 Werte),
 lightRuns-Determinismus, Disjunktheit ("keine zwei Läufe
 überlappen"), Läufe ⊆ Bounding-Box-Union, k ⊆ 0..12,
-Radius-Rundung, Lauf-Zählung ≤ 1200 am Testlicht-Setup,
+Radius-Rundung, Lauf-Zählung ≤ 2000 am Testlicht-Setup,
+k=12-Unterdrückung, Eimer-Bündelung (≤ 13 fillStyle-Wechsel),
 drawImage-Argumentzahl-Protokoll.
 
 ---
@@ -267,18 +301,22 @@ w 47,0 / W 67,3 / 9 87,7 / '=' 108,0 (gleichmäßige Schritte);
 Ordnungs-Auflage `k < w = e < W < 9 < '=' < A < D`; 'w' behält
 den kühleren Farbort (B > G). **Folge-Anpassungen (Pflicht):**
 (a) `water_mid_calm`: 'k' → '+' (35,5) als Tiefen-Schleier, sonst
-verdoppelt sich der Zonensprung (Review P3-M14); (b) Back-Kronen-
-Rim ('E'-Texel in tree_canopy_back_*) auf einen Misch-Ton ~10 L
-über '+' umsetzen — der GP5-R2-Entscheid gegen den Stahlband-
-Defekt bleibt gewahrt; Jury-Deklaration (Review P3-M11);
+verdoppelt sich der Zonensprung (Review P3-M14); (b) Back-Kronen-Rim: **Variante C aus der P0b-Rim-Analyse** —
+in den drei tree_canopy_back_*-Grids wird die 'E'-Rim-Zeile zu
+'*' (dunkle Oberkontur) und der Rim-Ton 'e' wandert an denselben
+Spalten EINE Zeile nach innen; Ergebnis +11,4 L über '+', 0 %
+unsichtbare Rim-Texel, GP5-R2-Beziehung (10,5 L) auf 0,9 L genau
+reproduziert; Jury-Deklaration (Review P3-M11);
 (c) shore_*-Dämpfung wird RELATIV formuliert: Kachelmittel
 shore_s/e/w ≥ 8 L UNTER shore_n nach Offset (Review P3-B4).
-**Globalität deklariert (Review P3-M10):** Die Rampen-Töne stecken
-auch in Innen-Grids (brick_moss, stone_floor-'m', sarcophagus,
-torch_wall …) — dieses Mit-Aufhellen ist GEWOLLT (Moos/Akzente
-leuchten leicht); die §3.2-Innen-Prognosen bleiben gültig, weil
-'t' unverändert ist und die Moos-Anteile < 3 % Fläche stellen;
-Jury-Deklaration. Wiesenlicht-Klassen (6 Grids) auf ±2..4 L um
+**Globalität deklariert (Review P3-M10, P0b-präzisiert):** Die
+Rampen-Töne stecken auch in Innen-Grids (Nutzer-Listen in
+.tmp/gp6_nutzer_tabelle.json) — Mit-Aufhellen GEWOLLT. Anteile:
+CATACOMBS 1,1 %, BOSS_KAMMER 0,7 %, **FLUESTERGRUFT 7,1 %** (der
+Kanal trägt die volle Wasser-Rampe — deshalb liegt deren
+SIM-Median bei 38,0 statt 34,6; das M1-Band hält, die
+ambientTint-Reserve ist dort 5-6 L, GRÖSSER als in Rev 2
+angenommen); Jury-Deklaration. Wiesenlicht-Klassen (6 Grids) auf ±2..4 L um
 das neue Pool-Mittel ~50. Der 47er-Pool nur per Offset.
 
 3.2 **Ambient (einzige Flusstest-Änderung §7.A):** GRAVEYARD
@@ -531,13 +569,18 @@ Nach jeder Phase: Hauptloop prüft + committet.
 ## §9 JURY (3 direkte Opus-Agenten)
 
 Prüfen die MESSUNGEN, liefern Sichtbefunde, Note informativ.
-Deklarationsliste: fillText-Überdeckung + GOLD-Θ auf
-Game-Over/Sieg (§6.7b), Schatten-Blinken (§4.3), Hänge-Kronen-
-Rest + ungespiegelte _m-Schatten (§5.3/5.5), Lit-Dither-Blinken
-(§6.2), ambientTint-Regel (§3.3), Innen-Grids erben den Offset
-(§3.1), Back-Kronen-Rim-Neumischung (§3.1b), Level-Up-Ring/Drops/
-Projektile tint-frei — Props getönt (§4.2), 5-arg-Einzelausnahme
-falls §2.4-2 zog. Material: Vollszenen, 9 Crops 4-6×, Strips,
+Deklarationsliste: **Lichtfeld hart gestuft OHNE Bayer, Kanten
+vertikal auf 4 px gerastert** (Phase-0-Messentscheid §2.2; die
+Bayer-Rastersprache tragen Vignette + Lit-Dither — falls die Jury
+die 4-px-Kante als Prio-0 liest, ist der Tausch auf 2 px eine
+bewusste 1,55×-Kosten-Entscheidung für Michael), 'D'-Dominanz der
+Innen-Highlights bis 75 % (§1/M1), fillText-Überdeckung + GOLD-Θ
+auf Game-Over/Sieg (§6.7b), Schatten-Blinken (§4.3), Hänge-
+Kronen-Rest + ungespiegelte _m-Schatten (§5.3/5.5), Lit-Dither-
+Blinken (§6.2), ambientTint-Regel (§3.3), Innen-Grids erben den
+Offset inkl. Kanal 7,1 % (§3.1), Back-Kronen-Rim Variante C
+(§3.1b), Level-Up-Ring/Drops/Projektile tint-frei — Props getönt
+(§4.2), 5-arg-Einzelausnahme falls §2.4-2 zog. Material: Vollszenen, 9 Crops 4-6×, Strips,
 Gradient-Schnitt, Messreport. Max 3 Runden; danach Ergebnis an
 Michael.
 
