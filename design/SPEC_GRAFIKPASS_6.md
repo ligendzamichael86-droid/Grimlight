@@ -1,5 +1,23 @@
 # SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.4, 13.08.2026, Fable)
 
+REV 2.5 = Rev 2.4 + drei Runde-2-Fixer-Eskalationen (13.08., Fable):
+(F1) Die 2-Zeichen-Regex-Verallgemeinerung der §7.G-Maßtabelle in
+check_gfx6_art.mjs:120/122 UND smoke_test.mjs:1734/1736
+(`canopy_shadow_xl_*(_[gd])?`) ist SANKTIONIERT — reine
+Verallgemeinerung, kein Gate wird schwächer.
+(F2) shot_gfx6.py WRAP_TILEMAP MUSS den 6. draw-Parameter
+durchreichen (`(...rest)`-Muster wie WRAP_PLAYER), sonst ist der
+P0-A-Fix im Beweismaterial unsichtbar — Pflicht-Nachzug §1.
+(F3) M4-METRIK-GENERALISIERUNG (erzwungen durch den sanktionierten
+Alpha-0,55-Fix: exakte A==B-Zählung ist bei Alpha < 1 konstruktiv 0):
+Verdeckung wird GRADIERT gemessen, `V = 1 − mean|A−B| / mean|C−D|`
+über die Silhouette. BINDEND: V(Kopf) ∈ 0,45..0,85 (Untergrenze =
+die Krone überlagert weiterhin; Obergrenze = Jury-Mandat J2) UND
+≥ 25 % der Voll-Silhouette lesbar (Jury-Zahl). Die binären
+Rev-2.3-Zahlen (verdeckt_kopf ≥ 100, Quotient ≥ 0,75) galten für
+das Exakt-Regime und sind ERSETZT. Gemessen vom Fixer: V(Kopf)
+0,529 ✓, Lesbarkeit ✓.
+
 REV 2.4 = Rev 2.3 + Jury-Runde-1-Auflösungen (design/GP6_JURY_R1.md):
 (J1) P0-C: Die Rev-2.3-Begründung "arithmetisch unerfüllbar (19 bei
 18)" war FALSCH (Mindestbedarf 17; Juror-M-Gegenbeleg existiert) —
