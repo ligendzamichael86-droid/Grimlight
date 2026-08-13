@@ -1,4 +1,21 @@
-# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.2, 12.08.2026, Fable)
+# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.3, 13.08.2026, Fable)
+
+REV 2.3 = Rev 2.2 + zwei Methoden-Entscheide nach Proof-Lauf 2:
+(K2-FINAL) Das Pro-Strahl-Plateau-Minimum des Gradient-Schnitts
+ENTFÄLLT ersatzlos — es war arithmetisch unerfüllbar (2·8+3 = 19
+geforderte bei 18 messbaren Blöcken im glow-freien Fenster;
+Erfüllbarkeits-Zensus über 972 Strahlen: 4,4 %). Die Lesbarkeit
+der Licht-Treppe sichern weiterhin BINDEND: Sprungzahl 8..13
+(gemessen 9), globaler Plateau-Anteil ≥ 95 % (gemessen 96,6 %),
+und die Jury am Gradient-Schnitt-BILD (Pflichtmaterial;
+rWob-Kompression einzelner Bänder ist deklariert).
+(M1-PHASEN) M1 friert auf die 8 FESTEN Phasen 6,05..13,05 s
+(1-s-Raster, arm_freeze wie M2/E2); je Kennzahl zählt der MEDIAN
+über die 8 Phasen (die 9-Lauf-Modus-Disziplin, auf M1 übertragen;
+Einzelphasen stehen im Report). Grund: der Fackel-Flicker bewegt
+die Mediane um bis zu ±0,8 L um die Bandgrenzen — ein einzelner,
+nicht festgenagelter Einfrier-Augenblick wäre Lotterie in beide
+Richtungen. Schwellen unverändert.
 
 REV 2.2 = Rev 2.1 + drei MESS-Korrekturen nach dem ersten Proof-Lauf
 (design/GP6_PHASE4-Diagnose; Schwellen unverändert, nur Methoden):
