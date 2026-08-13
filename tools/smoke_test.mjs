@@ -1723,11 +1723,17 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     // Die Schatten-Bakes sind NICHT so hoch wie ihre Krone: §5.3 legt die Hoehe
     // auf feste 32 px fest (der Schatten liegt flach auf dem Boden), nur die
     // Breite folgt sw. Genau das trennt 64x32 von 64x48.
+    // GP6 RUNDE 2 (P0-B): die Bake-Muster tragen jetzt das optionale MATERIAL-
+    // Suffix (_g Gras/Erdflecken, _d Weg). Die Fassungen sind reine
+    // Ton-Substitutionen desselben Grids — dieselbe Masse, deshalb dieselbe
+    // Zeile. Das GATE wird dadurch nicht schwaecher, sondern gilt fuer sechs
+    // Keys mehr; ohne die Ergaenzung fielen sie in den 16x16-Default und der
+    // Test waere ROT, obwohl die Masse korrekt ist.
     const MASSTABELLE = [
       [/^tree_canopy_xl_b(_m)?(_[rl][12])?$/, 64, 48],
-      [/^canopy_shadow_xl_b$/, 64, 32],
+      [/^canopy_shadow_xl_b(_[gd])?$/, 64, 32],
       [/^tree_canopy_xl_[ac](_m)?(_[rl][12])?$/, 48, 32],
-      [/^canopy_shadow_xl_[ac]$/, 48, 32],
+      [/^canopy_shadow_xl_[ac](_[gd])?$/, 48, 32],
       [/^tree_canopy_2x2_[abc]m?$/, 32, 32],
       [/^tree_canopy_back_[abc]$/, 32, 32],
     ];
@@ -3611,6 +3617,268 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       if (vorherDoc === undefined) delete globalThis.document;
       else globalThis.document = vorherDoc;
     }
+  }
+
+  // =====================================================================
+  // GP6 RUNDE 2 — ADDITIVE BLOECKE (k)-(n) zu den zwei Prio-0-Befunden der
+  // Jury-Runde 1 (design/GP6_JURY_R1.md). Weiterhin ausschliesslich
+  // ADDITIV; kein Bestandstest wird angefasst.
+  //   (k) P0-A Kronen-Transparenz ueber dem Spieler (globalAlpha 0,55)
+  //   (l) P0-B Ueberlapp-Dedupe (ein Stempel je Zelle)
+  //   (m) P0-B Materialwahl + stiller Fallback
+  //   (n) P0-B die acht neuen Material-Grids (Masse, Toene, Deckungsgleichheit)
+  // =====================================================================
+  const { canopyShadowMaterial } = await import('../game/js/world/tilemap.js');
+
+  // ---------------------------------------------------------------------
+  // (k) P0-A: der OPTIONALE 6. draw-Parameter opts.playerTile setzt fuer
+  //     GENAU die Kronen-Draws, deren Span-Fussabdruck die Standkachel
+  //     enthaelt, globalAlpha 0,55 — und setzt danach auf 1 zurueck.
+  //     Der Stub protokolliert je drawImage das gerade gueltige Alpha.
+  // ---------------------------------------------------------------------
+  {
+    const NK = 10;
+    const gK = Array.from({ length: NK }, () => '.'.repeat(NK));
+    const oK = Array.from({ length: NK }, () => Array(NK).fill('.'));
+    oK[2][2] = 'M';   // Anker (2,2), span [2,2] -> Fussabdruck 2..3 / 2..3
+    oK[2][6] = 'M';   // zweiter Anker weit rechts (Kontrollkrone)
+    const legK = {
+      '.': { art: 'grass' },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+    };
+    const tmK = createTilemap(gK, legK, oK.map((r) => r.join('')));
+    const zieheOver = (opts) => {
+      const log = [];
+      const ctxK = {
+        canvas: { width: NK * 16, height: NK * 16 },
+        globalAlpha: 1,
+        drawImage(img) { log.push({ k: String(img), a: this.globalAlpha }); },
+      };
+      tmK.draw(ctxK, { x: 0, y: 0 }, anyTilesF, 0, 'over', opts);
+      return { log, endAlpha: ctxK.globalAlpha };
+    };
+    const ohne = zieheOver(undefined);
+    const drauf = zieheOver({ playerTile: { tx: 3, ty: 3 } });   // im Fussabdruck
+    const daneben = zieheOver({ playerTile: { tx: 4, ty: 3 } }); // eine Spalte daneben
+    check('§7F(k) P0-A: die Draw-ANZAHL ist mit und ohne playerTile identisch (smoke:695-697 unberuehrt)',
+      ohne.log.length === drauf.log.length && ohne.log.length === daneben.log.length,
+      `${ohne.log.length} / ${drauf.log.length} / ${daneben.log.length}`);
+    check('§7F(k) P0-A: OHNE playerTile bleibt jeder Kronen-Draw bei globalAlpha 1 (Bestand byte-gleich)',
+      ohne.log.length === 2 && ohne.log.every((o) => o.a === 1),
+      JSON.stringify(ohne.log));
+    check('§7F(k) P0-A: MIT Spieler im Span-Fussabdruck zeichnet GENAU EIN Draw mit globalAlpha 0,55',
+      drauf.log.filter((o) => o.a === 0.55).length === 1
+      && drauf.log.filter((o) => o.a === 1).length === 1,
+      JSON.stringify(drauf.log));
+    check('§7F(k) P0-A: der halbtransparente Draw ist der Anker (2,2), nicht die Nachbarkrone',
+      drauf.log[0].a === 0.55 && drauf.log[1].a === 1, JSON.stringify(drauf.log));
+    check('§7F(k) P0-A: Spielerkachel EINE Spalte neben dem Fussabdruck -> alle Draws bei Alpha 1',
+      daneben.log.every((o) => o.a === 1), JSON.stringify(daneben.log));
+    check('§7F(k) P0-A: globalAlpha ist nach dem Pass explizit auf 1 zurueckgesetzt (§0.3)',
+      drauf.endAlpha === 1 && ohne.endAlpha === 1);
+    // Der GROUND-Pass darf nie transparent werden (opts wirkt nur im Over-Pass).
+    {
+      const log = [];
+      const ctxG = {
+        canvas: { width: NK * 16, height: NK * 16 },
+        globalAlpha: 1,
+        drawImage(img) { log.push(this.globalAlpha); },
+      };
+      tmK.draw(ctxG, { x: 0, y: 0 }, anyTilesF, 0, 'ground', { playerTile: { tx: 3, ty: 3 } });
+      check('§7F(k) P0-A: der GROUND-Pass ignoriert playerTile vollstaendig (immer Alpha 1)',
+        log.length > 0 && log.every((a) => a === 1));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (l) P0-B DEDUPE: zwei ueberlappende Anker stempeln jede Zelle GENAU
+  //     EINMAL (Juror-K-Befund "Doppelstempel-Flecken"), und die Deckung
+  //     geht dabei NICHT verloren.
+  // ---------------------------------------------------------------------
+  {
+    const NL = 12;
+    const gL = Array.from({ length: NL }, () => '.'.repeat(NL));
+    const zaehleZellen = (oGrid, legend) => {
+      const tmL = createTilemap(gL, legend, oGrid.map((r) => r.join('')));
+      const proZelle = new Map();
+      tmL.draw({
+        canvas: { width: NL * 16, height: NL * 16 },
+        drawImage: (img, sx, sy) => {
+          const k = String(img);
+          if (!k.startsWith('canopy_shadow')) return;
+          // Breite des Stempels in Kacheln aus dem Key (Bake = span-breit).
+          const sw = /_xl_b/.test(k) ? 4 : /_xl_[ac]/.test(k) ? 3 : 1;
+          const rowsN = /_xl_/.test(k) ? 2 : 1;
+          // Zell-Zuordnung ueber den Anker (Versatz ist < 16 px, also ist
+          // Math.round(sx/16) die Ankerspalte).
+          const cx = Math.round(sx / 16), cy = Math.round(sy / 16);
+          for (let r = 0; r < rowsN; r++) {
+            for (let c = 0; c < sw; c++) {
+              const kk = `${cx + c},${cy + r}`;
+              proZelle.set(kk, (proZelle.get(kk) || 0) + 1);
+            }
+          }
+        },
+      }, { x: 0, y: 0 }, anyTilesF, 0, 'ground');
+      return proZelle;
+    };
+    // (l1) Zwei 2x2-Anker mit ueberlappender Schattenzeile (Spalte 3 gemeinsam)
+    {
+      const o = Array.from({ length: NL }, () => Array(NL).fill('.'));
+      o[2][2] = 'M';   // Schatten auf (2,4)+(3,4)
+      o[2][3] = 'M';   // Schatten auf (3,4)+(4,4)  -> (3,4) ist der Ueberlapp
+      const leg = { '.': { art: 'grass' }, M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false } };
+      const z = zaehleZellen(o, leg);
+      check('§7F(l) P0-B Dedupe: zwei ueberlappende 2x2-Anker -> jede Schattenzelle GENAU EIN Stempel',
+        [...z.values()].every((n) => n === 1), JSON.stringify([...z]));
+      check('§7F(l) P0-B Dedupe: die Deckung bleibt vollstaendig (3 Zellen: 2,4 / 3,4 / 4,4)',
+        z.size === 3 && z.has('2,4') && z.has('3,4') && z.has('4,4'), JSON.stringify([...z.keys()]));
+    }
+    // (l2) Zwei XL-Bakes mit ueberlappendem Fussabdruck: der zweite Bake
+    //      entfaellt, seine freien Zellen werden mit 16x16-Stempeln gefuellt.
+    {
+      const o = Array.from({ length: NL }, () => Array(NL).fill('.'));
+      o[1][1] = 'B';   // span [4,3] -> Bake auf Spalten 1..4, Zeilen 4..5
+      o[1][3] = 'B';   // span [4,3] -> Spalten 3..6, Zeilen 4..5 (Ueberlapp 3,4)
+      const leg = {
+        '.': { art: 'grass' },
+        B: { art: 'tree_canopy_xl_b', span: [4, 3], solid: false, shadowArt: 'canopy_shadow_xl_b' },
+      };
+      const z = zaehleZellen(o, leg);
+      check('§7F(l) P0-B Dedupe: zwei ueberlappende XL-Bakes -> keine Zelle wird zweimal gestempelt',
+        [...z.values()].every((n) => n === 1), JSON.stringify([...z]));
+      check('§7F(l) P0-B Dedupe: die Zellen des verdraengten Bakes werden aufgefuellt (Spalten 1..6 x 2 Zeilen)',
+        z.size === 12, `${z.size} Zellen: ${[...z.keys()].sort().join(' ')}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (m) P0-B MATERIALWAHL: reine Funktion canopyShadowMaterial + der
+  //     Zweitpass haengt das Suffix an, faellt aber STILL zurueck, wenn die
+  //     Kachelquelle den Material-Key nicht fuehrt.
+  // ---------------------------------------------------------------------
+  {
+    check('§7F(m) P0-B canopyShadowMaterial: Weg-Arts -> _d',
+      ['path', 'path_v3', 'path_pebbles'].every((a) => canopyShadowMaterial({ art: a }) === '_d'));
+    check('§7F(m) P0-B canopyShadowMaterial: Gras-Pool/Gras-Flags -> _g',
+      canopyShadowMaterial({ art: 'grass_g5_00' }) === '_g'
+      && canopyShadowMaterial({ art: 'pebble_small', fringeSet: 'grass' }) === '_g'
+      && canopyShadowMaterial({ art: 'dirt_patch', bankSet: 'g' }) === '_g');
+    check('§7F(m) P0-B canopyShadowMaterial: der Weg gewinnt gegen sein eigenes bankSet g (Reihenfolge)',
+      canopyShadowMaterial({ art: 'path', bankSet: 'g', fringeTarget: true }) === '_d');
+    check('§7F(m) P0-B canopyShadowMaterial: alles uebrige -> Basis-Key (Mauer/Stamm/Wasser)',
+      ['brick_wall', 'tree_trunk', 'water', 'bones'].every((a) => canopyShadowMaterial({ art: a }) === '')
+      && canopyShadowMaterial(null) === '');
+    // Zweitpass: echte Kachelquelle (Suffix-Keys vorhanden) vs. Proxy (nicht).
+    const NM = 8;
+    const oM = Array.from({ length: NM }, () => Array(NM).fill('.'));
+    oM[2][2] = 'M';
+    const legM = {
+      '.': { art: 'grass_g5_00', fringeSource: true, fringeSet: 'grass' },
+      '=': { art: 'path', fringeTarget: true },
+      M: { art: 'tree_canopy_2x2_a', span: [2, 2], solid: false },
+    };
+    // Schattenzeile ist ay+2 = 4: links Gras, rechts Weg.
+    const gM = Array.from({ length: NM }, (_, y) => (y === 4 ? '..=.....' : '........'));
+    const echteQuelleM = {};
+    for (const k of Object.keys(TILE_ART)) echteQuelleM[k] = k;
+    const zieheM = (quelle) => {
+      const tmM = createTilemap(gM, legM, oM.map((r) => r.join('')));
+      const out = [];
+      tmM.draw({
+        canvas: { width: NM * 16, height: NM * 16 },
+        drawImage: (img) => { if (String(img).startsWith('canopy_shadow')) out.push(String(img)); },
+      }, { x: 0, y: 0 }, quelle, 0, 'ground');
+      return out;
+    };
+    const echt = zieheM(echteQuelleM);
+    check('§7F(m) P0-B Zweitpass: Gras-Zelle zieht canopy_shadow_g, Weg-Zelle canopy_shadow_d',
+      echt.length === 2 && echt.includes('canopy_shadow_g') && echt.includes('canopy_shadow_d'),
+      echt.join(','));
+    check('§7F(m) P0-B FALLBACK: eine Kachelquelle OHNE die Material-Grids zeichnet still den Basis-Key',
+      zieheM({ canopy_shadow: 'canopy_shadow' }).every((k) => k === 'canopy_shadow'),
+      zieheM({ canopy_shadow: 'canopy_shadow' }).join(','));
+    check('§7F(m) P0-B FALLBACK: eine Proxy-Kachelquelle (beantwortet jeden Namen) bleibt auf dem Basis-Key',
+      zieheM(anyTilesF).every((k) => k === 'canopy_shadow'), zieheM(anyTilesF).join(','));
+    // Realbezug: GRAVEYARD zieht beide Material-Fassungen wirklich.
+    {
+      const tmR = createTilemap(GRAVEYARD.rows, GRAVEYARD.legend, GRAVEYARD.overRows);
+      const keys = new Set();
+      tmR.draw({
+        canvas: { width: tmR.wPx, height: tmR.hPx },
+        drawImage: (img) => { if (String(img).startsWith('canopy_shadow')) keys.add(String(img)); },
+      }, { x: 0, y: 0 }, echteQuelleM, 0, 'ground');
+      check('§7F(m) P0-B GRAVEYARD zieht Gras- UND Weg-Fassung des 16x16-Stempels',
+        keys.has('canopy_shadow_g') && keys.has('canopy_shadow_d'), [...keys].sort().join(','));
+      check('§7F(m) P0-B GRAVEYARD emittiert weiterhin alle DREI XL-Bake-Klassen (jetzt material-getoent)',
+        ['a', 'b', 'c'].every((c) => [...keys].some((k) => k.startsWith(`canopy_shadow_xl_${c}`))),
+        [...keys].sort().join(','));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // (n) P0-B die acht neuen Material-Grids: Masse wie ihre Basis, Toene aus
+  //     der jeweiligen Bodenrampe, und DECKUNGSGLEICHE Silhouette (reine
+  //     Ton-Substitution — Bayer-25-%-Raster und Erosion unveraendert).
+  // ---------------------------------------------------------------------
+  {
+    const PAARE = [['canopy_shadow', 16, 16], ['canopy_shadow_xl_a', 48, 32],
+      ['canopy_shadow_xl_b', 64, 32], ['canopy_shadow_xl_c', 48, 32]];
+    const TOENE = { _g: new Set(['*', '+']), _d: new Set(['T', 'g']) };
+    let schlecht = null;
+    for (const [basis, w, h] of PAARE) {
+      for (const suf of ['_g', '_d']) {
+        const g = TILE_ART[basis + suf];
+        if (!g) { schlecht = `${basis}${suf} fehlt`; break; }
+        if (g.length !== h || g.some((r) => r.length !== w)) {
+          schlecht = `${basis}${suf}: ${g[0].length}x${g.length} statt ${w}x${h}`; break;
+        }
+        const t = [...new Set(g.join('').replace(/\./g, ''))];
+        if (t.some((c) => !TOENE[suf].has(c))) {
+          schlecht = `${basis}${suf}: Fremdton '${t.join('')}'`; break;
+        }
+        const b = TILE_ART[basis];
+        const deckung = b.every((row, y) => [...row].every((c, x) => (c === '.') === (g[y][x] === '.')));
+        if (!deckung) { schlecht = `${basis}${suf}: Silhouette weicht von ${basis} ab`; break; }
+      }
+      if (schlecht) break;
+    }
+    check('§7F(n) P0-B: alle acht Material-Grids existieren, halten Masse/Toene und sind deckungsgleich zur Basis',
+      schlecht === null, schlecht || 'ok');
+    check('§7F(n) P0-B: die BESTANDS-Keys bleiben unveraendert bei n/0 (Fallback fuer Mauer/Stamm/Wasser)',
+      PAARE.every(([b]) => [...new Set(TILE_ART[b].join('').replace(/\./g, ''))]
+        .every((c) => c === 'n' || c === '0')));
+    // Der Kern des Befunds: die neuen Toene liegen deutlich naeher am Boden.
+    const L = (hex) => 0.299 * parseInt(hex.slice(1, 3), 16)
+      + 0.587 * parseInt(hex.slice(3, 5), 16) + 0.114 * parseInt(hex.slice(5, 7), 16);
+    const mittelL = (key) => {
+      const g = TILE_ART[key];
+      let s = 0, n = 0;
+      for (const row of g) for (const c of row) { if (c === '.') continue; s += L(PALETTE[c]); n += 1; }
+      return s / n;
+    };
+    const wegL = mittelL('path');
+    const grasL = mittelL('grass_g5_00');
+    const dToene = [...TOENE._d].map((c) => L(PALETTE[c]));
+    const gToene = [...TOENE._g].map((c) => L(PALETTE[c]));
+    const altToene = ['n', '0'].map((c) => L(PALETTE[c]));
+    const mittel = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    check('§7F(n) P0-B: auf dem WEG faellt das MITTEL von ΔL je Schattenpunkt von > 60 (n/0) in das Band 25..30 (_d)',
+      wegL - mittel(altToene) > 60
+      && wegL - mittel(dToene) >= 25 && wegL - mittel(dToene) <= 30,
+      `alt ${(wegL - mittel(altToene)).toFixed(1)} neu ${(wegL - mittel(dToene)).toFixed(1)} `
+      + `(einzeln ${dToene.map((t) => (wegL - t).toFixed(1)).join('/')})`);
+    // Der TIEFE _d-Schritt muss unter 57,5 L liegen (M1-Bandgrenze GRAVEYARD:
+    // g6_02 rendert ohne Kronenschatten mit Median 46,27 auf der 46er-Grenze —
+    // die Szene haelt das Band nur, weil ein Teil der Weg-Schattenpunkte unter
+    // 46 L rendert; Renderfaktor ~0,80). Zugleich darf er nicht in die zwei
+    // dunkelsten Toene zurueckfallen (der Befund selbst).
+    check('§7F(n) P0-B: der tiefe _d-Schritt haelt das M1-Fenster (Palette <= 57,5, aber deutlich ueber n/0)',
+      Math.min(...dToene) <= 57.5 && Math.min(...dToene) > Math.max(...altToene) + 20,
+      `tief ${Math.min(...dToene).toFixed(1)} vs n/0 max ${Math.max(...altToene).toFixed(1)}`);
+    check('§7F(n) P0-B: auf GRAS bleibt ΔL je Schattenpunkt im Band 10..26 (_g)',
+      gToene.every((t) => grasL - t >= 10 && grasL - t <= 26),
+      gToene.map((t) => (grasL - t).toFixed(1)).join('/'));
   }
 }
 

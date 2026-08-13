@@ -636,6 +636,68 @@ export function swayPose8(tx, ty, timeSec, rate) {
 // Gras (animRate 0.8 x 2 Frames).
 export const CROWN_POSE_RATE = 3.2;
 
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 RUNDE 2 (P0-A) — KRONEN-TRANSPARENZ UEBER DEM SPIELER.
+//
+// Juror K (Prio 0): "von 275 Silhouetten-Texeln [...] sind unter der Krone 0
+// sichtbar [...] CLAUDE.md fordert 'Layering (Kronen ueber dem Spieler)', also
+// Ueberlagerung, nicht Ausloeschung." Rezept K, woertlich uebernommen: liegt
+// die Spieler-STANDKACHEL im Span-Fussabdruck einer Over-Krone, wird GENAU
+// DIESER Kronen-Draw mit globalAlpha 0,55 gezeichnet (danach Reset auf 1).
+//
+// BEWUSST ENG GEHALTEN (Juror-Rezept, nicht mehr):
+//   * nur SPAN-Anker (die Fussabdruck-Pruefung braucht [sw,sh]); die
+//     16x16-Haenge-Kronen ohne span bleiben unangetastet.
+//   * die Draw-ANZAHL aendert sich nicht (dieselben drawImage-Aufrufe, nur mit
+//     anderem Alpha) — die Zaehlung smoke:695-697 bleibt byte-gleich.
+//   * ohne durchgereichte Spielerkachel (jeder Bestandsaufruf, jeder Test)
+//     ist das Verhalten EXAKT wie bisher, Ruhelage t = 0 eingeschlossen.
+const CROWN_PLAYER_ALPHA = 0.55;
+
+// ---------------------------------------------------------------------------
+// GRAFIKPASS 6 RUNDE 2 (P0-B) — MATERIAL-WAHL DES KRONEN-SCHATTENS.
+//
+// Juror H + Juror K (Prio 0): der Bayer-25-%-Stempel aus den zwei dunkelsten
+// Palettentoenen liest auf dem Weg als Fliegengitter (ΔL 60,6 / 69,7 je Punkt).
+// Rezept H: Schatten-Toene auf die Schattenstufen der jeweiligen BODENRAMPE,
+// pro Material ein eigener Art-Key. Diese REINE Funktion liefert das Suffix
+// aus dem GROUND-Def der Schattenzelle:
+//
+//   '_d'  BRIGHTER WEG: art beginnt mit 'path' (path, path_v*, path_pebbles;
+//         Kachelmittel L 90,9). Diese Zellen sind der gemessene Defektort.
+//   '_g'  GRAS UND ERDFLECKEN: fringeSet 'grass' ODER bankSet 'g' ODER eine
+//         art aus dem Gras-Pool. Das schliesst pebble_small (L 52,3) und
+//         dirt_patch (L 51,3) MIT EIN — sie tragen zwar "Erd"-Namen, liegen
+//         aber auf der GRAS-Helligkeit, nicht auf der Weg-Helligkeit; mit dem
+//         _d-Ton (L 64..68) waere ihr "Schatten" um 12..16 L HELLER als der
+//         Boden. Die Reihenfolge (Weg zuerst) ist noetig, weil der Weg '='
+//         bankSet 'g' traegt (Uferband am Teichsuedrand).
+//   ''    alles uebrige (Mauer L 64,1, Stamm L 47,3, Wasser, Knochen): der
+//         BESTANDSKEY n/0 bleibt, er ist dort der naechstliegende Ton.
+//
+// Deterministisch und zeitfrei: gelesen wird def.art (die BASIS-Kachel), nicht
+// die per variantIndex/anim gewaehlte Variante — der Schattenton darf nicht
+// mit der Gras-Animation flackern.
+// Loest Basis-Key + Material-Suffix gegen die KACHELQUELLE auf. Das Suffix
+// zieht nur, wenn die Quelle den Key WIRKLICH BESITZT (hasOwnProperty — genau
+// das Muster der depthArt-/bankVariantFor-Varianten): eine Test-Kachelquelle,
+// die JEDEN Namen beantwortet (Proxy), faellt damit bewusst auf den geprueften
+// Bestandspfad zurueck, und eine Art ohne die Material-Grids zeichnet still
+// weiter den Basis-Bake. Die Engine erzwingt die Keys nicht.
+function matShadowKey(tileCanvases, basis, mat) {
+  if (!mat) return basis;
+  const k = basis + mat;
+  return Object.prototype.hasOwnProperty.call(tileCanvases, k) ? k : basis;
+}
+
+export function canopyShadowMaterial(def) {
+  if (!def) return '';
+  const art = typeof def.art === 'string' ? def.art : '';
+  if (art.startsWith('path')) return '_d';
+  if (def.fringeSet === 'grass' || def.bankSet === 'g' || art.startsWith('grass')) return '_g';
+  return '';
+}
+
 // Sway-Kachel? Explizites Legenden-Flag `sway: true` gewinnt (Engine-B kann es
 // setzen); sonst die Bestands-Heuristik: langsame, NICHT synchrone anim-Kacheln
 // (animRate <= 1) sind Wiege-Deko. Fackeln (animRate-Default 6) und Wasser
@@ -859,25 +921,124 @@ export function createTilemap(rows, legend, overRows = null) {
   // '_m'-Kronen ziehen denselben, UNGESPIEGELTEN Bake (deklariert, §9).
   // Ohne shadowArt bleibt alles wie im Bestand: eine 'canopy_shadow'-Zeile
   // ueber sw Spalten mit dem blossen Anker-Offset.
+  //
+  // GRAFIKPASS 6 RUNDE 2 (P0-B) — UEBERLAPP-DEDUPE, GENAU EIN STEMPEL JE ZELLE.
+  // Juror K: "Wo sich zwei Kronenschatten ueberlappen, wird doppelt gestempelt"
+  // (gemessen auf GRAVEYARD: von 156 Schattenzellen bekamen 42 zwei und 2 sogar
+  // drei Stempel — das Bayer-25-%-Raster verdichtet sich dort auf bis zu 44 %
+  // und liest als dunkler Fleck). Der Aufbau laeuft deshalb jetzt in ZWEI
+  // Runden ueber ein Belegungs-Set:
+  //
+  //   RUNDE 1 (Bakes): ein shadowArt-Bake ist EIN Draw und laesst sich nicht
+  //     teilen (Zuschneiden waere 5-arg-drawImage = §0.3-Verbot). Er wird
+  //     gezeichnet, wenn KEINE seiner Fussabdruck-Zellen (sw Spalten x 2
+  //     Zeilen — der Bake ist 32 px hoch) schon belegt ist, und belegt sie dann
+  //     alle. REIHENFOLGE: breitester Bake zuerst, bei Gleichstand Zeilen/
+  //     Spalten aufsteigend — vollstaendig deterministisch. Die Breiten-Ordnung
+  //     ist noetig, weil die XL-Anker im Zweierraster stehen und jeder Nachbar
+  //     genau eine Spalte teilt: rein zeilenweise verlieren BEIDE xl_b-Anker
+  //     (span 4, u. a. der ueber der M4-Beweiszelle) ihren Bake an einen
+  //     schmaleren Nachbarn (gemessen: nur noch xl_a/xl_c im Bild).
+  //   RUNDE 2 (16x16-Stempel): JEDE noch freie Schattenzelle bekommt genau
+  //     einen canopy_shadow-Stempel — die Zellen der Nicht-Bake-Anker UND die
+  //     Zellen der in Runde 1 verdraengten Bakes. Der 16x16-Stempel ist je
+  //     Zelle ein eigener Draw und damit beliebig teilbar; deshalb entsteht
+  //     KEINE Luecke. Ohne diese Auffuellung risse die Dedupe 16-px-Kaemme in
+  //     die geschlossenen XL-Daecher (gemessen: 31 Zellen ohne Schatten, drei
+  //     senkrechte Streifen quer durch das Nordwald-Band).
+  //
+  // Ergebnis auf GRAVEYARD: 156 Schattenzellen, jede mit GENAU EINEM Stempel;
+  // Bayer-Dichte ueberall konstant 25 %.
   const shadowCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
   const shadowSpanCells = Array.from({ length: hTiles }, () => new Array(wTiles).fill(null));
+  const shadowClaimed = new Set();
+  const cellKey = (x, y) => `${x},${y}`;
+  // Fussabdruck einer Schatten-Emission, auf die Map geklammert.
+  // rowsN = 2 fuer den 32 px hohen Bake, 1 fuer die 16x16-Stempelzeile.
+  const shadowFootprint = (tx, shy, sw, rowsN) => {
+    const out = [];
+    for (let r = 0; r < rowsN; r++) {
+      const y = shy + r;
+      if (y < 0 || y >= hTiles) continue;
+      for (let c = 0; c < sw; c++) {
+        const x = tx + c;
+        if (x < 0 || x >= wTiles) continue;
+        out.push([x, y]);
+      }
+    }
+    return out;
+  };
+  // --- Runde 1: XL-Bakes (ein Draw, nur bei voellig freiem Fussabdruck) -----
+  const verdraengt = [];
+  const bakeAnker = [];
   for (let ty = 0; ty < overCells.length; ty++) {
     for (let tx = 0; tx < wTiles; tx++) {
       const def = overCells[ty][tx];
-      if (!def || !def.span) continue;
+      if (!def || !def.span || !def.shadowArt) continue;
+      const shy = ty + def.span[1];
+      if (shy < 0 || shy >= hTiles) continue;
+      bakeAnker.push({ def, tx, ty, shy, sw: def.span[0] });
+    }
+  }
+  bakeAnker.sort((a, b) => (b.sw - a.sw) || (a.ty - b.ty) || (a.tx - b.tx));
+  for (const { def, tx, ty, shy, sw } of bakeAnker) {
+    const off = anchorOffset(def, tx, ty);
+    const fuss = shadowFootprint(tx, shy, sw, 2);
+    if (fuss.some(([x, y]) => shadowClaimed.has(cellKey(x, y)))) {
+      verdraengt.push({ fuss, off });
+      continue;
+    }
+    for (const [x, y] of fuss) shadowClaimed.add(cellKey(x, y));
+    // MATERIAL des Ein-Draw-Bakes: er deckt sw x 2 Zellen mit EINEM Ton-Satz,
+    // also entscheidet die MEHRHEIT seiner Fussabdruck-Zellen (Gleichstand:
+    // '_g' vor '_d' vor Basis — feste, deterministische Ordnung).
+    const stimmen = { _g: 0, _d: 0, '': 0 };
+    for (const [x, y] of fuss) stimmen[canopyShadowMaterial(cells[y][x])] += 1;
+    const mat = ['_g', '_d', ''].reduce((a, b) => (stimmen[b] > stimmen[a] ? b : a), '_g');
+    shadowSpanCells[shy][tx] = { key: def.shadowArt, mat, dx: off.dx + 2, dy: off.dy + 2 };
+    // MATERIALGRENZE UNTER DEM BAKE. Der Nordwald-Bake (xl_b bei (30,8)) liegt
+    // mit Zeile 11 auf Gras und mit Zeile 12 auf dem Weg — jede Mehrheitswahl
+    // traegt dort die HAELFTE des Fussabdrucks falsch (gemessen: der Gras-Ton
+    // auf dem Weg ergibt ΔL 44 je Punkt und allein 5-6 Schachbrett-Bloecke je
+    // Kamera). Die abweichenden Zellen bekommen deshalb ihren EIGENEN
+    // 16x16-Material-Stempel OBEN DRAUF, mit dem GLEICHEN Versatz wie der Bake.
+    // Das ist KEIN zweiter Stempel im Sinne des Juror-K-Befunds: beide Raster
+    // liegen durch den identischen Versatz auf DEMSELBEN Bayer-Untergitter
+    // (x ≡ dx, y ≡ dy mod 2), der Nachstempel ERSETZT die Bake-Punkte also
+    // (opake Toene, source-over) statt sie zu verdichten — die Punktdichte
+    // bleibt exakt 25 %. Die Alternative (Bake bei Material-Mix ganz
+    // weglassen) kostete in GRAVEYARD die gesamte xl_b-Klasse.
+    for (const [x, y] of fuss) {
+      const m = canopyShadowMaterial(cells[y][x]);
+      if (m === mat) continue;
+      shadowCells[y][x] = { dx: off.dx + 2, dy: off.dy + 2, mat: m };
+    }
+  }
+  // --- Runde 2: 16x16-Stempel auf allen noch freien Schattenzellen ----------
+  for (let ty = 0; ty < overCells.length; ty++) {
+    for (let tx = 0; tx < wTiles; tx++) {
+      const def = overCells[ty][tx];
+      if (!def || !def.span || def.shadowArt) continue;
       const [sw, sh] = def.span;
       const shy = ty + sh;
       if (shy < 0 || shy >= hTiles) continue;
       const off = anchorOffset(def, tx, ty);
-      if (def.shadowArt) {
-        shadowSpanCells[shy][tx] = { key: def.shadowArt, dx: off.dx + 2, dy: off.dy + 2 };
-        continue;
+      for (const [x, y] of shadowFootprint(tx, shy, sw, 1)) {
+        if (shadowClaimed.has(cellKey(x, y))) continue;
+        shadowClaimed.add(cellKey(x, y));
+        // MATERIAL je Zelle aus dem GROUND-Def genau dieser Zelle.
+        shadowCells[y][x] = { dx: off.dx, dy: off.dy, mat: canopyShadowMaterial(cells[y][x]) };
       }
-      for (let dx = 0; dx < sw; dx++) {
-        const shx = tx + dx;
-        if (shx < 0 || shx >= wTiles) continue;
-        shadowCells[shy][shx] = off;
-      }
+    }
+  }
+  // Auffuellung der in Runde 1 verdraengten Bakes (siehe Kommentar oben). Der
+  // Versatz ist DERSELBE wie beim Bake (anchorOffset PLUS (+2,+2)) — die
+  // Auffuell-Kachel steht sonst 2 px gegen ihre Bake-Nachbarn versetzt.
+  for (const v of verdraengt) {
+    for (const [x, y] of v.fuss) {
+      if (shadowClaimed.has(cellKey(x, y))) continue;
+      shadowClaimed.add(cellKey(x, y));
+      shadowCells[y][x] = { dx: v.off.dx + 2, dy: v.off.dy + 2, mat: canopyShadowMaterial(cells[y][x]) };
     }
   }
 
@@ -976,7 +1137,14 @@ export function createTilemap(rows, legend, overRows = null) {
   // runden) ließe Entities bei frac(cam.x) == 0.5 um 1 px gegen die Tiles wackeln.
   // layer: 'ground' zeichnet rows inkl. Fringe-Logik, 'over' zeichnet overRows
   // (leere Zellen = null werden übersprungen, keine Fringes im Over-Layer).
-  function draw(ctx, camera, tileCanvases, timeSec, layer = 'ground') {
+  // GRAFIKPASS 6 RUNDE 2 (P0-A): OPTIONALER 6. Parameter `opts` nach dem
+  // litDitherCells-Muster (§1.7). Heute genau ein Feld:
+  //   opts.playerTile = {tx, ty}   die STANDKACHEL des Spielers. Liegt sie im
+  //   Span-Fussabdruck einer Over-Krone, zeichnet GENAU DIESE Krone mit
+  //   globalAlpha 0,55 (Juror-Rezept K, P0-A). FEHLT der Parameter, ist das
+  //   Verhalten byte-gleich zum Bestand — alle Alt-Aufrufe (Flusstest-Stubs,
+  //   Smoke, Proof-Rig) bleiben unveraendert gruen.
+  function draw(ctx, camera, tileCanvases, timeSec, layer = 'ground', opts = null) {
     const camX = camera.x;
     const camY = camera.y;
     const viewW = ctx.canvas.width;
@@ -987,6 +1155,10 @@ export function createTilemap(rows, legend, overRows = null) {
     const ty1 = Math.min(hTiles - 1, Math.floor((camY + viewH) / TILE));
     const over = layer === 'over';
     if (over && overCells.length === 0) return;
+    // P0-A: nur im OVER-Pass und nur mit gueltiger Standkachel aktiv.
+    const pTile = (over && opts && opts.playerTile
+      && Number.isFinite(opts.playerTile.tx) && Number.isFinite(opts.playerTile.ty))
+      ? opts.playerTile : null;
     // Über-Layer: Startfenster nach links/oben um (maxSpan-1) erweitern, damit
     // Anker knapp außerhalb ihre in den Viewport ragenden Kronen zeichnen
     // (§2.3). Der Ground-Layer bleibt strikt 1x1.
@@ -1077,7 +1249,23 @@ export function createTilemap(rows, legend, overRows = null) {
           ? def.swayPoses[swayPose8(tx, ty, timeSec, CROWN_POSE_RATE)]
           : artFor(def, tx, ty, timeSec);
         const img = tileCanvases[artKey];
-        if (img) ctx.drawImage(img, ax, ay);
+        // GRAFIKPASS 6 RUNDE 2 (P0-A): steht der Spieler im Span-FUSSABDRUCK
+        // dieser Krone (tx..tx+sw-1 / ty..ty+sh-1), wird sie halbtransparent
+        // gezeichnet — er bleibt lesbar, die Krone bleibt UEBER ihm (Layering
+        // statt Ausloeschung). GENAU EIN Draw wie bisher, danach Alpha-Reset
+        // (§0.3 Pflicht; save/restore waere ein zweiter Zustandspfad).
+        if (img) {
+          const unterKrone = pTile && def.span
+            && pTile.tx >= tx && pTile.tx < tx + def.span[0]
+            && pTile.ty >= ty && pTile.ty < ty + def.span[1];
+          if (unterKrone) {
+            ctx.globalAlpha = CROWN_PLAYER_ALPHA;
+            ctx.drawImage(img, ax, ay);
+            ctx.globalAlpha = 1;
+          } else {
+            ctx.drawImage(img, ax, ay);
+          }
+        }
         if (!over && def.fringeTarget) {
           for (const key of fringeOverlays(defAt, tx, ty)) {
             const fimg = tileCanvases[key];
@@ -1169,12 +1357,12 @@ export function createTilemap(rows, legend, overRows = null) {
           const sy = Math.round(ty * TILE - camY);
           const span = shadowSpanCells[ty][tx];
           if (span) {
-            const ximg = tileCanvases[span.key];
+            const ximg = tileCanvases[matShadowKey(tileCanvases, span.key, span.mat)];
             if (ximg) ctx.drawImage(ximg, sx + span.dx, sy + span.dy);
           }
           if (tx >= tx0 && ty >= ty0 && shadowCells[ty][tx]) {
-            const shimg = tileCanvases['canopy_shadow'];
             const soff = shadowCells[ty][tx];
+            const shimg = tileCanvases[matShadowKey(tileCanvases, 'canopy_shadow', soff.mat)];
             if (shimg) ctx.drawImage(shimg, sx + soff.dx, sy + soff.dy);
           }
         }

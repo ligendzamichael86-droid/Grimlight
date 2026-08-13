@@ -951,7 +951,17 @@ function drawWorld() {
     }
   }
 
-  map.draw(ctx, camera, tiles, timeSec, 'over');
+  // GRAFIKPASS 6 RUNDE 2 (P0-A, Juror K): die STANDKACHEL des Spielers wird
+  // NUR beim 'over'-Aufruf durchgereicht. tilemap.js zeichnet jede Over-Krone,
+  // deren Span-Fussabdruck diese Kachel enthaelt, mit globalAlpha 0,55 — der
+  // Spieler bleibt unter dem Laub lesbar (CLAUDE.md "Layering (Kronen ueber dem
+  // Spieler)"), statt vollstaendig zu verschwinden (gemessen: 0 von 264
+  // Silhouetten-Texeln sichtbar). Der Abtastpunkt ist derselbe wie beim
+  // Kontaktschatten und bei lightAt (§4.1): Sprite-Mitte / Fusskante minus 1.
+  // Der 'ground'-Aufruf oben bleibt BYTE-GLEICH (kein 6. Argument).
+  const pTileX = Math.floor((player.x + player.w / 2) / 16);
+  const pTileY = Math.floor((player.y + player.h - 1) / 16);
+  map.draw(ctx, camera, tiles, timeSec, 'over', { playerTile: { tx: pTileX, ty: pTileY } });
   if (mapDef.fog) drawFog(ctx, camera, gfx, timeSec);
   // frameLights ist oben (vor dem renderables-Bau) fertig aufgebaut worden
   // (GP6 §4.1) und seither unveraendert.
