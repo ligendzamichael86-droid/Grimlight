@@ -534,6 +534,25 @@ export function drawHUD(ctx, player, input, gfx) {
       ctx.textBaseline = 'middle';
       ctx.fillText(b.label, b.x, b.y + 1);
     }
+    // SLICE 4 §4.2: PAUSE-KNOPF. EIN BESITZER — Geometrie und Sichtbarkeit
+    // stehen in input.touch.pause (core/input.js), hier wird nur daraus
+    // gezeichnet. Das Symbol sind ZWEI fillRect-Balken statt eines
+    // fillText-Sonderzeichens: '8px monospace' ist plattformabhaengig
+    // (Landkarte B §5.5), und jeder neue fillText-Zug ist eine potenzielle
+    // Test-Sonde (Review P1-m1). Kein Text, kein Risiko.
+    const pz = input.touch.pause;
+    if (pz && pz.visible) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = pz.pressed ? '#ae2f2a' : '#3a3542';
+      ctx.beginPath();
+      ctx.arc(pz.x, pz.y, pz.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#d6cbb1';
+      ctx.fillRect(pz.x - 4, pz.y - 4, 2, 8);
+      ctx.fillRect(pz.x + 2, pz.y - 4, 2, 8);
+    }
     ctx.restore();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -698,16 +717,116 @@ function centerText(ctx, text, y, color, font) {
   ctx.fillText(text, VIEW_W / 2, y);
 }
 
-export function drawTitle(ctx, timeSec) {
+// SLICE 4 §3.3: optionales viertes Argument `menu`. OHNE menu (= ohne
+// gueltigen Spielstand, und damit in allen drei Flusstests) ist diese
+// Funktion BYTE-GLEICH zum Bestand — dieselben fillText-Zuege, dieselbe
+// Blinkzeile. menu = { cursor, items, zones }; die Geometrie kommt aus
+// items/save.js (EIN Besitzer, keine zweite Koordinatenquelle).
+// Der Auswahlbalken ist ein fillRect in '#3a3542' bei globalAlpha 1 und
+// 128x18 px — er kann den Fade-Detektor der Flusstests (Vollbild 320x180,
+// '#000', 0 < alpha < 1) nicht ausloesen.
+export function drawTitle(ctx, timeSec, menu) {
   ctx.fillStyle = '#0a0810';
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   centerText(ctx, 'GRIMLIGHT', 57, '#14101a', 'bold 32px monospace'); // Schatten
   centerText(ctx, 'GRIMLIGHT', 54, '#ae2f2a', 'bold 32px monospace');
   centerText(ctx, 'Ein Friedhof. Eine Krypta. Ein Schatz.', 96, '#7d7588', '8px monospace');
-  if (Math.floor(timeSec * 2) % 2 === 0) {
+  if (menu) {
+    for (let i = 0; i < menu.items.length; i++) {
+      const z = menu.zones[i];
+      const gewaehlt = menu.cursor === i;
+      if (gewaehlt) {
+        ctx.fillStyle = '#3a3542';
+        ctx.fillRect(z.x, z.y, z.w, z.h);
+      }
+      centerText(ctx, menu.items[i], z.y + 5, gewaehlt ? '#f0bf4e' : '#7d7588', '8px monospace');
+    }
+  } else if (Math.floor(timeSec * 2) % 2 === 0) {
     centerText(ctx, 'ENTER / LEERTASTE / TIPPEN', 130, '#d6cbb1', '8px monospace');
   }
   drawVignette(ctx);
+}
+
+// ===========================================================================
+// SLICE 4 §4.1 — PAUSE-OVERLAY (HUD-Sprache: Panel-Toene #14101a/#575061/
+// #3a3542, Gold #f0bf4e, Creme #d6cbb1).
+//
+// DETEKTOR-PFLICHT (Review P1-m10): der Hintergrund ist KEIN 320x180-fillRect
+// in '#000' mit 0 < globalAlpha < 1 — das IST der Fade-Detektor der
+// Flusstests. Die Deckung steckt wie bei drawGameOver in der rgba-FUELLFARBE,
+// globalAlpha bleibt 1.
+// TEXTE meiden die Sonden-Praefixe der Flusstests ('GOLD', 'SIEG',
+// 'GAME OVER', 'GRIMLIGHT', 'STUFE', 'AUSRUESTUNG', 'x 0').
+//
+// PAUSE_MENU_ZONES ist die EINE Geometriequelle: hud.js zeichnet daraus,
+// main.js macht daraus den Tap-Hittest. Hoehe 18 px = 6,8 mm, Breite 128 px.
+// ===========================================================================
+export const PAUSE_MENU_ZONES = [
+  { x: 96, y: 74, w: 128, h: 18 },
+  { x: 96, y: 96, w: 128, h: 18 },
+  { x: 96, y: 118, w: 128, h: 18 },
+];
+
+// 1-px-Rahmen AUSSCHLIESSLICH aus fillRect. Bewusst KEIN strokeRect: die
+// Stubs von check_main_slice1 und check_boss_slice3 kennen nur fillRect,
+// clearRect, drawImage, fillText, beginPath/arc/fill/stroke, save/restore —
+// ein strokeRect im Pause-Pfad waere ein TypeError, sobald ein Test je
+// pausiert (in der Probe .tmp/probe_s4_engine.mjs gemessen). fillRect ist im
+// Projekt ohnehin die etablierte sichere Grundoperation (Boss-Balken, HUD).
+function rahmen(ctx, x, y, w, h, farbe) {
+  ctx.fillStyle = farbe;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y + 1, 1, h - 2);
+  ctx.fillRect(x + w - 1, y + 1, 1, h - 2);
+}
+
+export function drawPause(ctx, menu) {
+  ctx.fillStyle = 'rgba(6,5,12,0.72)';
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  // Panel mit Doppelrahmen wie das Inventar
+  ctx.fillStyle = '#14101a';
+  ctx.fillRect(80, 40, 160, 110);
+  rahmen(ctx, 80, 40, 160, 110, '#575061');
+  rahmen(ctx, 82, 42, 156, 106, '#3a3542');
+  centerText(ctx, 'PAUSE', 50, '#f0bf4e', 'bold 16px monospace');
+  const zeilen = [
+    'WEITER',
+    `GOTT: ${menu.god ? 'AN' : 'AUS'}`,
+    `FPS: ${menu.fps ? 'AN' : 'AUS'}`,
+  ];
+  for (let i = 0; i < zeilen.length; i++) {
+    const z = PAUSE_MENU_ZONES[i];
+    const gewaehlt = menu.cursor === i;
+    if (gewaehlt) {
+      ctx.fillStyle = '#3a3542';
+      ctx.fillRect(z.x, z.y, z.w, z.h);
+    }
+    centerText(ctx, zeilen[i], z.y + 5, gewaehlt ? '#f0bf4e' : '#d6cbb1', '8px monospace');
+  }
+  ctx.textAlign = 'left';
+}
+
+// SLICE 4 §6.4 — FPS-OVERLAY. GENAU ZWEI fillText-Zeilen (plus je ein
+// 1-px-Konturzug wie beim GOLD-Text), unten links, nur wenn im Pause-Menue
+// eingeschaltet. Werte kommen fertig gerechnet aus main.js (120-Frame-
+// Fenster) — das HUD misst nichts und kennt keine Uhr.
+export function drawFps(ctx, w) {
+  const z1 = `FPS ${w.fps}`;
+  const z2 = `MS ${w.ms.toFixed(1)} SPITZE ${w.max.toFixed(1)}`;
+  ctx.save();
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#14101a';
+  ctx.fillText(z1, 7, 159);
+  ctx.fillText(z2, 7, 169);
+  ctx.fillStyle = '#8fb85c';
+  ctx.fillText(z1, 6, 158);
+  ctx.fillText(z2, 6, 168);
+  ctx.restore();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
 }
 
 export function drawGameOver(ctx, player, timeSec) {

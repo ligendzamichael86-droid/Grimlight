@@ -25,10 +25,28 @@
 
 const VIEW_W = 320;
 const VIEW_H = 180;
-// Spec: Deadzone 8 px, Radius 40 px in BILDSCHIRM-Pixeln; interne Werte
-// werden pro Touch aus dem tatsächlichen Skalierungsfaktor abgeleitet.
-const JOY_RADIUS_SCREEN = 40;
+// ===========================================================================
+// SLICE 4 §5.1 / A4 — ERGONOMIE-MASSE.
+//
+// REFERENZGERAET (bindend fuer alle mm-Angaben hier): 1080x2400, dpr 3,
+// 6,5 Zoll, QUER. main.js skaliert dann mit 6 GERAETEpixeln je internem px;
+// input.js rechnet in CSS-px (getBoundingClientRect), das sind 6/3 = 2
+// CSS-px je internem px. Physisch: 404,9 ppi -> 1 Geraetepixel 0,0627 mm,
+// also 1 INTERNER px = 0,376 mm.
+//
+// (c) A4: JOY_RADIUS_SCREEN ist eine BILDSCHIRM-Groesse (CSS-px). 64 CSS-px
+//     = 32 interne px = 12,05 mm Vollausschlag (vorher 40 -> 7,53 mm; eine
+//     analoge Feinsteuerung war auf der Strecke kaum moeglich, Landkarte
+//     B §1.4, Einheitenfalle Review P2-M12).
+// ===========================================================================
+const JOY_RADIUS_SCREEN = 64;
 const JOY_DEADZONE_SCREEN = 8;
+// (a) A4: das JOYSTICK-FELD endet 24 interne px ueber der Canvas-Unterkante
+// (180 - 156 = 24 = 9,03 mm). Darunter liegt Androids Wischbalken bzw. der
+// iOS-Home-Indicator — ein dort begonnener Touch gehoert dem System. Ein
+// Touch unterhalb faellt bewusst in KEINE Zone; er darf insbesondere nicht in
+// die Angriffszone (rechte Haelfte) rutschen.
+const JOY_FIELD_Y1 = 156;
 
 const KEY_UP = ['KeyW', 'ArrowUp'];
 const KEY_DOWN = ['KeyS', 'ArrowDown'];
@@ -39,6 +57,9 @@ const KEY_POTION = ['KeyK', 'KeyE'];
 const KEY_CONFIRM = ['Enter', 'Space'];
 const KEY_SECONDARY = ['KeyL'];
 const KEY_INVENTORY = ['KeyI', 'Tab'];
+// SLICE 4 §4.2: Pause. Escape bewusst NICHT in der preventDefault-Liste —
+// im Browser-Vollbild ist Escape die Ausstiegstaste des Systems.
+const KEY_PAUSE = ['Escape', 'KeyP'];
 
 // HUD-Box-Zone (Inventar-Oeffner oben rechts), Rechteck (290,0)-(320,30)
 const HUD_BOX = { x0: 290, y0: 0, x1: 320, y1: 30 };
@@ -51,7 +72,8 @@ export function createInput() {
   let potionIds = new Set(); // Touch-Identifier, die auf Button B gestartet sind
   let secondaryIds = new Set(); // Touch-Identifier, die auf Button W gestartet sind
   let hudBoxIds = new Set();    // Touch-Identifier, die in der HUD-Box gestartet sind
-  let joyRadius = 20;  // interne Fallback-Werte (2×-Skalierung), toGame() aktualisiert
+  let pauseIds = new Set();     // Touch-Identifier, die auf dem Pause-Knopf gestartet sind
+  let joyRadius = 32;  // interne Fallback-Werte (2×-Skalierung), toGame() aktualisiert
   let joyDeadzone = 4;
 
   const input = {
@@ -62,6 +84,7 @@ export function createInput() {
     confirm: false,
     secondary: false,
     inventory: false,
+    pause: false,         // SLICE 4 §4.2: Pegel (Escape/P oder Pause-Knopf)
     tap: null,            // { x, y } des letzten touchstart, postUpdate() loescht
     hudBoxVisible: false, // main.js setzt, wenn die HUD-Item-Box sichtbar ist
     touch: {
@@ -70,14 +93,30 @@ export function createInput() {
       joyBaseY: 0,
       joyX: 0,
       joyY: 0,
-      joyRadius: 20, // interner Joystick-Radius (für HUD-Overlay)
+      joyRadius: 32, // interner Joystick-Radius (für HUD-Overlay)
+      // SLICE 4 §5.1 / A4 — ZONEN-GEOMETRIE. Bindende Werte, mm auf dem
+      // Referenzgeraet (1 interner px = 0,376 mm, s. Kopf):
+      //   A  r 16 -> 32 px = 12,04 mm   (Deko-Kreis; die REALE Angriffszone
+      //                                  ist die rechte Haelfte, Review P1-M2)
+      //   B  r 12 -> 24 px =  9,03 mm   Unterkante 156 -> 24 px ueber Rand (a)
+      //   W  r 14 -> 28 px = 10,54 mm   Unterkante 116, VERSETZT nach oben (b)
+      // Luecken (Mittenabstand minus beide Radien):
+      //   B<->W  sqrt(32²+42²) - 26 = 26,80 px  >= 16  (b)
+      //   A<->W  sqrt( 4²+46²) - 30 = 16,17 px  >= 12  (b)
+      // ALLE Kreise >= 9 mm Durchmesser (d).
       buttons: [
         { x: 288, y: 148, r: 16, label: 'A', pressed: false },
-        { x: 252, y: 156, r: 12, label: 'B', pressed: false },
+        { x: 252, y: 144, r: 12, label: 'B', pressed: false },
         // W erst mit Bumerang sichtbar (main.js setzt visible, hud.js
         // zeichnet nur sichtbare Buttons)
-        { x: 284, y: 106, r: 14, label: 'W', pressed: false, visible: false },
+        { x: 284, y: 102, r: 14, label: 'W', pressed: false, visible: false },
       ],
+      // SLICE 4 §4.2 PAUSE-KNOPF (oben). r 12 -> 24 px = 9,03 mm (>= 7 mm
+      // gefordert). Lage kollisionsfrei: HUD-Panel endet bei x 56, der
+      // Boss-Balken bei x 200, der GOTT-Hinweis beginnt bei ~268, die
+      // Item-Box bei 296. EIN BESITZER: hud.js zeichnet ausschliesslich aus
+      // diesem Objekt, main.js setzt nur `visible`.
+      pause: { x: 232, y: 14, r: 12, visible: false, pressed: false },
     },
     attach,
     postUpdate,
@@ -121,6 +160,9 @@ export function createInput() {
     input.secondary = anyDown(KEY_SECONDARY) || touchSecondary;
     input.touch.buttons[2].pressed = touchSecondary;
     input.inventory = anyDown(KEY_INVENTORY) || hudBoxIds.size > 0;
+    const touchPause = pauseIds.size > 0;
+    input.pause = anyDown(KEY_PAUSE) || touchPause;
+    input.touch.pause.pressed = touchPause;
   }
 
   function onKeyDown(e) {
@@ -131,6 +173,12 @@ export function createInput() {
       return;
     }
     keys.add(e.code);
+    // SLICE 4 §5.4: Tastatureingabe schaltet das Touch-Overlay wieder ab.
+    // Bisher wurde touch.active beim ersten Tap gesetzt und NIE wieder
+    // zurueckgenommen (Landkarte B §1.6) — auf dem Desktop blieben die
+    // Kreise danach dauerhaft im Bild. Der naechste Tap setzt es sofort
+    // wieder (onTouchStart).
+    input.touch.active = false;
     if (KEY_CONFIRM.includes(e.code)) input.confirm = true;
     if (KEY_UP.concat(KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ATTACK, KEY_POTION, KEY_CONFIRM, KEY_SECONDARY, KEY_INVENTORY).includes(e.code)) {
       e.preventDefault();
@@ -172,7 +220,14 @@ export function createInput() {
       // Startpunkt-Ausnahme-Muster aus Slice 1 (siehe Kopf-Kommentar).
       const w = input.touch.buttons[2];
       const b = input.touch.buttons[1];
-      if (input.hudBoxVisible
+      // SLICE 4 §4.2: der Pause-Knopf steht VOR allen anderen Zonen und
+      // greift NUR sichtbar (main.js schaltet ihn ausserhalb von 'playing'
+      // ab — sonst frisst seine Zone Taps im Titel/Game-Over, Muster
+      // hudBoxVisible, Review P1-m2).
+      const pz = input.touch.pause;
+      if (pz.visible && (p.x - pz.x) * (p.x - pz.x) + (p.y - pz.y) * (p.y - pz.y) <= pz.r * pz.r) {
+        pauseIds.add(t.identifier);
+      } else if (input.hudBoxVisible
           && p.x >= HUD_BOX.x0 && p.x <= HUD_BOX.x1
           && p.y >= HUD_BOX.y0 && p.y <= HUD_BOX.y1) {
         hudBoxIds.add(t.identifier);
@@ -181,7 +236,9 @@ export function createInput() {
       } else if ((p.x - b.x) * (p.x - b.x) + (p.y - b.y) * (p.y - b.y) <= b.r * b.r) {
         potionIds.add(t.identifier);
       } else if (p.x < VIEW_W / 2) {
-        if (joyId === null) {
+        // §5.1/A4(a): unterhalb von JOY_FIELD_Y1 beginnt kein Joystick mehr
+        // (Gestenleisten-Schutz). Der Touch faellt dann in KEINE Zone.
+        if (p.y <= JOY_FIELD_Y1 && joyId === null) {
           joyId = t.identifier;
           input.touch.joyBaseX = p.x;
           input.touch.joyBaseY = p.y;
@@ -225,6 +282,7 @@ export function createInput() {
       potionIds.delete(t.identifier);
       secondaryIds.delete(t.identifier);
       hudBoxIds.delete(t.identifier);
+      pauseIds.delete(t.identifier);
     }
     recompute();
   }
@@ -238,6 +296,7 @@ export function createInput() {
     potionIds.clear();
     secondaryIds.clear();
     hudBoxIds.clear();
+    pauseIds.clear();
     input.tap = null;
     input.touch.joyX = input.touch.joyBaseX;
     input.touch.joyY = input.touch.joyBaseY;

@@ -3882,6 +3882,986 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   }
 }
 
+// ===========================================================================
+// S4-GOLD (§6.3) — ADDITIVER BLOCK, Marker S4-§7F(gold). Slice 4, Phase 0.
+//
+// ZWECK: Der Op-Strom-Einfrierer VOR den §6.1/§6.2-Umbauten an
+// game/js/core/lighting.js (LUT-Memoisierung am Licht-Objekt, interner
+// Lauf-Puffer lightRunsInto). Protokolliert wird der KOMPLETTE
+// fillRect-Strom von createLighting().draw AUF DEM OFFSCREEN — dort sitzen
+// Ambient-Fill und saemtliche destination-out-Stanzungen, also genau das,
+// was §6.1/§6.2 anfassen. Gehen die drei sha256 nach dem Umbau unveraendert
+// durch, ist der Umbau pixel-gleich (A6 "PIXEL-GLEICH").
+//
+// DIESER BLOCK WIRD NACH DEM EINFRIEREN NICHT MEHR ANGEFASST. Ein roter
+// Hash ist KEIN Test-Problem, sondern ein Pixel-Unterschied.
+//
+// Erzeugt von .tmp/snap_lightops.mjs auf HEAD d7e7ef7 (lighting.js
+// unveraendert). Schaerfe belegt durch .tmp/snap_lightops_neg.mjs: drei
+// simulierte Regressionen (eingefrorene runs = "stale LUT" / eine Stanz-
+// stufe minimal andere Deckung / ein Lauf 1 px versetzt) schlagen je in
+// ALLEN DREI Setups an.
+//
+// Stub-Muster woertlich wie der bestehende §7F(b)-Detektor (save/restore
+// bewusst No-Op). Importe §0.4-konform via await import IM Block.
+// ===========================================================================
+{
+  const { createLighting: mkLight } = await import('../game/js/core/lighting.js');
+  const { CATACOMBS: KAT } = await import('../game/js/world/maps.js');
+  const { createHash: mkHash } = await import('node:crypto');
+
+  const GVW = 320, GVH = 180;
+
+  // Canvas-Stub: protokolliert JEDEN fillRect mit dem WIRKSAMEN Zustand
+  // (alpha, fillStyle, globalCompositeOperation) — Geometrie UND Farbe UND
+  // Composite-Modus, also alle drei Groessen der Pixel-Gleichheit.
+  const mkGoldStub = (canvas, log) => {
+    const st = { a: 1, gco: 'source-over', fill: '' };
+    return {
+      canvas, log,
+      get globalAlpha() { return st.a; },
+      set globalAlpha(v) { st.a = v; },
+      get globalCompositeOperation() { return st.gco; },
+      set globalCompositeOperation(v) { st.gco = v; },
+      get fillStyle() { return st.fill; },
+      set fillStyle(v) { st.fill = v; },
+      clearRect() {},
+      fillRect(x, y, w, h) { log.push(`f|${x}|${y}|${w}|${h}|${st.a}|${st.fill}|${st.gco}`); },
+      drawImage() {},
+      save() {}, restore() {},
+      beginPath() {}, arc() {}, fill() {},
+      createRadialGradient() { return { addColorStop() {} }; },
+      createLinearGradient() { return { addColorStop() {} }; },
+    };
+  };
+
+  // ---- DIE DREI FIXEN SETUPS (deterministisch, keine Uhr, kein Zufall) ----
+  // Jedes Setup faehrt eine feste Frame-Folge und benutzt ueber alle Frames
+  // DIESELBEN Lichtobjekte — nur so stresst das Gold die geplante LUT-
+  // Memoisierung am Licht-Objekt (§6.1: Neubau nur bei Positionsaenderung).
+  // A haelt alles ortsfest (LUT muss wiederverwendet werden), B und C
+  // bewegen je ein Licht (LUT muss neu gebaut werden).
+  const TORCH_R = 72, TILE_G = 16;
+  const katFackeln = [];
+  KAT.rows.forEach((row, ty) => [...row].forEach((ch, tx) => {
+    if (KAT.torchChars.includes(ch)) {
+      katFackeln.push({ x: tx * TILE_G + TILE_G / 2, y: ty * TILE_G + TILE_G / 2, radius: TORCH_R, flicker: 1 });
+    }
+  }));
+  const katCam = { x: 112, y: 80 };
+
+  const goldSetups = [
+    {
+      name: 'A 1 Fackel zentral (ortsfest, 12 Frames)',
+      cam: { x: 0, y: 0 }, ambient: 0.55, tint: '#06080f', frames: 12,
+      lights: [{ x: 160, y: 90, radius: 72, flicker: 1 }],
+      move: null,
+      gold: 'fac04024d3ff79d300c6284683e160d25fc055d7b7e2920a4e84f278bf533a51',
+    },
+    {
+      name: 'B 3 Fackeln versetzt (Licht 3 wandert, 12 Frames)',
+      cam: { x: 40, y: 24 }, ambient: 0.55, tint: '#06080f', frames: 12,
+      lights: [
+        { x: 100, y: 60, radius: 72, flicker: 1 },
+        { x: 220, y: 120, radius: 72, flicker: 1 },
+        { x: 160, y: 90, radius: 40, flicker: 0.3 },
+      ],
+      move: (ls) => { ls[2].x += 3; ls[2].y += 2; },
+      gold: '1a4e68d0d8e790e014fda1aca31ebfa3cd10d70753708edb9e57b6161a22b279',
+    },
+    {
+      // Lichtliste woertlich wie der bestehende §7F(b)-Lauf-Deckel-Test:
+      // alle CATACOMBS-Fackeln (r 72, flicker 1) + Spielerlaterne.
+      name: 'C Worst-View CATACOMBS (112,80), 10 Frames',
+      cam: katCam, ambient: KAT.ambient, tint: '#06080f', frames: 10,
+      lights: [...katFackeln, { x: katCam.x + GVW / 2, y: katCam.y + GVH / 2, radius: KAT.playerLightRadius, flicker: 0.3 }],
+      move: (ls) => { const p = ls[ls.length - 1]; p.x += 2; p.y += 1; },
+      gold: '4136e1f70dbdcac5c65f725175970cd405f013ae11c79b4ddf138033c0cda232',
+    },
+  ];
+
+  // Setup C haengt an maps.js. Bricht dort etwas, soll das MIT KLARTEXT
+  // auffliegen statt als undurchsichtiger Hash-Unterschied.
+  check('S4-§7F(gold) Setup C: Worst-View-Lichtliste unveraendert (26 Lichter)',
+    goldSetups[2].lights.length === 26, `${goldSetups[2].lights.length} Lichter`);
+
+  const goldStroeme = goldSetups.map((s) => {
+    const log = [];
+    const offCanvas = { width: 0, height: 0, getContext: () => mkGoldStub(offCanvas, log) };
+    const mainCanvas = { width: GVW, height: GVH, ownerDocument: { createElement: () => offCanvas } };
+    // Der Haupt-ctx protokolliert in einen SEPARATEN Eimer — gehasht wird
+    // ausschliesslich der Offscreen (Dunkelheits-/Stanz-Pass).
+    const mainCtx = mkGoldStub(mainCanvas, []);
+    const lg = mkLight(GVW, GVH);
+    for (let i = 0; i < s.frames; i++) {
+      if (i > 0 && s.move) s.move(s.lights);
+      log.push(`# frame ${i}`);
+      lg.draw(mainCtx, s.cam, s.lights, s.ambient, i / 60, s.tint);
+    }
+    return { ops: log.length - s.frames, hash: mkHash('sha256').update(log.join('\n')).digest('hex') };
+  });
+
+  // Scharfstellung: ein leerer/degenerierter Strom wuerde sonst als
+  // "stabiler Hash" durchgehen (Falsch-Gruen-Falle).
+  check('S4-§7F(gold) alle drei Stroeme sind substanziell (je > 5000 fillRects)',
+    goldStroeme.every((g) => g.ops > 5000), goldStroeme.map((g) => g.ops).join('/'));
+  check('S4-§7F(gold) die drei Setups sind wirklich verschieden (3 verschiedene Hashes)',
+    new Set(goldStroeme.map((g) => g.hash)).size === 3);
+
+  goldSetups.forEach((s, i) => {
+    check(`S4-§7F(gold) §6.3 Op-Strom-sha256 Setup ${s.name}`,
+      goldStroeme[i].hash === s.gold,
+      `ist ${goldStroeme[i].hash} (${goldStroeme[i].ops} fillRects), soll ${s.gold}`);
+  });
+}
+
+// ===========================================================================
+// SLICE 4 — ADDITIVE BLOECKE S4-§7F(a)..(f) (Spec §7, Phase 2 / Integrator).
+//
+// REGELN, unter denen diese Bloecke stehen (Spec §0.4):
+//   * NUR ADDITIV. Kein Zeichen oberhalb dieser Zeile wurde angefasst.
+//   * Alle neuen Module kommen per `await import(...)` IM BLOCK herein —
+//     die Kopf-Importe der Datei sind Bestand und bleiben unberuehrt
+//     (Review P1-M11).
+//   * S4-§7F(gold) (Phase 0, §6.3) steht oberhalb und wird NICHT angefasst.
+//
+// REFERENZGERAET fuer alle mm-Angaben (bindend, Spec A4 / Review P2-M12):
+// 1080x2400 Geraetepixel, 6,5 Zoll Diagonale, dpr 3, QUERformat.
+//   Diagonale in px  = hypot(1080, 2400)      = 2631,8 px
+//   ppi              = 2631,8 / 6,5           = 404,9
+//   1 Geraetepixel   = 25,4 / 404,9           = 0,06273 mm
+//   Skalierung quer  = min(floor(2400/320), floor(1080/180)) = min(7,6) = 6
+//   1 INTERNER px    = 6 Geraetepixel         = 0,3764 mm
+//   1 INTERNER px    = 6/dpr = 2 CSS-px       (Einheit von JOY_RADIUS_SCREEN)
+// Die Zahlen werden hier AUS DIESEN GROESSEN GERECHNET, nicht abgeschrieben:
+// eine falsche Herleitung faellt damit im Test auf, nicht erst am Geraet.
+// ===========================================================================
+{
+  const GERAET_PX_X = 2400;      // quer: lange Kante
+  const GERAET_PX_Y = 1080;
+  const ZOLL = 6.5;
+  const DPR = 3;
+  const PPI = Math.hypot(1080, 2400) / ZOLL;
+  const MM_PRO_GERAETPX = 25.4 / PPI;
+  const SKALIERUNG = Math.min(Math.floor(GERAET_PX_X / 320), Math.floor(GERAET_PX_Y / 180));
+  const MM_PRO_PX = SKALIERUNG * MM_PRO_GERAETPX;   // 0,3764
+  const CSS_PRO_PX = SKALIERUNG / DPR;              // 2
+
+  check('S4-§7F Referenzgeraet: 1 interner px = 6 Geraetepixel = 2 CSS-px = 0,376 mm',
+    SKALIERUNG === 6 && CSS_PRO_PX === 2 && Math.abs(MM_PRO_PX - 0.376) < 0.002,
+    `Skalierung ${SKALIERUNG}, ${CSS_PRO_PX} CSS-px, ${MM_PRO_PX.toFixed(4)} mm`);
+
+  // Aufzeichnender ctx-Stub. BEWUSST OHNE strokeRect/roundRect/Pfad-Extras:
+  // genau wie die Stubs der drei kanonischen Flusstests (check_main_slice1
+  // :30-51). Ein neuer Zeichenzug ausserhalb dieses Vorrats waere dort ein
+  // TypeError — dieser Stub faengt so etwas hier ab, statt es Michael zu
+  // ueberlassen.
+  function mkRec() {
+    const log = [];
+    const c = {
+      log,
+      globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      fillStyle: '', strokeStyle: '', lineWidth: 1,
+      font: '', textAlign: '', textBaseline: '',
+      _stack: [],
+      fillRect(...a) { log.push({ op: 'fillRect', alpha: this.globalAlpha, fill: this.fillStyle, args: a }); },
+      clearRect() {},
+      drawImage(img, ...a) { log.push({ op: 'drawImage', args: a }); },
+      fillText(t, x, y) { log.push({ op: 'fillText', text: String(t), x, y, font: this.font, fill: this.fillStyle }); },
+      beginPath() {}, arc(...a) { log.push({ op: 'arc', args: a }); }, fill() {}, stroke() {},
+      save() { this._stack.push({ a: this.globalAlpha, f: this.fillStyle }); },
+      restore() { const s = this._stack.pop(); if (s) { this.globalAlpha = s.a; this.fillStyle = s.f; } },
+      createRadialGradient: () => ({ addColorStop() {} }),
+    };
+    return c;
+  }
+  // Der Fade-Detektor der drei Flusstests, WOERTLICH: Vollbild-fillRect
+  // 320x180 in '#000' mit 0 < alpha < 1 auf dem Haupt-Canvas
+  // (check_main_slice1:158-163). Jeder neue Vollbild-Zug wird dagegen
+  // geprueft — ein Treffer wuerde einen Portal-Fade vortaeuschen.
+  const istFadeZug = (o) => o.op === 'fillRect' && o.fill === '#000'
+    && o.alpha > 0 && o.alpha < 1 && o.args[2] === 320 && o.args[3] === 180;
+  // Sonden-Praefixe, auf die die Flusstests im fillText-Protokoll horchen.
+  const SONDEN = ['GOLD', 'SIEG', 'GAME OVER', 'GRIMLIGHT', 'STUFE', 'AUSRUESTUNG', 'x 0'];
+
+  // -----------------------------------------------------------------------
+  // (a) §3.1 SAVE — RUNDLAUF, SCHEMA-ABLEHNUNG, maxHp-VERBOT, carry-ORDNUNG
+  // -----------------------------------------------------------------------
+  {
+    const { serialize, deserialize, applyToPlayer, SAVE_VERSION, SAVE_KEY } =
+      await import('../game/js/items/save.js');
+
+    const mkItem = (slot, stat, value, rare = false) => ({
+      slot, name: `PRUEF ${slot}`, rare, affixes: [{ stat, value }],
+    });
+
+    // Ein Spieler mit VOLLEM Zustand: Tasche, angelegte Teile, Zelda-Schiene,
+    // Progression, Gold, Traenke, angeschlagene hp.
+    const sp = createPlayer(GRAVEYARD.playerSpawn);
+    addItem(sp.inv, mkItem('weapon', 'dmg', 2));
+    addItem(sp.inv, mkItem('ring', 'pickupRadius', 6, true));
+    equipItem(sp.inv, 0);
+    sp.inv.zelda.push('boomerang', 'boss_key');
+    sp.inv.pity = 3;
+    sp.inv.newFlag = true;
+    sp.prog = { xp: 42, level: 3, hearts: 2 };
+    sp.recalcStats();
+    sp.hp = 5;
+    sp.gold = 137;
+    sp.potions = 2;
+
+    const zustand = {
+      mapKey: 'FLUESTERGRUFT',
+      spawn: { x: 72, y: 72 },
+      player: sp,
+      runFlags: { bossDead: true, openedChests: ['FLUESTERGRUFT:36,4'] },
+    };
+    const txt = serialize(zustand);
+    const roh = JSON.parse(txt);
+
+    check('S4-§7F(a) §3.1 serialize liefert Schema v1 mit allen Pflichtfeldern',
+      roh.v === SAVE_VERSION && roh.mapKey === 'FLUESTERGRUFT'
+      && roh.spawn.x === 72 && roh.spawn.y === 72
+      && roh.hp === 5 && roh.gold === 137 && roh.potions === 2
+      && roh.prog.level === 3 && roh.runFlags.bossDead === true
+      && roh.runFlags.openedChests.length === 1,
+      txt.slice(0, 120));
+    check('S4-§7F(a) §3.1 SAVE_KEY ist versioniert (ein v2-Schema kollidiert nicht)',
+      SAVE_KEY === 'grimlight.save.v1' && SAVE_VERSION === 1, `${SAVE_KEY} / v${SAVE_VERSION}`);
+    // maxHp ist ABGELEITET. Der Stand traegt weder das Feld noch die
+    // Zeichenkette (die Test-Items oben nutzen bewusst KEINEN maxHp-Affix).
+    check('S4-§7F(a) §3.1 maxHp wird NIE gespeichert (weder Feld noch Zeichenkette)',
+      !Object.hasOwn(roh, 'maxHp') && !txt.includes('maxHp'),
+      Object.keys(roh).join(','));
+    check('S4-§7F(a) §3.1 der Spieler selbst wird nie serialisiert (keine Funktionen/Timer im Stand)',
+      !Object.hasOwn(roh, 'player') && !txt.includes('invulnTimer') && !txt.includes('attackId'));
+
+    const snap = deserialize(txt);
+    check('S4-§7F(a) §3.1 Rundlauf: deserialize(serialize(x)) traegt jedes Feld zurueck',
+      !!snap && snap.mapKey === 'FLUESTERGRUFT' && snap.hp === 5 && snap.gold === 137
+      && snap.potions === 2 && snap.inv.items.length === 1
+      && snap.inv.equipped.weapon && snap.inv.equipped.weapon.slot === 'weapon'
+      && snap.inv.zelda.join(',') === 'boomerang,boss_key' && snap.inv.pity === 3
+      && snap.inv.newFlag === true && snap.prog.xp === 42 && snap.prog.level === 3
+      && snap.prog.hearts === 2 && snap.runFlags.bossDead === true
+      && snap.runFlags.openedChests[0] === 'FLUESTERGRUFT:36,4',
+      JSON.stringify(snap && snap.prog));
+    check('S4-§7F(a) §3.1 openedChests kommt als KOPIE zurueck (kein geteiltes Array)',
+      !!snap && snap.runFlags.openedChests !== zustand.runFlags.openedChests);
+
+    // Ein Affix DARF 'maxHp' heissen — das ist ein Item-Stat, kein Schemafeld.
+    // Ohne diese Probe wuerde ein zu grober maxHp-Waechter still Ringe fressen.
+    {
+      const sp2 = createPlayer(GRAVEYARD.playerSpawn);
+      addItem(sp2.inv, mkItem('armor', 'maxHp', 4, true));
+      const s2 = deserialize(serialize({
+        mapKey: 'CATACOMBS', spawn: { x: 104, y: 72 }, player: sp2,
+        runFlags: { bossDead: false, openedChests: [] },
+      }));
+      check('S4-§7F(a) §3.1 ein Item-Affix namens maxHp ueberlebt (Stat != Schemafeld)',
+        !!s2 && s2.inv.items.length === 1 && s2.inv.items[0].affixes[0].stat === 'maxHp',
+        s2 ? JSON.stringify(s2.inv.items[0].affixes) : 'null');
+    }
+
+    // --- HARTE ABLEHNUNG: jede Variante muss null liefern, nie werfen ------
+    // Ein WURF waere genauso schlimm wie ein falsches Objekt: er kaeme aus
+    // dem Modulkopf von main.js und wuerde den Start haengen lassen.
+    const pruefeAblehnung = (name, wert) => {
+      let out;
+      try {
+        out = deserialize(wert);
+      } catch (e) {
+        out = `WARF ${e && e.message}`;
+      }
+      check(`S4-§7F(a) §3.1 Ablehnung -> null: ${name}`, out === null, String(out));
+    };
+    const kaputt = (name, mutieren) => {
+      const d = JSON.parse(txt);
+      mutieren(d);
+      pruefeAblehnung(name, JSON.stringify(d));
+    };
+    pruefeAblehnung('kaputtes JSON', '{"v":1,"mapKey":');
+    pruefeAblehnung('leerer Text', '');
+    pruefeAblehnung('gar kein Text (null)', null);
+    pruefeAblehnung('undefined (Storage leer)', undefined);
+    pruefeAblehnung('Zahl statt Text', 42);
+    pruefeAblehnung('JSON-Array statt Objekt', '[1,2,3]');
+    pruefeAblehnung('JSON-null', 'null');
+    kaputt('fremde Schema-Version', (d) => { d.v = 2; });
+    kaputt('fehlende Version', (d) => { delete d.v; });
+    kaputt('unbekannte Karte', (d) => { d.mapKey = 'ATLANTIS'; });
+    kaputt('geerbter Karten-Key (constructor)', (d) => { d.mapKey = 'constructor'; });
+    kaputt('hp = 0 (waere Sofort-Tod im ersten Frame)', (d) => { d.hp = 0; });
+    kaputt('negatives Gold', (d) => { d.gold = -5; });
+    kaputt('maxHp im Stand (fremdes/aelteres Schema)', (d) => { d.maxHp = 8; });
+    kaputt('Item mit fremdem Slot', (d) => { d.inv.items[0].slot = 'hut'; });
+    kaputt('Item mit unbekanntem Affix-Stat', (d) => { d.inv.items[0].affixes[0].stat = 'luck'; });
+    kaputt('Item ohne Affixe', (d) => { d.inv.items[0].affixes = []; });
+    kaputt('angelegtes Teil im falschen Slot', (d) => { d.inv.equipped.armor = d.inv.equipped.weapon; });
+    kaputt('mehr Items als capacity', (d) => { d.inv.capacity = 0; });
+    kaputt('fremder Zelda-Eintrag', (d) => { d.inv.zelda = ['excalibur']; });
+    kaputt('level 0', (d) => { d.prog.level = 0; });
+    kaputt('xp als Text', (d) => { d.prog.xp = '42'; });
+    kaputt('runFlags fehlen', (d) => { delete d.runFlags; });
+    kaputt('openedChests mit Nicht-Text', (d) => { d.runFlags.openedChests = [7]; });
+    kaputt('bossDead als Text', (d) => { d.runFlags.bossDead = 'true'; });
+    kaputt('spawn ohne y', (d) => { delete d.spawn.y; });
+
+    // --- §3.1 FESTE carry-REIHENFOLGE (die eigentliche Falle) -------------
+    // Erst inv/prog, DANN recalcStats (leitet maxHp ab), DANN hp. Wer hp vor
+    // recalcStats setzt, kappt gegen das ALTE Maximum (6) statt gegen das
+    // neue (14) — der Spieler verloere beim Laden 4 hp.
+    {
+      const frisch = createPlayer(GRAVEYARD.playerSpawn);
+      const basisMax = frisch.maxHp;
+      const vergleich = createPlayer(GRAVEYARD.playerSpawn);
+      vergleich.prog = { xp: 42, level: 3, hearts: 2 };
+      vergleich.recalcStats();
+      const neuMax = vergleich.maxHp;
+      check('S4-§7F(a) §3.1 Vorbedingung der Ordnungs-Probe: Level/Herzen heben maxHp wirklich an',
+        neuMax > basisMax, `${basisMax} -> ${neuMax}`);
+      const hoch = deserialize(txt);
+      hoch.hp = basisMax + 4;              // 10: ueber dem alten, unter dem neuen Maximum
+      applyToPlayer(frisch, hoch);
+      check('S4-§7F(a) §3.1 applyToPlayer leitet maxHp AB (nicht aus dem Stand)',
+        frisch.maxHp === neuMax, `${frisch.maxHp} vs ${neuMax}`);
+      check('S4-§7F(a) §3.1 carry-Reihenfolge: hp wird gegen das NEUE maxHp gekappt',
+        frisch.hp === basisMax + 4, `hp ${frisch.hp}, erwartet ${basisMax + 4} (falsche Ordnung gaebe ${basisMax})`);
+      check('S4-§7F(a) §3.1 applyToPlayer traegt Gold/Traenke/Inventar/Progression',
+        frisch.gold === 137 && frisch.potions === 2 && frisch.prog.level === 3
+        && frisch.inv.zelda.includes('boss_key') && !!frisch.inv.equipped.weapon);
+      // Ueberhoehte hp werden gekappt, nie uebernommen.
+      const frisch2 = createPlayer(GRAVEYARD.playerSpawn);
+      const hoch2 = deserialize(txt);
+      hoch2.hp = 999;
+      applyToPlayer(frisch2, hoch2);
+      check('S4-§7F(a) §3.1 hp aus einem manipulierten Stand wird auf maxHp gekappt',
+        frisch2.hp === frisch2.maxHp && frisch2.hp === neuMax, `${frisch2.hp}/${frisch2.maxHp}`);
+    }
+
+    // save.js ist REIN (§0.3): kein Browser-Zugriff im Quelltext.
+    {
+      const src = readFileSync(new URL('../game/js/items/save.js', import.meta.url), 'utf8');
+      const codeOhneKommentare = src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const verboten = ['localStorage', 'window', 'document', 'navigator', 'screen.', 'matchMedia']
+        .filter((w) => codeOhneKommentare.includes(w));
+      check('S4-§7F(a) §0.3 save.js ist rein: kein Browser-Global im Code (nur in Kommentaren)',
+        verboten.length === 0, verboten.join(','));
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // (b) §3.3 TITEL-MENUE — PURER REDUCER + Flusstest-Vertraeglichkeit
+  // -----------------------------------------------------------------------
+  {
+    const { titleMenuStep, TITLE_MENU_ITEMS, TITLE_MENU_ZONES } =
+      await import('../game/js/items/save.js');
+
+    const leer = { up: false, down: false, confirm: false, tap: null };
+    check('S4-§7F(b) §3.3 Reducer ist pur: ohne Ereignis kein Zustandswechsel',
+      JSON.stringify(titleMenuStep(0, leer)) === '{"cursor":0,"action":null}'
+      && JSON.stringify(titleMenuStep(1, leer)) === '{"cursor":1,"action":null}');
+    check('S4-§7F(b) §3.3 Reducer ist pur: dasselbe Ereignis liefert zweimal dasselbe',
+      JSON.stringify(titleMenuStep(0, { ...leer, down: true }))
+      === JSON.stringify(titleMenuStep(0, { ...leer, down: true })));
+    check('S4-§7F(b) §3.3 hoch/runter bewegen den Cursor und klemmen an den Enden',
+      titleMenuStep(0, { ...leer, down: true }).cursor === 1
+      && titleMenuStep(1, { ...leer, up: true }).cursor === 0
+      && titleMenuStep(1, { ...leer, down: true }).cursor === 1
+      && titleMenuStep(0, { ...leer, up: true }).cursor === 0);
+    check('S4-§7F(b) §3.3 fremder Cursor-Wert wird auf 0 normalisiert (kein undefined-Eintrag)',
+      titleMenuStep(99, leer).cursor === 0 && titleMenuStep(-3, leer).cursor === 0
+      && titleMenuStep(undefined, leer).cursor === 0);
+    check('S4-§7F(b) §3.3 confirm loest den Cursor-Eintrag aus (continue / new)',
+      titleMenuStep(0, { ...leer, confirm: true }).action === 'continue'
+      && titleMenuStep(1, { ...leer, confirm: true }).action === 'new');
+
+    // TAP HAT VORRANG. Jeder touchstart setzt input.confirm (input.js:165) —
+    // ohne Vorrang wuerde ein Tap NEBEN dem Menue den markierten Eintrag
+    // starten, die Auswahl waere wirkungslos.
+    const z0 = TITLE_MENU_ZONES[0];
+    const z1 = TITLE_MENU_ZONES[1];
+    const mitte = (z) => ({ x: z.x + z.w / 2, y: z.y + z.h / 2 });
+    check('S4-§7F(b) §3.3 Tap auf FORTSETZEN waehlt und startet Eintrag 0',
+      JSON.stringify(titleMenuStep(1, { ...leer, confirm: true, tap: mitte(z0) }))
+      === '{"cursor":0,"action":"continue"}');
+    check('S4-§7F(b) §3.3 Tap auf NEUES SPIEL waehlt und startet Eintrag 1',
+      JSON.stringify(titleMenuStep(0, { ...leer, confirm: true, tap: mitte(z1) }))
+      === '{"cursor":1,"action":"new"}');
+    check('S4-§7F(b) §3.3 Tap NEBEN dem Menue tut nichts, obwohl confirm gesetzt ist',
+      titleMenuStep(0, { ...leer, confirm: true, tap: { x: 10, y: 10 } }).action === null
+      && titleMenuStep(1, { ...leer, confirm: true, tap: { x: 300, y: 175 } }).action === null);
+    check('S4-§7F(b) §3.3 Tap schlaegt auch die Richtungs-Flanken (eine Quelle je Frame)',
+      titleMenuStep(0, { up: false, down: true, confirm: true, tap: mitte(z0) }).action === 'continue');
+
+    // Geometrie: zwei getrennte, bequem treffbare Zonen im Bild.
+    const hoch = TITLE_MENU_ZONES.every((z) => z.h * MM_PRO_PX >= 6);
+    const drin = TITLE_MENU_ZONES.every((z) => z.x >= 0 && z.y >= 0 && z.x + z.w <= 320 && z.y + z.h <= 180);
+    const getrennt = z1.y >= z0.y + z0.h;
+    check('S4-§7F(b) §3.3 Menue-Zonen: im Bild, getrennt, >= 6 mm hoch',
+      hoch && drin && getrennt && TITLE_MENU_ZONES.length === TITLE_MENU_ITEMS.length,
+      `${z0.h} px = ${(z0.h * MM_PRO_PX).toFixed(1)} mm, Luecke ${z1.y - (z0.y + z0.h)} px`);
+    check('S4-§7F(b) §3.3 Menue-Texte meiden JEDE Sonde der Flusstests',
+      TITLE_MENU_ITEMS.every((t) => SONDEN.every((s) => !t.includes(s))),
+      TITLE_MENU_ITEMS.join('/'));
+  }
+
+  // -----------------------------------------------------------------------
+  // (c) §5.1 / A4 — ZONEN-GEOMETRIE (input.js + hud.js, EIN Besitzer)
+  // -----------------------------------------------------------------------
+  {
+    const { createInput } = await import('../game/js/core/input.js');
+
+    // Canvas-/Fenster-Stub in Referenzgroesse: 320 interne px auf 640 CSS-px
+    // (= 2 CSS-px je internem px, genau das Verhaeltnis des Referenzgeraets).
+    function mkPad() {
+      const winL = {};
+      const docL = {};
+      const win = { addEventListener: (t, f) => (winL[t] = winL[t] || []).push(f) };
+      const doc = {
+        defaultView: win, hidden: false,
+        addEventListener: (t, f) => (docL[t] = docL[t] || []).push(f),
+      };
+      const cvL = {};
+      const cv = {
+        ownerDocument: doc,
+        addEventListener: (t, f) => (cvL[t] = cvL[t] || []).push(f),
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: 320 * CSS_PRO_PX, height: 180 * CSS_PRO_PX }),
+      };
+      const input = createInput();
+      input.attach(cv);
+      const ev = (liste, punkte) => {
+        for (const f of liste || []) {
+          f({
+            preventDefault() {},
+            changedTouches: punkte.map((p, i) => ({
+              identifier: p.id ?? i, clientX: p.x * CSS_PRO_PX, clientY: p.y * CSS_PRO_PX,
+            })),
+          });
+        }
+      };
+      return {
+        input,
+        start: (...p) => ev(cvL.touchstart, p),
+        move: (...p) => ev(cvL.touchmove, p),
+        ende: (...p) => ev(cvL.touchend, p),
+        keydown: (code) => { for (const f of winL.keydown || []) f({ code, repeat: false, preventDefault() {} }); },
+        keyup: (code) => { for (const f of winL.keyup || []) f({ code }); },
+      };
+    }
+
+    const g = mkPad();
+    const B = g.input.touch.buttons;
+    const A = B[0]; const Bk = B[1]; const W = B[2];
+    const PZ = g.input.touch.pause;
+    const unten = (b) => 180 - (b.y + b.r);              // interne px bis zur Canvas-Unterkante
+    const luecke = (p, q) => Math.hypot(p.x - q.x, p.y - q.y) - p.r - q.r;
+
+    // --- A4 (a): Unterkanten >= 24 interne px ueber dem Rand --------------
+    check('S4-§7F(c) A4(a) B-Kreis-Unterkante >= 24 interne px ueber der Canvas-Unterkante',
+      unten(Bk) >= 24, `${unten(Bk)} px = ${(unten(Bk) * MM_PRO_PX).toFixed(1)} mm`);
+    check('S4-§7F(c) A4(a) W-Kreis-Unterkante >= 24 interne px ueber der Canvas-Unterkante',
+      unten(W) >= 24, `${unten(W)} px = ${(unten(W) * MM_PRO_PX).toFixed(1)} mm`);
+    // Das Joystick-FELD wird BEHAVIORAL gemessen (JOY_FIELD_Y1 ist modul-lokal):
+    // die tiefste y-Zeile, in der ein touchstart links noch einen Joystick
+    // beginnt. Suche von unten nach oben, damit ein zu tiefes Feld auffliegt.
+    let feldY1 = null;
+    for (let y = 179; y >= 0 && feldY1 === null; y--) {
+      const p = mkPad();
+      p.start({ x: 40, y });
+      if (p.input.touch.joyBaseX === 40) feldY1 = y;   // 40 != Startwert 0
+    }
+    check('S4-§7F(c) A4(a) Joystick-Feld-Unterkante >= 24 interne px ueber der Canvas-Unterkante',
+      feldY1 !== null && 180 - feldY1 >= 24,
+      `tiefster Joystick-Start y=${feldY1} -> ${180 - feldY1} px = ${((180 - (feldY1 ?? 0)) * MM_PRO_PX).toFixed(1)} mm`);
+    {
+      // Ein Touch UNTER dem Feld faellt in KEINE Zone — insbesondere nicht in
+      // die Angriffszone (die reale A-Zone ist die rechte Haelfte).
+      const p = mkPad();
+      p.start({ x: 40, y: (feldY1 ?? 156) + 1 });
+      p.move({ x: 120, y: (feldY1 ?? 156) + 1 });
+      check('S4-§7F(c) A4(a) Touch unter dem Joystick-Feld startet nichts (kein Joystick, kein Angriff)',
+        p.input.touch.joyBaseX === 0 && p.input.touch.joyBaseY === 0
+        && p.input.dirX === 0 && p.input.dirY === 0 && p.input.attack === false,
+        `dir ${p.input.dirX}/${p.input.dirY}, attack ${p.input.attack}`);
+    }
+
+    // --- A4 (b): Luecken --------------------------------------------------
+    check('S4-§7F(c) A4(b) Luecke B <-> W >= 16 interne px',
+      luecke(Bk, W) >= 16, `${luecke(Bk, W).toFixed(2)} px = ${(luecke(Bk, W) * MM_PRO_PX).toFixed(1)} mm`);
+    check('S4-§7F(c) A4(b) Luecke A-Kreis <-> W >= 12 interne px (W ist dafuer versetzt)',
+      luecke(A, W) >= 12, `${luecke(A, W).toFixed(2)} px = ${(luecke(A, W) * MM_PRO_PX).toFixed(1)} mm`);
+    // A <-> B bekommt BEWUSST kein Luecken-Gate (A4 nennt nur B<->W und
+    // A<->W): der A-KREIS ist Deko, die Angriffszone ist die ganze rechte
+    // Haelfte — sie beruehrt den B-Kreis ohnehin ringsum. Was zaehlt, ist
+    // dass B ein SAUBERER AUSSCHNITT aus dieser Haelfte ist. Genau das wird
+    // hier gemessen statt eines bedeutungslosen Mittenabstands (er betruege
+    // ${luecke(A, Bk).toFixed(2)} px).
+    {
+      const p = mkPad();
+      p.start({ x: Bk.x, y: Bk.y });
+      const q = mkPad();
+      q.start({ x: Bk.x + Bk.r + 1, y: Bk.y });
+      check('S4-§7F(c) A4 der B-Kreis ist ein sauberer Ausschnitt aus der Angriffs-Haelfte',
+        p.input.potion === true && p.input.attack === false
+        && q.input.attack === true && q.input.potion === false,
+        `im Kreis: Trank ${p.input.potion}/Hieb ${p.input.attack}, `
+        + `1 px daneben: Trank ${q.input.potion}/Hieb ${q.input.attack}`);
+    }
+
+    // --- A4 (c): Joystick-Radius 64 CSS-px = 32 interne px ---------------
+    {
+      const p = mkPad();
+      p.start({ x: 60, y: 100 });
+      p.move({ x: 260, y: 100 });   // weit ueber den Anschlag hinaus
+      const r = p.input.touch.joyRadius;
+      check('S4-§7F(c) A4(c) JOY_RADIUS_SCREEN = 64 CSS-px (= 32 interne px = 12,1 mm Vollausschlag)',
+        Math.abs(r * CSS_PRO_PX - 64) < 1e-9 && Math.abs(r - 32) < 1e-9,
+        `${r} interne px = ${(r * CSS_PRO_PX).toFixed(1)} CSS-px = ${(r * MM_PRO_PX).toFixed(2)} mm`);
+      check('S4-§7F(c) A4(c) Vollausschlag am Anschlag: dirX = 1, Knauf auf dem Radius geklemmt',
+        Math.abs(p.input.dirX - 1) < 1e-9 && Math.abs(p.input.touch.joyX - (60 + r)) < 1e-9,
+        `dirX ${p.input.dirX}, joyX ${p.input.touch.joyX}`);
+      // Feinsteuerung: halber Weg = halbe Geschwindigkeit (der eigentliche
+      // Gewinn von 40 -> 64; bei 40 lag der Anschlag schon nach 7,5 mm).
+      const q = mkPad();
+      q.start({ x: 60, y: 100 });
+      q.move({ x: 60 + 16, y: 100 });
+      check('S4-§7F(c) A4(c) halber Ausschlag = halbe Richtungsstaerke (analoge Feinsteuerung)',
+        Math.abs(q.input.dirX - 0.5) < 1e-9, `dirX ${q.input.dirX}`);
+    }
+
+    // --- A4 (d): jeder Kreis >= 9 mm, Pause-Knopf >= 7 mm ----------------
+    const mmD = (b) => 2 * b.r * MM_PRO_PX;
+    check('S4-§7F(c) A4(d) A/B/W haben je >= 9 mm Durchmesser',
+      mmD(A) >= 9 && mmD(Bk) >= 9 && mmD(W) >= 9,
+      `A ${mmD(A).toFixed(1)} / B ${mmD(Bk).toFixed(1)} / W ${mmD(W).toFixed(1)} mm`);
+    check('S4-§7F(c) §4.2 Pause-Knopf >= 7 mm Durchmesser und im oberen Bilddrittel',
+      mmD(PZ) >= 7 && PZ.y + PZ.r <= 60, `${mmD(PZ).toFixed(1)} mm bei y ${PZ.y}`);
+    check('S4-§7F(c) §4.2 Pause-Knopf kollidiert mit keiner anderen Touch-Zone',
+      luecke(PZ, A) > 0 && luecke(PZ, Bk) > 0 && luecke(PZ, W) > 0
+      && !(PZ.x + PZ.r >= 290 && PZ.y - PZ.r <= 30),   // HUD-Box (290,0)-(320,30)
+      `A ${luecke(PZ, A).toFixed(1)} / B ${luecke(PZ, Bk).toFixed(1)} / W ${luecke(PZ, W).toFixed(1)}`);
+    check('S4-§7F(c) alle Zonen liegen vollstaendig im 320x180-Bild',
+      [A, Bk, W, PZ].every((b) => b.x - b.r >= 0 && b.y - b.r >= 0 && b.x + b.r <= 320 && b.y + b.r <= 180));
+
+    // --- Zonen-VERHALTEN: der gezeichnete A-Kreis ist Deko ----------------
+    {
+      const p = mkPad();
+      p.start({ x: A.x, y: A.y });
+      check('S4-§7F(c) A4 Tap auf den A-Kreis greift an',
+        p.input.attack === true && p.input.touch.buttons[0].pressed === true);
+      const q = mkPad();
+      q.start({ x: 170, y: 40 });    // rechte Haelfte, weit weg vom A-Kreis
+      check('S4-§7F(c) A4 die REALE Angriffszone ist die ganze rechte Haelfte (Kreis = Deko)',
+        q.input.attack === true, `attack ${q.input.attack}`);
+      const r = mkPad();
+      r.start({ x: 159, y: 40 });    // linke Haelfte, oberhalb des Feldes
+      check('S4-§7F(c) A4 links der Bildmitte greift nichts an (Joystick statt Hieb)',
+        r.input.attack === false && r.input.touch.joyBaseX === 159);
+    }
+
+    // --- §4.2 Pause-Knopf: nur sichtbar scharf, und VOR allen anderen -----
+    {
+      const p = mkPad();
+      p.start({ x: PZ.x, y: PZ.y });
+      check('S4-§7F(c) §4.2 unsichtbarer Pause-Knopf frisst keinen Tap (faellt in die Normal-Logik)',
+        p.input.pause === false && p.input.attack === true,
+        `pause ${p.input.pause}, attack ${p.input.attack}`);
+      const q = mkPad();
+      q.input.touch.pause.visible = true;
+      q.start({ x: PZ.x, y: PZ.y });
+      check('S4-§7F(c) §4.2 sichtbarer Pause-Knopf pausiert und loest KEINEN Hieb aus',
+        q.input.pause === true && q.input.touch.pause.pressed === true && q.input.attack === false);
+      q.ende({ x: PZ.x, y: PZ.y });
+      check('S4-§7F(c) §4.2 touchend loest den Pause-Pegel wieder',
+        q.input.pause === false && q.input.touch.pause.pressed === false);
+      const r = mkPad();
+      r.input.touch.pause.visible = true;
+      r.start({ x: PZ.x + PZ.r + 2, y: PZ.y });
+      check('S4-§7F(c) §4.2 knapp neben dem Pause-Knopf pausiert nichts',
+        r.input.pause === false);
+    }
+
+    // --- §4.2 Tastatur + §5.4 Touch-Overlay-Ruecknahme --------------------
+    {
+      const p = mkPad();
+      p.keydown('Escape');
+      check('S4-§7F(c) §4.2 Escape setzt den Pause-Pegel', p.input.pause === true);
+      p.keyup('Escape');
+      check('S4-§7F(c) §4.2 Escape losgelassen nimmt ihn zurueck', p.input.pause === false);
+      p.keydown('KeyP');
+      check('S4-§7F(c) §4.2 P setzt den Pause-Pegel ebenfalls', p.input.pause === true);
+      p.keyup('KeyP');
+      const q = mkPad();
+      q.start({ x: 60, y: 100 });
+      check('S4-§7F(c) §5.4 Vorbedingung: der Tap schaltet das Touch-Overlay an',
+        q.input.touch.active === true);
+      q.keydown('KeyW');
+      check('S4-§7F(c) §5.4 Tastatureingabe schaltet das Touch-Overlay wieder AB',
+        q.input.touch.active === false);
+      q.keyup('KeyW');
+      q.start({ x: 60, y: 100 });
+      check('S4-§7F(c) §5.4 der naechste Tap schaltet es sofort wieder an',
+        q.input.touch.active === true);
+    }
+
+    // --- EIN BESITZER: hud.js zeichnet ausschliesslich aus input.touch ----
+    {
+      const hudSrc = readFileSync(new URL('../game/js/ui/hud.js', import.meta.url), 'utf8');
+      check('S4-§7F(c) §5.1 hud.js zeichnet die Buttons aus b.x/b.y/b.r (keine zweite Koordinatenquelle)',
+        /ctx\.arc\(b\.x,\s*b\.y,\s*b\.r,/.test(hudSrc));
+      check('S4-§7F(c) §4.2 hud.js zeichnet den Pause-Knopf aus input.touch.pause',
+        /const pz = input\.touch\.pause;/.test(hudSrc) && /ctx\.arc\(pz\.x,\s*pz\.y,\s*pz\.r,/.test(hudSrc));
+      check('S4-§7F(c) §4.2 das Pause-Symbol ist fillRect, KEIN fillText (8px-monospace-Risiko)',
+        /ctx\.fillRect\(pz\.x - 4/.test(hudSrc) && !/fillText\([^)]*pz\./.test(hudSrc));
+    }
+
+    // --- §5.5 Inventar-Trefferflaechen (ENG BEGRENZT, Anker fest) --------
+    {
+      const ui = createInventoryUI();
+      const p = createPlayer(GRAVEYARD.playerSpawn);
+      addItem(p.inv, { slot: 'armor', name: 'A', rare: false, affixes: [{ stat: 'dmg', value: 1 }] });
+      addItem(p.inv, { slot: 'weapon', name: 'B', rare: false, affixes: [{ stat: 'dmg', value: 1 }] });
+      const inp = { dirX: 0, dirY: 0, attack: false, confirm: false, inventory: false, tap: null };
+      ui.open();
+      ui.update(inp, p);
+      const tap = (x, y) => { inp.tap = { x, y }; const r = ui.update(inp, p); inp.tap = null; return r; };
+      ui.cursor = 1;
+      tap(100, 30);
+      check('S4-§7F(c) §5.5 Bestands-Tap (100,30) trifft weiter Zeile 0 (Anker LIST_Y unveraendert)',
+        ui.cursor === 0);
+      ui.cursor = 0;
+      tap(100, 45);
+      check('S4-§7F(c) §5.5 Zeile 0 reicht jetzt bis y 45 (ROW_H 20 = 7,5 mm statt 16 = 6,0 mm)',
+        ui.cursor === 0);
+      tap(100, 50);
+      check('S4-§7F(c) §5.5 y 50 liegt in Zeile 1 (Zeilenhoehe wirklich 20, nicht groesser)',
+        ui.cursor === 1);
+      check('S4-§7F(c) §5.5 Bestands-Tap (290,12) schliesst weiter (Anker (288,10) unveraendert)',
+        tap(290, 12) === 'close');
+      check('S4-§7F(c) §5.5 X-Knopf reicht jetzt bis (311,33) = 24x24 px = 9,0 mm',
+        tap(311, 33) === 'close');
+      check('S4-§7F(c) §5.5 knapp ausserhalb des X-Knopfes wird NICHT geschlossen',
+        tap(313, 36) !== 'close');
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // (d) §4.1/§4.2/§6.4 PAUSE + FPS-OVERLAY, HEADLESS
+  //     Geprueft wird, was ohne Browser pruefbar ist: die Zeichen-Vertraege
+  //     (Detektor-Vertraeglichkeit, Stub-Vorrat, Geometrie-Quelle) und die
+  //     byte-Gleichheit des Titels ohne Spielstand. Der Zustandsautomat
+  //     selbst liegt in main.js und wird von tools/check_save_slice4.mjs
+  //     mit echtem Boot gefahren.
+  // -----------------------------------------------------------------------
+  {
+    const hud = await import('../game/js/ui/hud.js');
+    const { drawPause, drawFps, drawTitle, PAUSE_MENU_ZONES } = hud;
+
+    // Pause-Menue-Geometrie: eine Quelle (hud.js), main.js macht daraus den
+    // Hittest.
+    check('S4-§7F(d) §4.1 PAUSE_MENU_ZONES: 3 getrennte Zonen im Bild, >= 6 mm hoch',
+      PAUSE_MENU_ZONES.length === 3
+      && PAUSE_MENU_ZONES.every((z) => z.x >= 0 && z.y >= 0 && z.x + z.w <= 320 && z.y + z.h <= 180)
+      && PAUSE_MENU_ZONES.every((z) => z.h * MM_PRO_PX >= 6)
+      && PAUSE_MENU_ZONES[1].y >= PAUSE_MENU_ZONES[0].y + PAUSE_MENU_ZONES[0].h
+      && PAUSE_MENU_ZONES[2].y >= PAUSE_MENU_ZONES[1].y + PAUSE_MENU_ZONES[1].h,
+      PAUSE_MENU_ZONES.map((z) => `${z.y}+${z.h}`).join(' '));
+
+    const rec0 = mkRec();
+    drawPause(rec0, { cursor: 0, god: false, fps: false });
+    check('S4-§7F(d) §4.1 drawPause kommt mit dem Stub-Vorrat der Flusstests aus (kein strokeRect/Pfad)',
+      rec0.log.length > 0);
+    check('S4-§7F(d) §4.1 drawPause loest den Fade-Detektor NICHT aus (Deckung sitzt in der Fuellfarbe)',
+      !rec0.log.some(istFadeZug),
+      JSON.stringify(rec0.log.filter((o) => o.op === 'fillRect' && o.args[2] === 320).map((o) => `${o.fill}@${o.alpha}`)));
+    check('S4-§7F(d) §4.1 drawPause deckt die Welt voll ab (Vollbild-Rect bei globalAlpha 1)',
+      rec0.log.some((o) => o.op === 'fillRect' && o.args[2] === 320 && o.args[3] === 180 && o.alpha === 1));
+    const pTexte = rec0.log.filter((o) => o.op === 'fillText').map((o) => o.text);
+    check('S4-§7F(d) §4.1 Pause-Texte meiden JEDE Sonde der Flusstests',
+      pTexte.every((t) => SONDEN.every((s) => !t.includes(s))), pTexte.join('/'));
+    check('S4-§7F(d) §4.1 Pause zeigt WEITER + GOTT-Schalter + FPS-Schalter',
+      pTexte.some((t) => t.includes('WEITER')) && pTexte.some((t) => t.startsWith('GOTT'))
+      && pTexte.some((t) => t.startsWith('FPS')), pTexte.join('/'));
+    check('S4-§7F(d) §4.3/§6.4 die Schalterzeilen spiegeln den Zustand (AN/AUS)',
+      pTexte.includes('GOTT: AUS') && pTexte.includes('FPS: AUS'), pTexte.join('/'));
+    {
+      const rec1 = mkRec();
+      drawPause(rec1, { cursor: 2, god: true, fps: true });
+      const t1 = rec1.log.filter((o) => o.op === 'fillText').map((o) => o.text);
+      check('S4-§7F(d) §4.3/§6.4 eingeschaltet steht AN in denselben zwei Zeilen',
+        t1.includes('GOTT: AN') && t1.includes('FPS: AN'), t1.join('/'));
+      // Der Auswahlbalken folgt dem Cursor und kommt aus PAUSE_MENU_ZONES.
+      const balken = (log) => log.filter((o) => o.op === 'fillRect' && o.fill === '#3a3542'
+        && o.args[2] === PAUSE_MENU_ZONES[0].w && o.args[3] === PAUSE_MENU_ZONES[0].h);
+      check('S4-§7F(d) §4.1 genau EIN Auswahlbalken, und er sitzt auf der Cursor-Zone',
+        balken(rec0.log).length === 1 && balken(rec0.log)[0].args[1] === PAUSE_MENU_ZONES[0].y
+        && balken(rec1.log).length === 1 && balken(rec1.log)[0].args[1] === PAUSE_MENU_ZONES[2].y,
+        `${balken(rec0.log).length}/${balken(rec1.log).length}`);
+    }
+
+    // §6.4 FPS-Overlay: GENAU ZWEI Zeilen, keine Uhr im HUD.
+    {
+      const rec = mkRec();
+      drawFps(rec, { fps: 58, ms: 17.24, max: 41.5 });
+      const zug = rec.log.filter((o) => o.op === 'fillText');
+      const zeilen = [...new Set(zug.map((o) => o.text))];
+      check('S4-§7F(d) §6.4 FPS-Overlay sind GENAU ZWEI Textzeilen (je mit 1-px-Kontur)',
+        zeilen.length === 2 && zug.length === 4, `${zeilen.length} Zeilen / ${zug.length} Zuege`);
+      check('S4-§7F(d) §6.4 die Zahlen kommen fertig gerechnet von aussen (HUD misst nichts)',
+        zeilen.some((t) => t.includes('58')) && zeilen.some((t) => t.includes('17.2') && t.includes('41.5')),
+        zeilen.join(' | '));
+      check('S4-§7F(d) §6.4 FPS-Overlay malt kein Vollbild und meidet die Sonden',
+        !rec.log.some((o) => o.op === 'fillRect' && o.args[2] === 320)
+        && zeilen.every((t) => SONDEN.every((s) => !t.includes(s))), zeilen.join(' | '));
+      check('S4-§7F(d) §6.4 das Overlay liegt unten links im Bild',
+        zug.every((o) => o.x >= 0 && o.x < 160 && o.y >= 150 && o.y <= 175));
+    }
+
+    // §3.3 BYTE-GLEICHHEIT DES TITELS OHNE SPIELSTAND. drawVignette baut beim
+    // ersten Aufruf einen Canvas ueber document.createElement — hier lokal
+    // gestubbt und danach sofort wieder entfernt (Muster §7F(j) oben).
+    {
+      const vorherDoc = globalThis.document;
+      globalThis.document = {
+        createElement: () => {
+          const c = { width: 0, height: 0 };
+          c.getContext = () => ({ globalAlpha: 1, fillStyle: '', fillRect() {} });
+          return c;
+        },
+      };
+      try {
+        const a = mkRec(); drawTitle(a, 1.0);            // Bestands-Aufruf (2 Argumente)
+        const b = mkRec(); drawTitle(b, 1.0, null);      // neuer Aufruf ohne Stand
+        const c = mkRec(); drawTitle(c, 1.0, {
+          cursor: 0, items: ['FORTSETZEN', 'NEUES SPIEL'],
+          zones: [{ x: 96, y: 116, w: 128, h: 18 }, { x: 96, y: 138, w: 128, h: 18 }],
+        });
+        check('S4-§7F(d) §3.3 OHNE Spielstand ist drawTitle byte-gleich zum Bestand',
+          JSON.stringify(a.log) === JSON.stringify(b.log),
+          `${a.log.length} vs ${b.log.length} Zuege`);
+        check('S4-§7F(d) §3.3 der Bestands-Titel zeigt weiter GRIMLIGHT und den Blinktext',
+          a.log.some((o) => o.op === 'fillText' && o.text === 'GRIMLIGHT')
+          && a.log.some((o) => o.op === 'fillText' && o.text.includes('ENTER')));
+        check('S4-§7F(d) §3.3 MIT Spielstand ersetzt das Menue den Blinktext (kein Doppel-Hinweis)',
+          c.log.some((o) => o.op === 'fillText' && o.text === 'FORTSETZEN')
+          && c.log.some((o) => o.op === 'fillText' && o.text === 'NEUES SPIEL')
+          && !c.log.some((o) => o.op === 'fillText' && o.text.includes('ENTER')));
+        check('S4-§7F(d) §3.3 der Auswahlbalken des Titels loest den Fade-Detektor nicht aus',
+          !c.log.some(istFadeZug));
+      } finally {
+        if (vorherDoc === undefined) delete globalThis.document;
+        else globalThis.document = vorherDoc;
+      }
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // (e) §3.4 GEOEFFNETE TRUHEN — das Trio: Schluessel aus der props-LISTE,
+  //     Filter auf einer KOPIE (mapDef unberuehrt), resetRun-Reset und
+  //     Siegtruhen-Ausnahme.
+  // -----------------------------------------------------------------------
+  {
+    // Quelltext OHNE Kommentare: main.js begruendet seine Entscheidungen in
+    // langen Kommentarbloecken, in denen genau die Zeichenketten stehen, die
+    // hier gesucht werden ('loop.stop()/start() wird NICHT benutzt', 'saveNow'
+    // in der Hook-Liste). Ein Waechter, der Kommentare mitliest, prueft die
+    // Erzaehlung statt den Code.
+    const mainSrcRoh = readFileSync(new URL('../game/js/main.js', import.meta.url), 'utf8');
+    const mainSrc = mainSrcRoh.replace(/^[ \t]*\/\/.*$/gm, '').replace(/[ \t]+\/\/.*$/gm, '');
+    // Funktionsrumpf bis zur ersten schliessenden Klammer am Zeilenanfang.
+    const rumpf = (name) => {
+      const m = new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`).exec(mainSrc);
+      return m ? m[0] : null;
+    };
+    // Schluesselformel WOERTLICH aus main.js (chestKey) — sie steht hier und
+    // dort auf derselben Prop-Geometrie.
+    const chestKey = (mapKey, p) => `${mapKey}:${(p.x / 16) | 0},${(p.y / 16) | 0}`;
+
+    // --- 1. Datenquelle: die props-Liste, NICHT der Event-Strom ----------
+    {
+      const fmap = createTilemap(FLUESTERGRUFT.rows, FLUESTERGRUFT.legend);
+      const ps = createProps(FLUESTERGRUFT.propSpawns);
+      const truhen = ps.filter((p) => p.kind === 'chest');
+      check('S4-§7F(e) §3.4 Vorbedingung: FLUESTERGRUFT traegt die boss_key- und die heart-Truhe',
+        truhen.length === 2 && truhen.some((t) => t.content === 'boss_key')
+        && truhen.some((t) => t.content === 'heart'),
+        truhen.map((t) => t.content).join(','));
+
+      // Eine Truhe per Schwerthieb oeffnen (der einzige Weg, props.js:66).
+      const kiste = truhen.find((t) => t.content === 'boss_key');
+      const pl = createPlayer({ x: kiste.x + kiste.w / 2, y: kiste.y + kiste.h + 6 });
+      pl.facing = 'up';
+      const evs = [];
+      pl.attackId = 99;
+      pl.getSwordHitbox = () => ({ x: kiste.x, y: kiste.y, w: kiste.w, h: kiste.h });
+      updateProps(1 / 60, ps, pl, fmap, [], evs);
+      check('S4-§7F(e) §3.4 Vorbedingung: der Schwerthieb oeffnet die Truhe',
+        kiste.opened === true);
+      // Genau das ist der Grund fuer die props-Liste als Quelle: die Events
+      // tragen KEINE Position (und die Gold-Truhe pusht gar keins).
+      const mitPos = evs.filter((e) => e && typeof e === 'object' && ('x' in e || 'y' in e));
+      check('S4-§7F(e) §3.4 die Truhen-Events tragen KEINE Position (Events als Quelle unmoeglich)',
+        mitPos.length === 0, JSON.stringify(evs));
+
+      const key = chestKey('FLUESTERGRUFT', kiste);
+      check('S4-§7F(e) §3.4 Schluessel ist Karte + Kachel der AABB-Ecke',
+        key === 'FLUESTERGRUFT:36,4', key);
+
+      // --- 2. Filter auf dem ERGEBNIS von createProps (Kopie!) -----------
+      const vorher = JSON.stringify(FLUESTERGRUFT.propSpawns);
+      const neu = createProps(FLUESTERGRUFT.propSpawns);
+      check('S4-§7F(e) §3.4 createProps liefert eine KOPIE: dieselben Spawns geben denselben Schluessel',
+        chestKey('FLUESTERGRUFT', neu.find((p) => p.content === 'boss_key')) === key);
+      const gefiltert = neu.filter((p) => !(p.kind === 'chest'
+        && [key].includes(chestKey('FLUESTERGRUFT', p))));
+      check('S4-§7F(e) §3.4 der Filter entfernt genau die geoeffnete Truhe (keine Gold-Farm)',
+        gefiltert.length === neu.length - 1
+        && !gefiltert.some((p) => p.kind === 'chest' && p.content === 'boss_key')
+        && gefiltert.some((p) => p.kind === 'chest' && p.content === 'heart'),
+        `${neu.length} -> ${gefiltert.length}`);
+      check('S4-§7F(e) §3.4 mapDef.propSpawns bleibt dabei UNANGETASTET (sonst fehlt der Boss nach resetRun)',
+        JSON.stringify(FLUESTERGRUFT.propSpawns) === vorher
+        && FLUESTERGRUFT.propSpawns.length === 13);
+
+      // --- 3. resetRun-Reset: leere Liste = ALLE Truhen wieder da -------
+      const nachReset = createProps(FLUESTERGRUFT.propSpawns)
+        .filter((p) => !(p.kind === 'chest' && [].includes(chestKey('FLUESTERGRUFT', p))));
+      check('S4-§7F(e) §3.4 mit leerer Liste stehen boss_key- UND heart-Truhe wieder (Run bleibt loesbar)',
+        nachReset.filter((p) => p.kind === 'chest').length === 2,
+        `${nachReset.filter((p) => p.kind === 'chest').length} Truhen`);
+    }
+
+    // --- 4. Siegtruhen-Ausnahme ------------------------------------------
+    {
+      const sieg = createProps([{ ...tcc(10, 4), kind: 'chest', content: 'treasure' }]);
+      for (const p of sieg) p.siegChest = true;
+      check('S4-§7F(e) §3.4 die Siegtruhe steht NICHT in BOSS_KAMMER.propSpawns (sie wird gepusht)',
+        (BOSS_KAMMER.propSpawns || []).length === 0);
+      // Ihr Schluessel waere gueltig — genommen wird er nur nicht, weil die
+      // Registrierung siegChest ueberspringt.
+      check('S4-§7F(e) §3.4 die Siegtruhe traegt die Ausnahme-Markierung',
+        sieg[0].siegChest === true && chestKey('BOSS_KAMMER', sieg[0]) === 'BOSS_KAMMER:10,4',
+        chestKey('BOSS_KAMMER', sieg[0]));
+      const registriert = sieg
+        .filter((p) => p.kind === 'chest' && p.opened === true && p.siegChest !== true)
+        .map((p) => chestKey('BOSS_KAMMER', p));
+      sieg[0].opened = true;
+      const registriert2 = sieg
+        .filter((p) => p.kind === 'chest' && p.opened === true && p.siegChest !== true)
+        .map((p) => chestKey('BOSS_KAMMER', p));
+      check('S4-§7F(e) §3.4 auch GEOEFFNET landet die Siegtruhe nie in openedChests (Sieg bleibt erreichbar)',
+        registriert.length === 0 && registriert2.length === 0);
+    }
+
+    // --- 5. Quelltext-Anker: die drei Zusagen stehen wirklich in main.js --
+    const resetRumpf = rumpf('resetRun');
+    const buildRumpf = rumpf('buildWorld');
+    check('S4-§7F(e) Vorbedingung: resetRun und buildWorld sind im Quelltext auffindbar',
+      !!resetRumpf && !!buildRumpf, `${resetRumpf ? 'ok' : 'resetRun?'} / ${buildRumpf ? 'ok' : 'buildWorld?'}`);
+    check('S4-§7F(e) §3.4 main.js setzt openedChests in resetRun zurueck',
+      !!resetRumpf && resetRumpf.includes('runFlags.openedChests = [];'));
+    check('S4-§7F(e) §3.4 main.js nimmt die Siegtruhe von der Registrierung aus',
+      /p\.siegChest === true\) continue;/.test(mainSrc));
+    check('S4-§7F(e) §3.4 main.js filtert das ERGEBNIS von createProps, nie mapDef.propSpawns',
+      /const alleProps = createProps\(mapDef\.propSpawns\);/.test(mainSrc)
+      && /props = runFlags\.openedChests\.length === 0/.test(mainSrc)
+      && !/mapDef\.propSpawns\s*=[^=]/.test(mainSrc)
+      && !/mapDef\.propSpawns\.(splice|push|pop|shift|sort)/.test(mainSrc));
+    check('S4-§7F(e) §3.4 die Registrierung liest die props-LISTE (nicht den Event-Strom)',
+      /for \(let i = 0; i < props\.length; i\+\+\)[\s\S]{0,400}?runFlags\.openedChests\.push\(k\)/.test(mainSrc));
+    check('S4-§7F(e) §3.2 im resetRun-Pfad wird NIE gespeichert',
+      !!resetRumpf && !resetRumpf.includes('saveNow()'));
+    check('S4-§7F(e) §3.2 die Save-Hooks sitzen NICHT in buildWorld (Respawn saehe hp = 0)',
+      !!buildRumpf && !buildRumpf.includes('saveNow()'));
+    check('S4-§7F(e) §3.2 alle vier Hooks (Portal, Respawn, Lifecycle, Zurueck-Taste) sind verdrahtet',
+      (mainSrc.match(/saveNow\(\);/g) || []).length >= 3
+      && /fadePhase = 'none';[\s\S]{0,120}?saveNow\(\);/.test(mainSrc)
+      && /player\.deathToll = null;[\s\S]{0,120}?saveNow\(\);/.test(mainSrc)
+      && /function systemPause\(\)[\s\S]{0,200}?saveNow\(\);/.test(mainSrc)
+      && /function pausiere\(\)[\s\S]{0,200}?saveNow\(\);/.test(mainSrc),
+      `${(mainSrc.match(/saveNow\(\);/g) || []).length} Aufrufe`);
+  }
+
+  // -----------------------------------------------------------------------
+  // (f) §4.1 LOOP-60-s-SPRUNG — Rueckkehr aus dem Hintergrund.
+  //     Android friert die WebView ein; beim Wiederaufwachen liefert die Uhr
+  //     einen Sprung von Minuten. Ohne Deckel wuerde der Akkumulator tausende
+  //     Updates nachspulen (Spiral of Death) — der Spieler waere tot, bevor
+  //     das Bild steht. loop.js bleibt dafuer UNANGETASTET (§4.1: die Pause
+  //     laeuft ueber den Zustandsautomaten, nicht ueber stop()/start()).
+  // -----------------------------------------------------------------------
+  {
+    const { createLoop } = await import('../game/js/core/loop.js');
+    let uhr = 0;
+    const q = [];
+    const updates = [];
+    let renders = 0;
+    const loop = createLoop({
+      update: (dt) => updates.push(dt),
+      render: () => { renders += 1; },
+      raf: (cb) => q.push(cb),
+      now: () => uhr,
+    });
+    loop.start();
+    const frame = (msVor) => { uhr += msVor; const cb = q.shift(); if (!cb) throw new Error('kein rAF'); const n0 = updates.length; cb(); return updates.length - n0; };
+
+    const f0 = frame(0);
+    check('S4-§7F(f) §4.1 erster Frame: Delta 0, kein Update', f0 === 0 && renders === 1);
+    const f1 = frame(1000 / 60);
+    check('S4-§7F(f) §4.1 normaler Frame: genau ein 60-Hz-Update', f1 === 1
+      && Math.abs(updates[0] - 1 / 60) < 1e-12, `${f1} Updates`);
+
+    const fSprung = frame(60000);   // 60 Sekunden im Hintergrund
+    check('S4-§7F(f) §4.1 60-s-Sprung spult NICHT nach: hoechstens 5 Updates in einem Frame',
+      fSprung === 5, `${fSprung} Updates (ungedeckelt waeren es 3600)`);
+    check('S4-§7F(f) §4.1 der Sprung kostet hoechstens 83 ms Spielzeit',
+      fSprung * (1 / 60) <= 0.084, `${(fSprung / 60 * 1000).toFixed(1)} ms`);
+    // Der Rest wird verworfen (acc = 0), es gibt also KEIN Nachspulen. Der
+    // erste Folge-Frame kann dadurch leer bleiben (der Akkumulator startet bei
+    // 0 und 1000/60 ms liegen in double-Arithmetik ein Ulp UNTER 1/60 s) —
+    // deshalb wird hier die Obergrenze geprueft und der Wiederanlauf ueber ein
+    // laengeres Fenster.
+    const fDanach = frame(1000 / 60);
+    check('S4-§7F(f) §4.1 der Rest wird verworfen: der Folge-Frame spult nichts nach',
+      fDanach <= 1, `${fDanach} Updates`);
+    let summe = 0;
+    for (let i = 0; i < 10; i++) summe += frame(1000 / 60);
+    check('S4-§7F(f) §4.1 nach dem Sprung laeuft der Loop sofort wieder mit 60 Hz',
+      summe >= 9 && summe <= 11, `${summe} Updates in 10 Frames`);
+    check('S4-§7F(f) §4.1 jeder Frame rendert genau einmal (keine zweite rAF-Kette)',
+      renders === 14 && q.length === 1, `${renders} Renders, ${q.length} offene rAF`);
+    check('S4-§7F(f) §4.1 alle Updates laufen mit dem FESTEN Schritt 1/60',
+      updates.every((dt) => Math.abs(dt - 1 / 60) < 1e-12), `${updates.length} Updates`);
+
+    // §4.1: main.js pausiert ueber den Zustandsautomaten. loop.stop()/start()
+    // wuerde eine ZWEITE rAF-Kette erzeugen — hier gemessen, damit die
+    // Begruendung im Test steht und nicht nur im Kommentar.
+    {
+      const q2 = [];
+      let u2 = 0;
+      const l2 = createLoop({ update: () => { u2 += 1; }, render: () => {}, raf: (cb) => q2.push(cb), now: () => uhr });
+      l2.start();
+      q2.shift()();                 // erster Frame, reiht den naechsten ein
+      l2.stop();
+      l2.start();                   // sofortiger Neustart, alter Callback lebt noch
+      check('S4-§7F(f) §4.1 stop()+start() hinterlaesst ZWEI eingereihte Callbacks (deshalb Pause per Zustand)',
+        q2.length === 2, `${q2.length} rAF-Callbacks`);
+      // Quelltext ohne Kommentare (main.js BEGRUENDET die Regel im Klartext —
+      // ein Waechter, der Kommentare mitliest, faende dort seinen eigenen
+      // Suchbegriff).
+      const mainCode = readFileSync(new URL('../game/js/main.js', import.meta.url), 'utf8')
+        .replace(/^[ \t]*\/\/.*$/gm, '').replace(/[ \t]+\/\/.*$/gm, '');
+      check('S4-§7F(f) §4.1 main.js ruft loop.stop() nie und start() genau einmal',
+        !/\.stop\(\)/.test(mainCode) && (mainCode.match(/\.start\(\)/g) || []).length === 1,
+        `stop ${(mainCode.match(/\.stop\(\)/g) || []).length}, start ${(mainCode.match(/\.start\(\)/g) || []).length}`);
+      check('S4-§7F(f) §4.1 die Pause laeuft ueber den Zustandsautomaten (state paused)',
+        /state === 'paused'/.test(mainCode) && /enterState\('paused'\)/.test(mainCode));
+    }
+  }
+}
+
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);
 if (totalTicks < 600) failures.push(`Zu wenige Ticks simuliert: ${totalTicks} < 600`);
 

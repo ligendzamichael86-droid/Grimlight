@@ -272,35 +272,66 @@ function buildLut(seed) {
   return lut;
 }
 
+// ===========================================================================
+// SLICE 4 §6.1 — LUT-MEMOISIERUNG AM LICHT-OBJEKT.
+//
+// BEFUND (Landkarte B §4.3): buildLut kostet 0,195 der 0,351 ms reinen
+// JS-Zeit je Frame (56 %) und ist zu 100 % cachebar — der Seed
+// l.x*0.7 + l.y*1.3 haengt NUR an der Weltposition, nicht an timeSec.
+//
+// WARUM AM OBJEKT und NICHT als Map<seed, LUT> (Review P1-B3 / P2-B1,
+// beide Pruefer unabhaengig gemessen): die Spielerlaterne (main.js
+// syncPlayerLight), Elite-Lichter und Selten-Drop-Lichter WANDERN, jeder
+// Frame erzeugt also einen neuen Seed. Eine Map waechst dadurch unbegrenzt
+// (gemessen 625 Eintraege nach 10 s, ~3,7 MB/min Float32Array-Nutzlast) —
+// exakt der GC-Druck, den §6 beseitigen soll. Am Licht-Objekt ist der
+// Deckel die ANZAHL DER LICHTER (21 im Worst-View), und bewegte Lichter
+// bauen ihre LUT weiterhin genau einmal je Frame.
+//
+// PIXEL-GLEICHHEIT: buildLut ist deterministisch, der Cache-Schluessel
+// (x, y) bestimmt den Seed vollstaendig. Bewiesen durch den S4-GOLD-Block
+// (§6.3, tools/smoke_test.mjs) — Setup A haelt ein Licht ortsfest (LUT MUSS
+// wiederverwendet werden), B und C bewegen je eines (LUT MUSS neu gebaut
+// werden); alle drei Op-Strom-sha256 bleiben unveraendert.
+//
+// SEITENEFFEKT (deklariert): das Licht-Objekt bekommt drei Zusatzfelder
+// _lut/_lutX/_lutY. Sie sind reine Rechen-Zwischenstaende; niemand
+// serialisiert Licht-Objekte (der Save speichert keine Lichter, §3.1).
+// ===========================================================================
+function lutFor(l) {
+  if (l._lut !== undefined && l._lutX === l.x && l._lutY === l.y) return l._lut;
+  const lut = buildLut(l.x * 0.7 + l.y * 1.3);
+  l._lut = lut;
+  l._lutX = l.x;
+  l._lutY = l.y;
+  return lut;
+}
+
 /**
- * §2.2 lightRuns — PURE Funktion, keine Seiteneffekte, KEIN Cache.
+ * §2.2 / SLICE 4 §6.2 — lightRunsInto: der INTERNE ZWILLING des Zeichenpfads.
  *
- * Liefert eine paarweise DISJUNKTE Partition der Vereinigung aller
- * Licht-Bounding-Boxen als Scanline-Segmente `{x, y, w, h: 4, k}` je
- * 4-px-Zeile (x/w auf 2-px-Bloecke gerastert, harte Bandgrenzen).
- * k ∈ 0..12 ist die Lichtstufe; die Stanz-Deckung ist X = 1 - k/12.
+ * Schreibt dieselbe Laufmenge wie lightRuns in einen FLACHEN Zahlen-Puffer:
+ * vier Zahlen je Lauf (x, y, w, k); h ist konstant RUN_H. Der Puffer gehoert
+ * dem AUFRUFER und wird wiederverwendet (Muster warmEimer, lighting.js:475) —
+ * damit entfallen die ~1600 Lauf-Objekte je Frame (Landkarte B §4.2).
  *
- * k = 12 bedeutet X = 0 (No-Op-Stanz) und wird UNTERDRUECKT (§2.2) — das
- * spart je Frame gut hundert wirkungslose fillRects. Die vollstaendige
- * Partition (fuer Disjunktheits-/Deckungsbeweise) liefert opt.emitK12.
+ * NUR createLighting().draw benutzt diese Funktion. Der OEFFENTLICHE Vertrag
+ * von lightRuns (Objekt-Array {x, y, w, h, k}, gleiche Reihenfolge) bleibt
+ * UNVERAENDERT — der Bestands-Smoke §7F(b) liest r.h/r.x/r.k und vergleicht
+ * per JSON.stringify zwei gleichzeitig gehaltene Ergebnisse (Review
+ * P1-B2/P2-B2). lightRuns ist deshalb nur noch ein duenner Wrapper, der die
+ * Objektliste aus dem Puffer materialisiert.
  *
- * @param {Array}  lights   [{x, y, radius, flicker}] in WELTpixeln
- * @param {Object} camera   {x, y}
- * @param {number} ambient  BEWUSST UNBENUTZT: die Quantisierung ist relativ
- *                          (§2.1), die Laufmenge haengt nicht vom Ambient ab
- *                          (P0a-Zusatzbefund — die §3.2-Absenkung ist
- *                          kostenneutral). Der Parameter steht in der von §2.2
- *                          festgelegten Signatur und bleibt darin.
- * @param {number} timeSec  Sekunden (Flicker)
- * @param {number} viewW, viewH  Sichtfenster in px
- * @param {Object} [opt]    { emitK12: true } nur fuer Selbstpruefungen
- * @returns {Array} runs
+ * SEITENEFFEKT: memoisiert die LUT am Licht-Objekt (§6.1, siehe lutFor) —
+ * rechnerisch pure, das Ergebnis haengt weiterhin ausschliesslich von den
+ * Argumenten ab.
  */
-export function lightRuns(lights, camera, ambient, timeSec, viewW, viewH, opt) {
+function lightRunsInto(out, lights, camera, ambient, timeSec, viewW, viewH, opt) {
   const emitK12 = !!(opt && opt.emitK12);
   const BW = viewW >> 1;                       // Bloecke in x (je 2 px)
   const BH = Math.ceil(viewH / RUN_H);         // Zeilen in y (je RUN_H px)
-  const runs = [];
+  const runs = out;
+  runs.length = 0;
 
   // ---- 1. Lichter aufbereiten: 2-px-Radiusrundung, Culling, LUT ----------
   const L = [];
@@ -320,7 +351,7 @@ export function lightRuns(lights, camera, ambient, timeSec, viewW, viewH, opt) {
     // Viewport-Culling wie im Bestand (Katakomben haben viele Fackeln).
     if (cx + r < 0 || cx - r > viewW || cy + r < 0 || cy - r > viewH) continue;
     L.push({
-      cx, cy, inv: 1 / (r * r), lut: buildLut(l.x * 0.7 + l.y * 1.3),
+      cx, cy, inv: 1 / (r * r), lut: lutFor(l),
       x0: Math.max(0, (cx - r) >> 1), x1: Math.min(BW - 1, (cx + r) >> 1),
       y0: Math.max(0, Math.floor((cy - r) / RUN_H)),
       y1: Math.min(BH - 1, Math.floor((cy + r) / RUN_H)),
@@ -367,18 +398,58 @@ export function lightRuns(lights, camera, ambient, timeSec, viewW, viewH, opt) {
       }
       if (k !== runK) {
         if (runK >= 0 && (emitK12 || runK !== LIGHT_STEPS)) {
-          runs.push({
-            x: (bx0 + runStart) * 2,
-            y: by * RUN_H,
-            w: (i - runStart) * 2,
-            h: RUN_H,
-            k: runK,
-          });
+          // §6.2: vier Zahlen statt eines Objekts — x, y, w, k (h = RUN_H).
+          runs.push(
+            (bx0 + runStart) * 2,
+            by * RUN_H,
+            (i - runStart) * 2,
+            runK
+          );
         }
         runK = k;
         runStart = i;
       }
     }
+  }
+  return runs;
+}
+
+/**
+ * §2.2 lightRuns — PURE Funktion, keine Seiteneffekte ausser der
+ * LUT-Memoisierung am Licht-Objekt (§6.1, deterministisch und
+ * ergebnis-neutral). OEFFENTLICHER VERTRAG, UNVERAENDERT seit GP6.
+ *
+ * Liefert eine paarweise DISJUNKTE Partition der Vereinigung aller
+ * Licht-Bounding-Boxen als Scanline-Segmente `{x, y, w, h: 4, k}` je
+ * 4-px-Zeile (x/w auf 2-px-Bloecke gerastert, harte Bandgrenzen).
+ * k ∈ 0..12 ist die Lichtstufe; die Stanz-Deckung ist X = 1 - k/12.
+ *
+ * k = 12 bedeutet X = 0 (No-Op-Stanz) und wird UNTERDRUECKT (§2.2) — das
+ * spart je Frame gut hundert wirkungslose fillRects. Die vollstaendige
+ * Partition (fuer Disjunktheits-/Deckungsbeweise) liefert opt.emitK12.
+ *
+ * SLICE 4 §6.2: intern laeuft die Rechnung ueber lightRunsInto (flacher
+ * Zahlen-Puffer); diese Funktion materialisiert daraus die Objektliste in
+ * UNVERAENDERTER Reihenfolge. Der Zeichenpfad (createLighting().draw)
+ * benutzt den Puffer direkt und allokiert nichts mehr je Lauf.
+ *
+ * @param {Array}  lights   [{x, y, radius, flicker}] in WELTpixeln
+ * @param {Object} camera   {x, y}
+ * @param {number} ambient  BEWUSST UNBENUTZT: die Quantisierung ist relativ
+ *                          (§2.1), die Laufmenge haengt nicht vom Ambient ab
+ *                          (P0a-Zusatzbefund — die §3.2-Absenkung ist
+ *                          kostenneutral). Der Parameter steht in der von §2.2
+ *                          festgelegten Signatur und bleibt darin.
+ * @param {number} timeSec  Sekunden (Flicker)
+ * @param {number} viewW, viewH  Sichtfenster in px
+ * @param {Object} [opt]    { emitK12: true } nur fuer Selbstpruefungen
+ * @returns {Array} runs
+ */
+export function lightRuns(lights, camera, ambient, timeSec, viewW, viewH, opt) {
+  const buf = lightRunsInto([], lights, camera, ambient, timeSec, viewW, viewH, opt);
+  const runs = [];
+  for (let i = 0; i < buf.length; i += 4) {
+    runs.push({ x: buf[i], y: buf[i + 1], w: buf[i + 2], h: RUN_H, k: buf[i + 3] });
   }
   return runs;
 }
@@ -473,6 +544,14 @@ export function createLighting(viewW, viewH) {
   // Neuanlage haelt den Frame allokationsfrei; die Buendelung spart die
   // fillStyle-Zuweisung je Lauf (Muster §2.3 "Eimer").
   const warmEimer = WARM_LADDER.map(() => []);
+  // SLICE 4 §6.2: derselbe Wiederverwendungs-Gedanke fuer den STANZ-Pfad.
+  // stanzBuf haelt die flache Laufmenge (x, y, w, k je Lauf, s.
+  // lightRunsInto), stanzEimer die nach Stufe k gebuendelten Tripel
+  // (x, y, w). Beide leben ueber die Frames hinweg und werden nur geleert —
+  // die ~1600 Lauf-Objekte je Frame (Landkarte B §4.2) entfallen damit.
+  const stanzBuf = [];
+  const stanzEimer = [];
+  for (let k = 0; k <= LIGHT_STEPS; k++) stanzEimer.push([]);
 
   function ensureOffscreen(ctx) {
     if (off) return;
@@ -507,23 +586,25 @@ export function createLighting(viewW, viewH) {
     // ausschliesslich im rgba-String (§0.2 Detektor, siehe Kopf-Kommentar).
     octx.globalAlpha = 1;
     octx.globalCompositeOperation = 'destination-out';
-    const runs = lightRuns(lights, camera, ambient, timeSec, viewW, viewH);
+    // §6.2: interner Zwilling + wiederverwendeter Puffer statt Objektliste.
+    // Die REIHENFOLGE der Laeufe ist identisch zu lightRuns(), die
+    // Buendelung darunter ebenfalls — der Op-Strom bleibt byte-gleich
+    // (S4-GOLD §6.3).
+    const runs = lightRunsInto(stanzBuf, lights, camera, ambient, timeSec, viewW, viewH);
     // EIMER-BUENDELUNG (§2.3): nach Stufe k gruppiert zeichnen. Erlaubt, weil
     // die Partition disjunkt ist (Reihenfolge frei) — 13 fillStyle-Zuweisungen
     // je Frame statt einer je Lauf.
-    const eimer = new Array(LIGHT_STEPS + 1).fill(null);
-    for (let i = 0; i < runs.length; i++) {
-      const run = runs[i];
-      if (eimer[run.k] === null) eimer[run.k] = [run];
-      else eimer[run.k].push(run);
+    for (let k = 0; k <= LIGHT_STEPS; k++) stanzEimer[k].length = 0;
+    for (let i = 0; i < runs.length; i += 4) {
+      const e = stanzEimer[runs[i + 3]];
+      e.push(runs[i], runs[i + 1], runs[i + 2]);
     }
     for (let k = 0; k <= LIGHT_STEPS; k++) {
-      const b = eimer[k];
-      if (b === null) continue;
+      const b = stanzEimer[k];
+      if (b.length === 0) continue;
       octx.fillStyle = STANZ_RGBA[k];
-      for (let i = 0; i < b.length; i++) {
-        const run = b[i];
-        octx.fillRect(run.x, run.y, run.w, run.h);
+      for (let i = 0; i < b.length; i += 3) {
+        octx.fillRect(b[i], b[i + 1], b[i + 2], RUN_H);
       }
     }
     // §0.3 Composite-Hygiene: nach dem destination-out-Block explizit zurueck.

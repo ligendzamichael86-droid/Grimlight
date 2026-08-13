@@ -1,5 +1,7 @@
-/* Grimlight — nur Zentrierung + schwarzer Letterbox-Rand.
-   Die ganzzahlige Skalierung setzt main.js per Inline-Style auf #game. */
+/* Grimlight — Letterbox, Positionierung und der Hochformat-Hinweis.
+   Die ganzzahlige Skalierung UND (seit Slice 4 §5.3) die auf das
+   Geraetepixel-Raster gerundete Position setzt main.js per Inline-Style
+   auf #game. */
 
 html, body {
   margin: 0;
@@ -15,10 +17,13 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* SLICE 4 §5.3: die Flex-Zentrierung ist RAUS. Sie zentrierte in CSS-px und
+   erzeugte damit auf Geraeten mit ungerader Aufloesung einen halben
+   Geraetepixel Versatz (Pixel-Scherung bei image-rendering: pixelated).
+   Zentriert wird jetzt in main.js auf ganzen GERAETEpixeln; body ist nur
+   noch der Bezugsrahmen. */
 body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
 }
 
 #game {
@@ -26,8 +31,60 @@ body {
   image-rendering: crisp-edges;
   touch-action: none;
   display: block;
-  /* Fallback-Größe, solange main.js noch keine Skalierung gesetzt hat.
-     Inline-Styles von main.js überschreiben das. */
+  /* §5.3: absolut, damit main.js left//top exakt setzen kann. Die
+     Fallback-Werte gelten nur, bis das erste resize() gelaufen ist. */
+  position: absolute;
+  left: 0;
+  top: 0;
   width: min(100vw, 177.78vh);
   aspect-ratio: 16 / 9;
+}
+
+/* ==========================================================================
+   SLICE 4 §5.2 — HOCHFORMAT-HINWEIS, REIN IN CSS.
+   Das div ist STATISCH in index.html und wird ausschliesslich per
+   Media-Query ein-/ausgeblendet. Es gibt KEINEN JS-Zugriff darauf: die
+   Flusstest-Stubs kennen weder window.matchMedia noch classList, und
+   document.getElementById liefert dort fuer JEDE id das Spiel-Canvas
+   (Review P1-B1). Im Querformat ist das div display:none und damit auch
+   fuer Touches unsichtbar.
+
+   Gemessen (Landkarte B §1.1): im Hochformat skaliert das Spiel auf 3
+   statt 6 und Button A schrumpft auf 6,0 mm, B auf 4,5 mm — unbedienbar.
+   In der App verhindert das der Manifest-Lock (sensorLandscape, §2.1);
+   dieser Hinweis ist die Browser-Variante.
+   ========================================================================== */
+#rotate {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  #rotate {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: #0a0810;
+    color: #d6cbb1;
+    font: 16px monospace;
+    line-height: 1.6;
+    /* Safe-Area NUR hier und NUR als iOS-Versicherung (Review P2-M5): in
+       der Android-WebView liefert env() 0, weil das Projekt ohne
+       edge-to-edge laeuft. Die bindende Verteidigung gegen die
+       Gestenleiste sind die 24 internen px aus §5.1 (input.js), nicht
+       dieses env(). JS liest env() NIE (getComputedStyle fehlt im Stub). */
+    padding:
+      env(safe-area-inset-top, 0px)
+      env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+  #game {
+    /* Das Spiel bleibt im DOM (kein Reload, kein Zustandsverlust), liegt
+       aber unter dem Hinweis. */
+    visibility: hidden;
+  }
 }

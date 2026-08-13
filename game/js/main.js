@@ -19,8 +19,17 @@ import { createPlayer } from './entities/player.js';
 import { createSkeleton, createGhoul, createEnemy, updateEnemies, updateDrops, drawEnemy, drawDrop, scatterDrop, eliteLights } from './entities/enemies.js';
 import { createProps, updateProps, drawProp } from './entities/props.js';
 import { createProjectiles, drawProjectile } from './entities/projectiles.js';
-import { drawHUD, drawVignette, drawFog, drawTitle, drawGameOver, drawVictory, drawPickupToast } from './ui/hud.js';
+import {
+  drawHUD, drawVignette, drawFog, drawTitle, drawGameOver, drawVictory, drawPickupToast,
+  drawPause, drawFps, PAUSE_MENU_ZONES,
+} from './ui/hud.js';
 import { createInventoryUI, drawInventoryUI } from './ui/inventory_ui.js';
+// Slice 4 §3: Save-System. save.js ist REIN (kein Browser-Zugriff) — den
+// Storage fasst ausschliesslich main.js an, in der §0.2-Guardform.
+import {
+  SAVE_KEY, serialize, deserialize, applyToPlayer,
+  titleMenuStep, TITLE_MENU_ITEMS, TITLE_MENU_ZONES,
+} from './items/save.js';
 
 const VIEW_W = 320;
 const VIEW_H = 180;
@@ -34,6 +43,19 @@ const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
 // Ganzzahlige Skalierung in GERÄTEpixeln; Backing bleibt fest 320×180.
+//
+// SLICE 4 §5.3 — HALBPIXEL-FIX. Bis Slice 3 zentrierte die Flexbox des body
+// (style.css) das Canvas; bei ungerader Geraeteaufloesung entstand dabei ein
+// HALBER Geraetepixel Versatz (gemessen iPhone 14 Pro 1179x2556 dpr 3:
+// 49,5 Geraetepixel Rand, Landkarte B §1.8). Folge bei image-rendering:
+// pixelated: ungleich breite Pixelreihen = Scherung im ganzen Bild.
+// JETZT: #game liegt absolut (style.css), und die Position wird HIER auf dem
+// GERAETEpixel-Raster gerundet und danach in CSS-px zurueckgerechnet. Die
+// Ausgabe traegt >= 4 Nachkommastellen, weil Blink CSS-Laengen auf 1/64 px
+// rastert (Review P2-m2).
+// §0.2: benutzt werden AUSSCHLIESSLICH canvas.style und die window-Groessen —
+// kein document.body, kein getComputedStyle, kein matchMedia (nichts davon
+// existiert in den Flusstest-Stubs).
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const scale = Math.max(
@@ -42,6 +64,12 @@ function resize() {
   );
   canvas.style.width = `${(scale * VIEW_W) / dpr}px`;
   canvas.style.height = `${(scale * VIEW_H) / dpr}px`;
+  try {
+    const left = Math.round((window.innerWidth * dpr - scale * VIEW_W) / 2) / dpr;
+    const top = Math.round((window.innerHeight * dpr - scale * VIEW_H) / 2) / dpr;
+    canvas.style.left = `${left.toFixed(4)}px`;
+    canvas.style.top = `${top.toFixed(4)}px`;
+  } catch { /* §0.2: ohne style-Objekt bleibt die CSS-Zentrierung stehen */ }
 }
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', resize);
@@ -234,7 +262,57 @@ let startMapKey = 'GRAVEYARD';
 // als gelbes GOTT oben rechts. Gelesen wie ?map= — location.search wird
 // AUSSCHLIESSLICH hier angefasst, alle anderen Module bleiben Node-importierbar.
 // Ohne den Parameter ist godMode false und jede Abzweigung tot.
-const godMode = new URLSearchParams(window.location.search).get('god') === '1';
+// Slice 4 §4.3: aus `const` wird `let` — der GOTT-Schalter im Pause-Menue
+// baut den Spieler damit zur Laufzeit neu (in der App gibt es keine
+// Query-Parameter, Landkarte B §3).
+let godMode = new URLSearchParams(window.location.search).get('god') === '1';
+
+// ===========================================================================
+// SLICE 4 §0.2 — BROWSER-GUARDS. JEDER neue Browser-API-Zugriff dieser Datei
+// laeuft ueber eine der Hilfen hier: typeof-Pruefung + try/catch +
+// Null-Fallback. Die Flusstest-Stubs kennen NUR window {addEventListener,
+// devicePixelRatio, innerWidth/Height, location.search,
+// requestAnimationFrame}, document {getElementById, createElement,
+// addEventListener, defaultView, hidden} und das Canvas — es gibt KEIN
+// localStorage, kein matchMedia, kein screen, kein navigator, kein
+// document.body/documentElement. Ein ungeguardeter Zugriff macht alle drei
+// kanonischen Flusstests rot (§0.1, gemessen Review P1-B1).
+// ===========================================================================
+
+// Pflichtform der Landkarte (§0.2): das try ist NICHT optional — WebViews mit
+// blockierten Cookies werfen schon beim reinen Property-Zugriff SecurityError.
+const store = (() => { try { return window.localStorage || null; } catch { return null; } })();
+
+function storeLesen(key) {
+  try { return store ? store.getItem(key) : null; } catch { return null; }
+}
+function storeSchreiben(key, wert) {
+  try { if (store) store.setItem(key, wert); } catch { /* Quota/Privatmodus: still */ }
+}
+
+// §3.3: der Spielstand wird beim Boot nur GELESEN, nicht angewandt. Er
+// entscheidet allein, ob der Titel ein Menue zeigt. Ohne Storage ist er null
+// und der komplette Startpfad bleibt byte-gleich zum Bestand.
+let savedGame = deserialize(storeLesen(SAVE_KEY));
+let titleCursor = 0;      // 0 = FORTSETZEN, 1 = NEUES SPIEL
+let titleHeldY = false;   // Flanke fuer die Menue-Navigation
+
+// §3.2 SCHREIBEN. Die Hooks sitzen bewusst NICHT in buildWorld (Review
+// P1-B4): dort sieht der Respawn-Pfad hp = 0 (das carry kopiert prev.hp,
+// hp = maxHp faellt erst danach), und der Titel-Start wuerde ueber resetRun
+// bei JEDEM Confirm den alten Stand ueberschreiben. Gespeichert wird an den
+// vier Stellen, an denen der Zustand VOLLSTAENDIG hergestellt ist:
+//   (a) nach vollzogenem Portal-Wechsel (Fade fertig)
+//   (b) nach Respawn-Abschluss (hp/deathToll gesetzt)
+//   (c) im pagehide/visibilitychange-Pfad (§4.1)
+//   (d) beim Pausieren ueber die Android-Zurueck-Taste (§4.5)
+// Im resetRun-Pfad wird NIE gespeichert.
+function saveNow() {
+  if (!store || !player || !currentMapKey || !lastSpawn) return;
+  storeSchreiben(SAVE_KEY, serialize({
+    mapKey: currentMapKey, spawn: lastSpawn, player, runFlags,
+  }));
+}
 
 let state = 'title';
 let stateTime = 0;
@@ -269,7 +347,9 @@ let toast = null;
 let zeldaWasAir = false;
 let zeldaBlink = 0;
 // Slice 3: Progression/Boss-Run-Zustand.
-let runFlags = { bossDead: false };   // Reset in resetRun
+// Slice 4 §3.4: openedChests kommt dazu — Schluessel `MAP:tx,ty` je bereits
+// geoeffneter Truhe. Beides wird in resetRun zurueckgesetzt.
+let runFlags = { bossDead: false, openedChests: [] };   // Reset in resetRun
 let lastSpawn = null;                 // fuer den Respawn (§2.6): letzter Eintritts-Spawn
 let currentMapKey = null;             // aktuelle Map (Respawn zielt hierauf)
 let levelupTimer = 0;                 // Ring-Effekt levelup_0/1, 0,5 s ueber dem Spieler
@@ -293,6 +373,28 @@ function followPlayer() {
 function syncPlayerLight() {
   playerLight.x = player.x + player.w / 2;
   playerLight.y = player.y + player.h / 2;
+}
+
+// ===========================================================================
+// SLICE 4 §3.4 — GEOEFFNETE TRUHEN.
+//
+// DATENQUELLE ist die props-LISTE, nicht der Event-Strom: die Events aus
+// props.js tragen weder mapKey noch Position, und die Gold-Truhe pusht
+// ueberhaupt kein Event (Review P1-B5/P2-M1). Der Schluessel ist Karte +
+// KACHEL der AABB-Ecke; er wird an genau zwei Stellen gebildet — hier — und
+// beide Male aus einem fertigen Prop-Objekt.
+// ===========================================================================
+function chestKey(mapKey, p) {
+  return `${mapKey}:${(p.x / 16) | 0},${(p.y / 16) | 0}`;
+}
+
+// Die SIEGTRUHE entsteht per push (nicht aus propSpawns) und ist von
+// Registrierung UND Filter ausgenommen: die Bestandszusage "der Sieg bleibt
+// nach Verlassen/Rueckkehr erreichbar" bleibt damit wortwoertlich gueltig
+// (Review P1-M5; §9 deklariert, dass genau diese eine Truhe weiter refillt).
+function markSiegtruhe(ps) {
+  for (const p of ps) p.siegChest = true;
+  return ps;
 }
 
 // Welt einer Map aufbauen. Gegner-/Prop-Zustand wird beim erneuten Betreten
@@ -336,11 +438,25 @@ function buildWorld(mapKey, spawn, carry) {
       .filter((s) => !(runFlags.bossDead && s.kind === 'graveward'))
       .map(createEnemy),
   ];
-  props = createProps(mapDef.propSpawns);
+  // SLICE 4 §3.4: bereits geoeffnete Truhen werden NICHT neu erzeugt (sonst
+  // wird der Bestandskompromiss "Truhen fuellen sich beim Wiederbetreten neu"
+  // durch das Save zur Gold-Farm). Gefiltert wird auf dem ERGEBNIS von
+  // createProps: das ist per Definition eine KOPIE (createProps mappt),
+  // mapDef.propSpawns bleibt also unangetastet — Pflicht, sonst fehlt der
+  // Boss/die Truhe nach resetRun dauerhaft (Kommentar oben, Review P2-M2).
+  // Zweiter Grund fuer den Filter NACH createProps: der Schluessel entsteht
+  // aus derselben Prop-Geometrie wie bei der Registrierung unten
+  // (props.js legt die AABB-Ecke auf spawn - w/2), es gibt keine zweite
+  // Rechnung, die auseinanderlaufen koennte.
+  const alleProps = createProps(mapDef.propSpawns);
+  props = runFlags.openedChests.length === 0
+    ? alleProps
+    : alleProps.filter((p) => !(p.kind === 'chest'
+      && runFlags.openedChests.includes(chestKey(mapKey, p))));
   // §3: nach besiegtem Boss die Siegtruhe statisch bei tc(10,4) hinlegen —
   // der Sieg bleibt nach Verlassen/Rueckkehr erreichbar.
   if (mapKey === 'BOSS_KAMMER' && runFlags.bossDead) {
-    props.push(...createProps([{ ...tc(10, 4), kind: 'chest', content: 'treasure' }]));
+    props.push(...markSiegtruhe(createProps([{ ...tc(10, 4), kind: 'chest', content: 'treasure' }])));
   }
   projectiles = createProjectiles();
   // §2.4: Funken der alten Map verwerfen (kein Ember-Bleed über den Map-Wechsel).
@@ -389,7 +505,29 @@ function resetRun() {
   fadeT = 0;
   pendingPortal = null;
   runFlags.bossDead = false; // §2.6.6: frischer Run, der Boss lebt wieder
+  // §3.4 PFLICHT: die Truhen-Liste MUSS mitzurueckgesetzt werden. Bliebe sie
+  // stehen, fehlten im neuen Run die boss_key- und die heart-Truhe — das
+  // Boss-Portal waere fuer immer VERSCHLOSSEN und der Run unloesbar
+  // (Review P1-B5; kein Bestandstest faengt das, check_boss injiziert den
+  // Schluessel von Hand).
+  runFlags.openedChests = [];
   buildWorld(startMapKey, MAPS[startMapKey].playerSpawn, false);
+}
+
+// §3.3 FORTSETZEN. Der Snapshot wird erst HIER angewandt — der Titel selbst
+// laesst ihn unberuehrt. Reihenfolge: Run-Flags (steuern Boss-Filter,
+// Siegtruhe und Truhen-Filter in buildWorld) -> Welt bauen (carry = false,
+// frischer Spieler) -> carry-Reihenfolge aus dem Snapshot (save.js).
+function ladeSpielstand(snap) {
+  runFlags.bossDead = snap.runFlags.bossDead;
+  runFlags.openedChests = snap.runFlags.openedChests.slice();
+  player = null;
+  victoryTimer = 0;
+  fadePhase = 'none';
+  fadeT = 0;
+  pendingPortal = null;
+  buildWorld(snap.mapKey, snap.spawn, false);
+  applyToPlayer(player, snap);
 }
 
 function enterState(next) {
@@ -398,9 +536,200 @@ function enterState(next) {
   input.consumeConfirm();
 }
 
+// ===========================================================================
+// SLICE 4 §4.4 — QUERFORMAT, BROWSER-FALLBACK.
+//
+// Der eigentliche Lock sitzt im AndroidManifest (sensorLandscape, §2.1); das
+// hier ist nur die Browser-Variante fuer Michaels Handy-Chrome. Bedingungen,
+// alle drei bindend:
+//   * NUR bei input.touch.active === true. requestFullscreen wuerde sonst
+//     auch seinen PC-Browser auf Port 8123 ins Vollbild reissen (ESC noetig)
+//     und screen.orientation.lock dort NotSupportedError werfen (Review
+//     P2-m3).
+//   * EXAKTE §0.2-Guardform: typeof-Pruefung, Feld-Pruefung,
+//     typeof-Funktions-Pruefung, alles in try/catch, Promise nur behandeln,
+//     wenn sie eine ist. Die Stubs haben WEDER document.documentElement NOCH
+//     ein globales screen — ein ungeguardeter Zugriff macht alle drei
+//     Flusstests rot (Review P2-B4).
+//   * Der Hochformat-HINWEIS laeuft rein ueber CSS (statisches div +
+//     Media-Query), NIE ueber matchMedia — das fehlt im Stub ebenfalls.
+// ===========================================================================
+// ===========================================================================
+// SLICE 4 §4.1/§4.2/§4.3 — PAUSE.
+//
+// Die Pause laeuft REIN ueber den Zustandsautomaten (state === 'paused').
+// loop.stop()/start() wird bewusst NICHT benutzt: loop.js setzt in stop()
+// nur running = false, ein bereits eingereihter rAF-Callback stirbt erst
+// beim naechsten Aufruf — ein start() davor erzeugt eine ZWEITE rAF-Kette
+// und damit doppelte Update-Rate (Review P1-M6). loop.js bleibt unangetastet.
+// ===========================================================================
+let pauseCursor = 0;
+let pauseHeldY = false;   // Flanke der Menue-Navigation
+let pauseHeld = false;    // Flanke des Pause-Pegels (Knopf/Escape/P)
+
+// §6.4 FPS-Fenster. Uhr in §0.2-Guardform: performance.now, sonst Date.now
+// (ein JS-Builtin, in jeder Umgebung vorhanden). GEMESSEN WIRD NUR MIT
+// EINGESCHALTETEM OVERLAY — ohne den Schalter ist der Renderpfad byte-gleich
+// zum Bestand.
+const jetztMs = (() => {
+  try {
+    if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
+      return () => performance.now();
+    }
+  } catch { /* faellt auf Date.now zurueck */ }
+  return () => Date.now();
+})();
+let fpsSichtbar = false;
+let fpsLetzte = 0;
+let fpsFrames = 0;
+let fpsSumme = 0;
+let fpsSpitze = 0;
+let fpsWert = { fps: 0, ms: 0, max: 0 };
+const FPS_FENSTER = 120;
+
+function fpsTick() {
+  const t = jetztMs();
+  if (fpsLetzte > 0) {
+    const dt = t - fpsLetzte;
+    // Ausreisser (Tab im Hintergrund, Pause) verfaelschen das Fenster nicht.
+    if (dt > 0 && dt < 1000) {
+      fpsSumme += dt;
+      if (dt > fpsSpitze) fpsSpitze = dt;
+      fpsFrames += 1;
+      if (fpsFrames >= FPS_FENSTER) {
+        const mittel = fpsSumme / fpsFrames;
+        fpsWert = { fps: Math.round(1000 / mittel), ms: mittel, max: fpsSpitze };
+        fpsFrames = 0;
+        fpsSumme = 0;
+        fpsSpitze = 0;
+      }
+    }
+  }
+  fpsLetzte = t;
+}
+
+// §4.3 GOTT-UMSCHALTUNG — SPIELER-NEUBAU.
+//
+// Ein Laufzeit-Flag boostet NICHT: godBoost schliesst in player.js ueber
+// `const god = opts.god === true` (Closure); ein nachtraegliches
+// player.god = true schaltet AUSSCHLIESSLICH die Unverwundbarkeit in hurt(),
+// Schaden x10 und Tempo x1,4 bleiben aus (Review P1-B6/P2-B3, beide Pruefer
+// haben es gemessen). player.js bleibt deshalb UNANGETASTET; main.js baut
+// den Spieler an derselben Weltposition NEU und traegt den Zustand in der
+// FESTEN carry-Reihenfolge (main.js:314-319) hinueber. Die Welt (Karte,
+// Gegner, Props, Drops, Projektile, Lichter) bleibt vollstaendig stehen.
+//
+// DEKLARIERT (§9): Transientes startet frisch — invulnTimer, attackTimer,
+// attackId, Knockback, potionCooldown, facing/state/animTimer. Der Bumerang
+// der GOTT-Ausstattung wird beim EINSCHALTEN nachgereicht (Muster
+// buildWorld-godMode-Block), beim Ausschalten aber NICHT eingezogen.
+function toggleGott() {
+  godMode = !godMode;
+  const prev = player;
+  player = createPlayer(
+    { x: prev.x + prev.w / 2, y: prev.y + prev.h / 2 },
+    { god: godMode }
+  );
+  player.inv = prev.inv;
+  player.prog = prev.prog;
+  player.recalcStats();
+  player.hp = Math.min(prev.hp, player.maxHp);
+  player.gold = prev.gold;
+  player.potions = prev.potions;
+  if (godMode && !player.inv.zelda.includes('boomerang')) player.inv.zelda.push('boomerang');
+  syncPlayerLight();
+  followPlayer();
+}
+
+// Eintritt in die Pause. IMMER ueber enterState (ruft consumeConfirm — sonst
+// schaltet der Tap, der pausiert hat, im selben Frame WEITER wieder frei,
+// Review P1-m2). Speichert nach §3.2 (c)/(d).
+function pausiere() {
+  if (state !== 'playing') return;
+  saveNow();
+  pauseCursor = 0;
+  pauseHeldY = true; // eine gehaltene Richtung darf den Cursor nicht sofort bewegen
+  enterState('paused');
+}
+
+// §4.1 LIFECYCLE. visibilitychange/pagehide -> Auto-Save + Pause. Beide
+// Listener in §0.2-Guardform; die Stubs haben document.addEventListener als
+// No-Op und feuern nichts, der Startpfad bleibt byte-gleich.
+function systemPause() {
+  if (!player) return;
+  saveNow();          // §3.2 (c) — Android kann die App ohne weiteren Callback killen
+  pausiere();
+}
+try {
+  if (typeof document !== 'undefined' && document
+    && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      try { if (document.hidden) systemPause(); } catch { /* inert */ }
+    });
+  }
+} catch { /* inert */ }
+try {
+  if (typeof window !== 'undefined' && window
+    && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', systemPause);
+  }
+} catch { /* inert */ }
+
+// §4.5 ANDROID-ZURUECK-TASTE. Ohne Listener beendet Capacitor 6 die Activity
+// (BridgeActivity erbt das Default-Verhalten, Review P2-M10) — ein Fehlgriff
+// schliesst Michaels App mitten im Bosskampf. Mit Listener: Pause + Save.
+//
+// GUARDED UND DYNAMISCH, damit im Browser und in Node NICHTS passiert:
+//   (1) ohne window.Capacitor wird gar nichts versucht (Browser/Tests);
+//   (2) bevorzugt wird die Laufzeit-Bruecke window.Capacitor.Plugins.App —
+//       sie braucht KEINEN Bundler, und das Projekt hat keinen (CLAUDE.md);
+//   (3) nur als Reserve der bare-Specifier-Import '@capacitor/app'; er
+//       scheitert im Browser ohne Import-Map, deshalb ausschliesslich als
+//       abgefangene Promise.
+function haengeZurueckTasteAn() {
+  const anschluss = (App) => {
+    try {
+      if (App && typeof App.addListener === 'function') {
+        App.addListener('backButton', () => {
+          try { if (state === 'playing') pausiere(); } catch { /* inert */ }
+        });
+      }
+    } catch { /* inert */ }
+  };
+  try {
+    const cap = (typeof window !== 'undefined' && window) ? window.Capacitor : null;
+    if (!cap) return; // Browser/Node: vollstaendig inert
+    if (cap.Plugins && cap.Plugins.App) { anschluss(cap.Plugins.App); return; }
+    import('@capacitor/app').then((m) => anschluss(m && m.App), () => {});
+  } catch { /* inert */ }
+}
+haengeZurueckTasteAn();
+
+function starteQuerformat() {
+  if (input.touch.active !== true) return;
+  try {
+    const de = (typeof document !== 'undefined' && document) ? document.documentElement : null;
+    if (de && typeof de.requestFullscreen === 'function') {
+      const p = de.requestFullscreen();
+      if (p && typeof p.then === 'function') p.then(() => {}, () => {});
+    }
+  } catch { /* inert */ }
+  try {
+    if (typeof screen !== 'undefined' && screen && screen.orientation
+      && typeof screen.orientation.lock === 'function') {
+      const p = screen.orientation.lock('landscape');
+      if (p && typeof p.then === 'function') p.then(() => {}, () => {});
+    }
+  } catch { /* inert */ }
+}
+
 function update(dt) {
   timeSec += dt;
   stateTime += dt;
+
+  // §4.2: der Pause-Knopf ist NUR im Spielzustand scharf — sonst frisst seine
+  // Zone Taps im Titel, im Game-Over und im Sieg (Muster hudBoxVisible).
+  input.touch.pause.visible = state === 'playing';
 
   // HUD-Spiegel + Touch-Sichtbarkeiten NUR in playing/inventory
   // aktualisieren (im Titel ist player null). drawHUD behält seine
@@ -430,9 +759,50 @@ function update(dt) {
     else attackSwallow = false;
   }
 
-  if (state === 'title') {
-    if (input.confirm) {
+  // §4.2/§4.5 PAUSE-FLANKE (Knopf ❚❚, Escape/P). Sie steht VOR der
+  // Zustandskette und verbraucht den ganzen Frame: so laeuft weder im
+  // Pausier- noch im Fortsetz-Frame ein Welt-Update. In allen anderen
+  // Zustaenden ist sie wirkungslos. In den Flusstests ist input.pause
+  // dauerhaft false (kein Escape/P, kein Touch) — die Kette darunter
+  // verhaelt sich byte-gleich zum Bestand.
+  const pauseEdge = input.pause && !pauseHeld;
+  pauseHeld = input.pause;
+
+  if (pauseEdge && (state === 'playing' || state === 'paused')) {
+    if (state === 'playing') pausiere();
+    else enterState('playing');
+  } else if (state === 'title') {
+    // §3.3: OHNE Spielstand ist dieser Zweig byte-gleich zum Bestand — jeder
+    // Confirm startet sofort einen frischen Run. Erst mit gueltigem Stand
+    // schaltet das Menue davor (dann hat der Tap Vorrang vor confirm, sonst
+    // wuerde jeder Tap irgendwo den Cursor-Eintrag ausloesen).
+    if (savedGame) {
+      const yLevel = input.dirY < -0.5 || input.dirY > 0.5;
+      const res = titleMenuStep(titleCursor, {
+        up: input.dirY < -0.5 && !titleHeldY,
+        down: input.dirY > 0.5 && !titleHeldY,
+        confirm: !!input.confirm,
+        tap: input.tap,
+      });
+      titleHeldY = yLevel;
+      titleCursor = res.cursor;
+      if (res.action === 'continue') {
+        ladeSpielstand(savedGame);
+        savedGame = null;
+        starteQuerformat();
+        enterState('playing');
+      } else if (res.action === 'new') {
+        // "NEU verliert nichts": kein Hook feuert vor dem ersten
+        // Kartenwechsel/Respawn, der alte Stand steht also noch im Storage
+        // (Review P2-M3). Geloescht wird er nie aktiv.
+        savedGame = null;
+        resetRun();
+        starteQuerformat();
+        enterState('playing');
+      }
+    } else if (input.confirm) {
       resetRun();
+      starteQuerformat(); // §4.4 — No-Op ohne Touch (schuetzt den Desktop-Flow)
       enterState('playing');
     }
   } else if (state === 'playing') {
@@ -448,6 +818,10 @@ function update(dt) {
       } else if (fadePhase === 'in' && fadeT >= FADE_TIME) {
         fadePhase = 'none';
         fadeT = 0;
+        // §3.2 HOOK (a): Portal-Wechsel vollzogen. Hier — und NICHT am Ende
+        // von buildWorld — ist der Zustand vollstaendig (Welt gebaut, Fade
+        // durch, hp/gold/potions uebernommen).
+        saveNow();
       }
     } else {
       events.length = 0;
@@ -456,6 +830,14 @@ function update(dt) {
       projectiles.update(dt, input, player, enemies, props, map, drops, events);
       updateEnemies(dt, enemies, player, map, drops, events);
       updateProps(dt, props, player, map, drops, events);
+      // §3.4: geoeffnete Truhen registrieren (Quelle = props-Liste, s.
+      // chestKey-Kommentar). Die Siegtruhe bleibt ausgenommen.
+      for (let i = 0; i < props.length; i++) {
+        const p = props[i];
+        if (p.kind !== 'chest' || p.opened !== true || p.siegChest === true) continue;
+        const k = chestKey(currentMapKey, p);
+        if (!runFlags.openedChests.includes(k)) runFlags.openedChests.push(k);
+      }
       updateDrops(dt, drops, player, events);
       syncPlayerLight();
       followPlayer();
@@ -508,7 +890,7 @@ function update(dt) {
         const anchor = tc(10, 4);
         const coins = 6 + Math.floor(Math.random() * 5); // 6-10
         for (let k = 0; k < coins; k++) scatterDrop(drops, map, anchor.x, anchor.y, 'coin');
-        props.push(...createProps([{ ...anchor, kind: 'chest', content: 'treasure' }]));
+        props.push(...markSiegtruhe(createProps([{ ...anchor, kind: 'chest', content: 'treasure' }])));
         runFlags.bossDead = true;
       }
 
@@ -596,6 +978,45 @@ function update(dt) {
       attackSwallow = true; // Schliess-Tap nicht als Hieb werten
       enterState('playing'); // consumeConfirm an beiden Übergängen (enterState)
     }
+  } else if (state === 'paused') {
+    // §4.1 HARTE PAUSE wie 'inventory': keine Welt-Updates, keine Timer.
+    // timeSec laeuft oben weiter (Fackel-Flackern im eingefrorenen Bild).
+    input.hudBoxVisible = false;
+    const yLevel = input.dirY < -0.5 || input.dirY > 0.5;
+    const up = input.dirY < -0.5 && !pauseHeldY;
+    const down = input.dirY > 0.5 && !pauseHeldY;
+    pauseHeldY = yLevel;
+    let wahl = -1;
+    if (input.tap) {
+      // TAP HAT VORRANG vor confirm: jeder touchstart setzt input.confirm
+      // (input.js), ein Tap neben dem Menue darf deshalb nichts ausloesen.
+      for (let i = 0; i < PAUSE_MENU_ZONES.length; i++) {
+        const z = PAUSE_MENU_ZONES[i];
+        if (input.tap.x >= z.x && input.tap.x <= z.x + z.w
+          && input.tap.y >= z.y && input.tap.y <= z.y + z.h) {
+          pauseCursor = i;
+          wahl = i;
+          break;
+        }
+      }
+    } else {
+      if (up && pauseCursor > 0) pauseCursor -= 1;
+      if (down && pauseCursor < PAUSE_MENU_ZONES.length - 1) pauseCursor += 1;
+      if (input.confirm) wahl = pauseCursor;
+    }
+    if (wahl === 0) {
+      enterState('playing');
+    } else if (wahl === 1) {
+      toggleGott();
+      input.consumeConfirm(); // Auswahl verbraucht, kein Durchbluten
+    } else if (wahl === 2) {
+      fpsSichtbar = !fpsSichtbar;
+      fpsLetzte = 0;          // Fenster frisch starten (die Pause ist kein Frame)
+      fpsFrames = 0;
+      fpsSumme = 0;
+      fpsSpitze = 0;
+      input.consumeConfirm();
+    }
   } else if (state === 'gameover') {
     if (player.state === 'dead') player.animTimer += dt; // Sterbe-Frames
     if (stateTime >= END_SCREEN_MIN_TIME && input.confirm) {
@@ -609,6 +1030,11 @@ function update(dt) {
       buildWorld(currentMapKey, lastSpawn, true);
       player.hp = player.maxHp;
       player.deathToll = null;
+      // §3.2 HOOK (b): Respawn abgeschlossen — erst JETZT stehen hp = maxHp
+      // und deathToll = null. Ein Hook in buildWorld haette hp = 0
+      // gespeichert (der carry-Block kopiert prev.hp), der geladene Stand
+      // waere im ersten Frame erneut gestorben (Review P1-B4, gemessen).
+      saveNow();
       enterState('playing');
     }
   } else if (state === 'victory') {
@@ -982,7 +1408,11 @@ function render() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   if (state === 'title') {
-    drawTitle(ctx, timeSec);
+    // §3.3: ohne Spielstand exakt der Bestands-Aufruf (drittes Argument
+    // undefined) — die Flusstests sehen keinen Unterschied.
+    drawTitle(ctx, timeSec, savedGame
+      ? { cursor: titleCursor, items: TITLE_MENU_ITEMS, zones: TITLE_MENU_ZONES }
+      : null);
     return;
   }
   drawWorld();
@@ -996,6 +1426,10 @@ function render() {
   }
   if (state === 'gameover') drawGameOver(ctx, player, timeSec);
   else if (state === 'victory') drawVictory(ctx, player, timeSec);
+  // §4.1 Pause-Overlay ueber der eingefrorenen Welt (HUD-Sprache).
+  if (state === 'paused') {
+    drawPause(ctx, { cursor: pauseCursor, god: godMode, fps: fpsSichtbar });
+  }
   if (state === 'playing' && fadePhase !== 'none') {
     const a = fadePhase === 'out'
       ? Math.min(fadeT / FADE_TIME, 1)
@@ -1004,6 +1438,13 @@ function render() {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.globalAlpha = 1;
+  }
+  // §6.4 FPS-Overlay ganz zuletzt — ueber Pause UND ueber dem Portal-Fade
+  // (eine Messanzeige darf nicht mit weggeblendet werden). Ohne den
+  // Schalter passiert hier NICHTS: kein Uhrzugriff, kein Zeichenzug.
+  if (fpsSichtbar) {
+    fpsTick();
+    drawFps(ctx, fpsWert);
   }
 }
 

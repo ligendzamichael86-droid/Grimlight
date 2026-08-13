@@ -13,10 +13,19 @@ const PANEL = { x: 8, y: 8, w: 304, h: 164 };
 const LIST_X0 = 48;
 const LIST_X1 = 304;
 const LIST_Y = 26;
-const ROW_H = 16;
+// SLICE 4 §5.5 — TREFFERFLAECHEN (ENG BEGRENZT, Review P1-M1). Geaendert
+// werden GENAU ZWEI Konstanten, beide mit FESTEM Anker:
+//   ROW_H 16 -> 20   Zeile 0 bleibt 26..46 (der Bestands-Tap y = 30 trifft
+//                    weiter; smoke_test.mjs:1249). 20 px = 7,5 mm.
+//   BTN_CLOSE 20 -> 24 bei UNVERAENDERTEM Anker (288,10) — der Bestands-Tap
+//                    (290,12) bleibt drin (smoke_test.mjs:1256). 24 px =
+//                    9,0 mm.
+// LIST_Y und der X-Anker sind TABU (die harten Koordinaten stehen im
+// BESTANDS-Smoke, nicht in den Flusstests).
+const ROW_H = 20;
 const ROWS = 7;
 const BTN_EQUIP = { x: 232, y: 142, w: 72, h: 22 };
-const BTN_CLOSE = { x: 288, y: 10, w: 20, h: 20 };
+const BTN_CLOSE = { x: 288, y: 10, w: 24, h: 24 };
 
 const COLOR_NORMAL = '#d6cbb1';
 const COLOR_RARE = '#92aec0';

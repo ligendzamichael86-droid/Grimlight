@@ -4,10 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- Slice 4 §5.6: nicht-Apple-Variante + Farbe der Systemleisten. -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0810">
   <title>Grimlight</title>
   <link rel="stylesheet" href="css/style.css">
+  <!-- Slice 4 §5.6: Manifest OHNE Icons (deklariert, §9) — Icons braeuchten
+       Binaerdateien im Repo. Die Browser-Variante wird dadurch huebscher
+       (Vollbild, Querformat, Farbe), aber NICHT installierbar. Fuer die App
+       ist das Manifest ohnehin ohne Bedeutung, dort gilt das AndroidManifest. -->
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Slice 4 §5.2: Hochformat-Hinweis. STATISCH im Markup und ausschliesslich
+       per CSS-Media-Query gesteuert — kein JS fasst dieses Element an
+       (die Flusstest-Stubs haben kein matchMedia, und ihr
+       document.getElementById liefert fuer JEDE id das Canvas). -->
+  <div id="rotate">Bitte das Ger&auml;t quer halten.<br>Grimlight braucht Querformat.</div>
   <canvas id="game" width="320" height="180"></canvas>
   <script type="module" src="js/main.js"></script>
 </body>

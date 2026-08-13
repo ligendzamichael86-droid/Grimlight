@@ -1,0 +1,8 @@
+{
+  "appId": "de.grimlight.app",
+  "appName": "Grimlight",
+  "webDir": "../game",
+  "android": {
+    "allowMixedContent": false
+  }
+}
