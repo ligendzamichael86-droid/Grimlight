@@ -22,10 +22,13 @@ Key canopy_shadow_g/_d + XL-Fassungen, additiv ans Ende; der
 Schatten-Zweitpass wählt je Zelle nach Bodenmaterial und stempelt
 je Zelle GENAU EINMAL — Überlapp-Dedupe). NEUES GATE: Schachbrett-
 Blockanteil (8×8-Energie-Metrik Juror K) in g6_01/g6_02 < 2 %.
-(J4) P0-D (L<16-Bänder) ist an Michael eskaliert; bis zu seinem
-Entscheid gilt die Rev-2.1-Fassung MIT der offenen Deklaration
+(J4) P0-D (L<16-Bänder): MICHAEL HAT ENTSCHIEDEN (13.08.2026,
+Option a): Die Rev-2.1-Bänder gelten mit der OFFENEN DEKLARATION
 "GP6 verbessert die Dunkelanteile innen nicht, es verschlechtert
-sie nicht".
+sie nicht" — diese Deklaration ist Teil der Abnahme und der
+Übergabe. Die Dunkel-Inventur (Juror-H-P1-1: Dither-Paare aus
+angehobenen × stehengebliebenen Tönen) ist PFLICHT-Backlog-Punkt
+für GP7.
 
 REV 2.3 = Rev 2.2 + zwei Methoden-Entscheide nach Proof-Lauf 2:
 (K2-FINAL) Das Pro-Strahl-Plateau-Minimum des Gradient-Schnitts

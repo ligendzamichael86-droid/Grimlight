@@ -57,13 +57,11 @@ Berichte: Task-Ausgaben der Session (Auszüge unten wörtlich).
 > an k/t, oder eine ausdrückliche, an Michael adressierte Deklaration,
 > dass GP6 die Dunkelanteile innen nicht verbessert, sondern nur
 > nicht verschlechtert."
-> ENTSCHEID: An MICHAEL eskaliert (Abnahme-Frage). Faktenlage: Die
-> Rev-2-Bänder waren vor der P0b-Simulation gesetzt und hätten eine
-> Dunkel-Grundsanierung (k/t-Rampen) verlangt, die dem §3.1-
-> Silhouetten-Entscheid widerspricht; die Rev-2.1-Bänder liegen
-> unter dem IST (Verbesserungs-Charakter bei BOSS/GRUFT real, bei
-> CATACOMBS nur 0,03 pp). Empfehlung Fable: Deklaration annehmen,
-> Dunkel-Inventur (H-P1-1) als GP7-Punkt.
+> ENTSCHEID: An MICHAEL eskaliert. **MICHAEL 13.08.2026: OPTION a**
+> — Deklaration angenommen ("GP6 verbessert die Dunkelanteile innen
+> nicht, es verschlechtert sie nicht"), Rev-2.1-Bänder bleiben,
+> Dunkel-Inventur (H-P1-1) ist Pflicht-Backlog für GP7. Damit ist
+> P0-D AUFGELÖST.
 
 ## PRIO-1/2 (Backlog, NICHT Runde 2 — §9: Runde N+1 baut nur Prio-0)
 
