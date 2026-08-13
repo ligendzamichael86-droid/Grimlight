@@ -1,4 +1,31 @@
-# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.3, 13.08.2026, Fable)
+# SPEC Grafikpass 6 — "Licht & Maßstab" (Rev 2.4, 13.08.2026, Fable)
+
+REV 2.4 = Rev 2.3 + Jury-Runde-1-Auflösungen (design/GP6_JURY_R1.md):
+(J1) P0-C: Die Rev-2.3-Begründung "arithmetisch unerfüllbar (19 bei
+18)" war FALSCH (Mindestbedarf 17; Juror-M-Gegenbeleg existiert) —
+korrekt ist: empirisch nur auf 4-11 % der zulässigen Strahlen
+erfüllbar, damit maß die Regel die Strahlwahl. ERSATZREGEL (bindend,
+am Zensus geeicht — 55 % aller Strahlen erreichen sie): der
+Gradient-Schnitt braucht ≥ 5 Plateaus ≥ 2 Blöcke. Der §1/M2-Körper
+gilt ab jetzt in DIESER Fassung (der dortige Rev-2.1-Satz "kein
+Plateau < 2 Blöcke" ist tot).
+(J2) M4 wird VERSCHÄRFT (Jury-Mandat, P0-A): zusätzlich Quotient
+verdeckt/silhouette ≤ 0,85 UND ≥ 25 % der Voll-Silhouette (275
+Texel) in der Beweiszelle lesbar — Totalverdeckung ist ein Defekt,
+kein Optimum. Bau-Vorgabe: Over-Kronen, deren Span-Fußabdruck die
+Spieler-Standkachel enthält, zeichnen mit globalAlpha 0,55
+(danach Reset; Ruhelage t=0-Determinismus und smoke:695-697-Zählung
+bleiben unberührt).
+(J3) P0-B: canopy_shadow(+_xl_*) werden MATERIAL-getönt (Schatten-
+stufen der jeweiligen Bodenrampe statt n/0; pro Material eigener
+Key canopy_shadow_g/_d + XL-Fassungen, additiv ans Ende; der
+Schatten-Zweitpass wählt je Zelle nach Bodenmaterial und stempelt
+je Zelle GENAU EINMAL — Überlapp-Dedupe). NEUES GATE: Schachbrett-
+Blockanteil (8×8-Energie-Metrik Juror K) in g6_01/g6_02 < 2 %.
+(J4) P0-D (L<16-Bänder) ist an Michael eskaliert; bis zu seinem
+Entscheid gilt die Rev-2.1-Fassung MIT der offenen Deklaration
+"GP6 verbessert die Dunkelanteile innen nicht, es verschlechtert
+sie nicht".
 
 REV 2.3 = Rev 2.2 + zwei Methoden-Entscheide nach Proof-Lauf 2:
 (K2-FINAL) Das Pro-Strahl-Plateau-Minimum des Gradient-Schnitts
