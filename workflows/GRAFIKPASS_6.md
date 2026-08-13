@@ -55,6 +55,18 @@ informativ. Max. 3 Runden, danach Ergebnis an Michael.
 
 Spec §10. Übergabe in `uebergaben/`.
 
-## Erkenntnisse / Änderungen
+## Erkenntnisse / Änderungen (Lauf 12.-13.08.2026, ABGENOMMEN)
 
-(laufend ergänzen)
+Abgeschlossen: ALLE 15 Messziel-Gates grün, Jury-Noten 7,5/7,8/7,5
+(Median 7,5; GP5: 7,0). Übergabe: uebergaben/2026-08-13_grafikpass6.md
+(dort die 5 bindenden Erkenntnisse: Gates brauchen Ober- UND
+Untergrenzen; Eich-Formeln VOR der Messung und Einfrier-Commits
+ohne Beifang; Mess-Korrekturen brauchen Review wie Specs — 3
+Fable-Rechenfehler von Agenten/Juroren gefunden; Töne material-
+relativ statt absolut; bewegte Messgrößen einfrieren/mitteln).
+Jury-Prozess neu: Mess-Validierung + Sichtprüfung bindend, Note
+informativ; Juror-M-Skeptiker-Rolle (dem grünen Tableau NICHT
+glauben) hat sich doppelt bezahlt gemacht. Spec-Historie Rev 1→2.5
+mit dokumentierten Methoden-Korrekturen. P0-D-Deklaration (Michael,
+Option a) ist Teil der Abnahme. GP7-Backlog priorisiert in der
+Übergabe + design/GP6_JURY_R1.md.
