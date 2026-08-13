@@ -704,7 +704,7 @@ function litFilter(tx, ty) {
 // Bosses: eine ZUSAETZLICHE, breite Zeile bei dy -1 (also eine Zeile UNTER der
 // Fusskante), die kein Sprite verdeckt, und die satteste Deckung eine Zeile
 // darueber. BIG bleibt UNVERAENDERT (SHADOW_*_BIG unten).
-//   dy -1  0,90 x Breite, Alpha 0,30  <- der sichtbare Bodenkontakt (M5)
+//   dy -1  0,90 x Breite, Alpha 0,34  <- der sichtbare Bodenkontakt (M5)
 //   dy  0  0,95 x Breite, Alpha 0,40  <- Kern wie GP4
 //   dy  1  0,70 x Breite, Alpha 0,20
 //   dy  2  0,40 x Breite, Alpha 0,10
@@ -712,8 +712,17 @@ function litFilter(tx, ty) {
 // liefert 11 sichtbare Texel unter der Fusskante.
 // BLINK-VERHALTEN (Deklaration §9): der Schatten haengt an der Hitbox, nicht am
 // Sprite — eine unverwundbar blinkende Figur behaelt ihren Schatten.
+// GP6 RUNDE 1 (M5-FIX): die -1-Zeile stand auf Alpha 0,30 und war INNEN zu
+// schwach. Gemessen (Proof-Lauf 1, CATACOMBS im Fackelkegel): dL = 5,94 L bei
+// 0,30 — die Schwelle ist 6,0. Der Schatten ist reines '#000' mit Alpha a, die
+// Zeile dunkelt den Boden also um a x L_Boden ab; der Innen-Messort trug
+// 5,94/0,30 = 19,8 L. Sie uebernimmt deshalb das Alpha der BIG-Profil-
+// Grundzeile (0,34): 0,34 x 19,8 = 6,73 L. §4.3 nennt BAUWERTE, keine
+// Messwerte — die uebrigen drei Zeilen und BIG bleiben unangetastet.
+// NEBENWIRKUNG (deklariert): aussen wird der Bodenkontakt minimal satter, der
+// schwaechste gemessene Aussenwert steigt von 11,3 auf 12,8 L.
 const SHADOW_W = [0.90, 0.95, 0.7, 0.4];
-const SHADOW_A = [0.30, 0.40, 0.20, 0.10];
+const SHADOW_A = [0.34, 0.40, 0.20, 0.10];
 const SHADOW_DY = [-1, 0, 1, 2];      // Zeilen OBERHALB der Fusskante (-1 = darunter)
 // ---------------------------------------------------------------------------
 // GRAFIKPASS 5 RUNDE 3 — BOSS-KONTAKTSCHATTEN (Jury: "der BOSS hat keinen

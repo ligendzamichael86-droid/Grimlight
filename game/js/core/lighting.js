@@ -138,6 +138,95 @@ function quantizePulse(p) {
 }
 
 // ===========================================================================
+// GRAFIKPASS 6 RUNDE 1 (E2-FIX) — DER WARM-PASS WIRD GERASTERT.
+//
+// MESSBEFUND (E2, Proof-Lauf 1: 30/31 distinkte (A-B)-Luminanzen im Ring
+// d <= 0,48r, Schwelle 24). Die Zerlegung nach Ringzonen (.tmp/
+// g6r1_e2_analyse.py) zeigt, WO die Vielfalt sitzt:
+//   * Ring d > 18 px (Kegel-Gradient, 680 Bloecke):  8 Werte — das ist der
+//     gestanzte Kegel selbst (5 a-Stufen mal Untergrundfarbe), NICHT der
+//     Warm-Pass. Unantastbar (§0.2/Punch-Pfad).
+//   * Kern d <= 18 px (256 Bloecke): 24 Werte — HIER liegt der Fehler, und
+//     zwar aus ZWEI Quellen: (1) die Antialiasing-Saeume der 13 Boegen je
+//     Fackel (das 2x2-Blockmittel der Messung mischt Rand- und Innenwert zu
+//     immer neuen Zwischenwerten) und (2) die freie SUMME dreier
+//     unabhaengiger Ring-Saetze: 4 Glow-Zonen x 5 Boden-Zonen x 4
+//     Hotspot-Zonen ergeben rund zwei Dutzend geometrisch erreichbare
+//     Summen — jede eine eigene Luminanz.
+//
+// FIX (zwei Hebel, beide noetig):
+//   (H1) GERASTERT STATT GEBOGEN: der Warm-Pass zeichnet keine Boegen mehr,
+//        sondern 2-px-Blockleaufe auf 4-px-Zeilen — dieselbe Geometrie wie
+//        das Lichtfeld (§2.2). Kein Antialiasing, keine Saeume, und weil das
+//        Raster auf geraden Bildschirm-Koordinaten sitzt, ist jeder
+//        2x2-Messblock in sich EINFARBIG.
+//   (H2) EINE LEITER STATT DREIER SUMMEN: die drei Ring-Saetze bleiben die
+//        QUELLE des Profils (Radien, Alphas, Farben unveraendert), werden je
+//        Block aber wie bisher aufsummiert und dann GENAU EINMAL auf eine
+//        feste 6-stufige Warm-Leiter gerastet (dasselbe Muster wie §2.1:
+//        eine Quantisierung auf das fertige Produkt, nie je Licht). Ein
+//        Block wird damit GENAU EINMAL gezeichnet, nie mehrfach ueberlagert.
+//
+// Die Leiter-Eintraege sind ganzzahlige Additiv-Tripel und werden mit
+// globalAlpha === 1 als rgba(R,G,B,1) unter 'lighter' gezeichnet: die
+// Deckung steckt also wie im Stanz-Block (§0.2/§2.3) ausschliesslich im
+// rgba-String, und der Zuschlag ist EXAKT (R,G,B) — keine 8-Bit-Rundung je
+// Fackel, keine driftenden Zwischenwerte. Die Tripel folgen dem
+// Farbverlauf des Bestands (aussen entsaettigt rosabraun -> warmorange ->
+// amber -> cremeweiss) und halten die Spitze des Bestands: der innerste
+// Eintrag (48,42,32) entspricht dem bisherigen Summenmaximum aus
+// Glow+Boden+Hotspot im Dochtkern (M1-Highlighttraeger §3.4/§2.6 bleibt).
+// KEIN fillRect ueber das Vollbild und nichts in '#000' — der
+// fadeAlpha-Detektor der Flusstests bleibt unberuehrt.
+const WARM_RUN_H = 4;                 // Zeilenhoehe wie das Lichtfeld (§2.2)
+
+// Kumulierte additive Luminanz (Rec.601) je Ring-ZONE. Zone i = "innerhalb
+// von rf_i, aber ausserhalb von rf_{i+1}" — dort liegen die Ringe 0..i
+// uebereinander, ihre Deckungen summieren sich (composite 'lighter').
+function ringCumLum(rings) {
+  const out = [];
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < rings.length; i++) {
+    const c = rings[i].c.split(',');
+    r += rings[i].a * +c[0];
+    g += rings[i].a * +c[1];
+    b += rings[i].a * +c[2];
+    out.push(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+  return out;
+}
+const GLOW_CUM_L = ringCumLum(GLOW_RINGS);   // 1,01 2,02 3,48 5,66 9,75 16,84
+const FLOOR_CUM_L = ringCumLum(FLOOR_RINGS); // 3,21 8,12 14,55 20,97 (mal pulse)
+const HOT_CUM_L = ringCumLum(HOT_RINGS);     // 14,26 28,44 42,52 (mal pulse)
+
+// Die feste Warm-Leiter (6 Stufen). Ganzzahlige Additiv-Tripel entlang des
+// Bestands-Farbverlaufs; die Zuordnung laeuft ueber die Luminanz (Rec.601),
+// also ueber genau die Groesse, die E2 misst.
+const WARM_LADDER = [
+  [3, 2, 1],      //  2,19 L — aeusserer Halo (fasst 1,01 / 2,02 / 3,48 zusammen)
+  [9, 5, 3],      //  5,97 L — Uebergang
+  [15, 9, 5],     // 10,31 L — warmorange
+  [25, 15, 8],    // 17,19 L — Glow-Kern
+  [36, 25, 14],   // 27,15 L — Bodenpfuetze im Kern
+  [48, 42, 32],   // 42,65 L — Dochtkern (cremeweiss, R-B = +16 -> nie Weiss)
+];
+const WARM_RGBA = WARM_LADDER.map((t) => `rgba(${t[0]},${t[1]},${t[2]},1)`);
+const WARM_LUM = WARM_LADDER.map((t) => 0.299 * t[0] + 0.587 * t[1] + 0.114 * t[2]);
+// Schnittgrenzen = Mitten zwischen benachbarten Leiterstufen (naechster Wert).
+const WARM_GRENZEN = [];
+for (let i = 0; i + 1 < WARM_LUM.length; i++) {
+  WARM_GRENZEN.push((WARM_LUM[i] + WARM_LUM[i + 1]) / 2);
+}
+const WARM_MIN_L = 0.5;               // darunter wird gar nicht gezeichnet
+
+function warmStufe(lum) {
+  if (lum < WARM_MIN_L) return -1;
+  let k = 0;
+  while (k < WARM_GRENZEN.length && lum >= WARM_GRENZEN[k]) k++;
+  return k;
+}
+
+// ===========================================================================
 // §2.1 RELATIVE QUANTISIERUNG — die eine Wahrheit fuer Boden UND Sprites.
 // quantizeLight wird GENAU EINMAL auf das fertige PRODUKT aller Licht-Profile
 // angewandt (nie je Licht), sonst summieren sich 21 Rundungsfehler.
@@ -379,6 +468,11 @@ export function lightAt(lights, wx, wy, ambient, timeSec, prev) {
 export function createLighting(viewW, viewH) {
   let off = null;  // Offscreen-Canvas, lazy + gecacht
   let octx = null;
+  // Eimer des Warm-Passes (GP6 R1): je Leiterstufe ein wiederverwendeter
+  // Zahlen-Puffer (x, y, w im Dreierschritt). Wiederverwendung statt
+  // Neuanlage haelt den Frame allokationsfrei; die Buendelung spart die
+  // fillStyle-Zuweisung je Lauf (Muster §2.3 "Eimer").
+  const warmEimer = WARM_LADDER.map(() => []);
 
   function ensureOffscreen(ctx) {
     if (off) return;
@@ -455,6 +549,7 @@ export function createLighting(viewW, viewH) {
     // Der harte, posterisierte Stanz-Lichtkegel oben bleibt unveraendert scharf.
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    for (let ki = 0; ki < warmEimer.length; ki++) warmEimer[ki].length = 0;
     for (const light of lights) {
       if ((light.flicker || 0) < 0.8) continue;
       const flicker = light.flicker || 0;
@@ -484,13 +579,14 @@ export function createLighting(viewW, viewH) {
       // Kanten mehrerer Fackeln aufeinander ein ("Kornkreise", GP4-Lehre).
       const glowSeed = light.x * 0.9 + light.y * 1.7;
       ctx.globalAlpha = 1;
+      // GP6 R1 (H1): die Zonen-Radien werden EINMAL je Fackel quadriert; der
+      // Jitter sitzt wie bisher auf dem Ringradius, die Boegen selbst sind
+      // ersatzlos entfallen (die Blockschleife unten fuellt die Flaeche).
+      const glowR2 = [];
       for (let k = 0; k < GLOW_RINGS.length; k++) {
-        const ring = GLOW_RINGS[k];
         const rWob = k === GLOW_RINGS.length - 1 ? 0 : Math.sin(glowSeed + k * 2.399) * 0.03;
-        ctx.fillStyle = `rgba(${ring.c},${ring.a})`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, gr * (ring.rf + rWob), 0, Math.PI * 2);
-        ctx.fill();
+        const rr = gr * (GLOW_RINGS[k].rf + rWob);
+        glowR2.push(rr * rr);
       }
 
       // Grafikpass 4 §2.3: (a) flacher Boden-Glow an der Fackelbasis (EIN kleiner
@@ -511,12 +607,10 @@ export function createLighting(viewW, viewH) {
       // Grafikpass 5 R2: 4 gestufte Ringe statt des Radialgradienten. DAS hier
       // war die von Juror H vermessene Stelle (30 Einzelschritte in der
       // Bodenpfuetze); der Pool liest jetzt als 4 klare Lichtstufen.
+      const floorR2 = [];
       for (let k = 0; k < FLOOR_RINGS.length; k++) {
-        const ring = FLOOR_RINGS[k];
-        ctx.fillStyle = `rgba(${ring.c},${(ring.a * pulse).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(cx, baseY, bgR * ring.rf, 0, Math.PI * 2);
-        ctx.fill();
+        const rr = bgR * FLOOR_RINGS[k].rf;
+        floorR2.push(rr * rr);
       }
 
       // (b) 2-3 px warm-cremiger Flammenkern-Hotspot (Radial, Stops ~0.5->0),
@@ -538,12 +632,81 @@ export function createLighting(viewW, viewH) {
       const hotY = cy - (light.wall ? 4 : 2);
       const hsR = 2.25;
       // Grafikpass 5 R2: 3 gestufte Ringe statt des Radialgradienten.
+      const hotR2 = [];
       for (let k = 0; k < HOT_RINGS.length; k++) {
-        const ring = HOT_RINGS[k];
-        ctx.fillStyle = `rgba(${ring.c},${(ring.a * pulse).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(cx, hotY, hsR * ring.rf, 0, Math.PI * 2);
-        ctx.fill();
+        const rr = hsR * HOT_RINGS[k].rf;
+        hotR2.push(rr * rr);
+      }
+
+      // ---- GP6 R1 (H1+H2): BLOCK-LAEUFE STATT BOEGEN --------------------
+      // Fenster = Glow-Scheibe (sie umschliesst Bodenpfuetze und Dochtkern:
+      // gr = 34,6 px gegen baseY+bgR = 13 px bzw. hotY-hsR = -4,25 px).
+      // x rastet auf 2-px-Bloecke, y auf WARM_RUN_H-Zeilen — beides auf dem
+      // BILDSCHIRM-Raster, damit die Blockmittel der Messung einfarbig sind.
+      const bxA = Math.max(0, Math.floor((cx - gr) / 2));
+      const bxB = Math.min((viewW >> 1) - 1, Math.floor((cx + gr) / 2));
+      const byA = Math.max(0, Math.floor((cy - gr) / WARM_RUN_H));
+      const byB = Math.min(Math.ceil(viewH / WARM_RUN_H) - 1,
+        Math.floor((cy + gr) / WARM_RUN_H));
+      for (let by = byA; by <= byB; by++) {
+        const py = by * WARM_RUN_H + WARM_RUN_H / 2;   // Zeilenmitte wie §2.2
+        const dgy = py - cy, dgy2 = dgy * dgy;
+        const dfy = py - baseY, dfy2 = dfy * dfy;
+        const dhy = py - hotY, dhy2 = dhy * dhy;
+        let runK = -1, runStart = bxA;
+        for (let bx = bxA; bx <= bxB + 1; bx++) {
+          let k = -1;
+          if (bx <= bxB) {
+            const dx = bx * 2 + 1 - cx;                 // Blockmitte
+            const dx2 = dx * dx;
+            const dg2 = dx2 + dgy2;
+            if (dg2 <= glowR2[0]) {
+              // Zonen sind geschachtelt (rf-Abstand 0,16 >> Jitter 0,03):
+              // das erste "ausserhalb" beendet die Suche.
+              let lum = GLOW_CUM_L[0];
+              for (let i = 1; i < glowR2.length; i++) {
+                if (dg2 <= glowR2[i]) lum = GLOW_CUM_L[i]; else break;
+              }
+              const df2 = dx2 + dfy2;
+              if (df2 <= floorR2[0]) {
+                let fl = FLOOR_CUM_L[0];
+                for (let i = 1; i < floorR2.length; i++) {
+                  if (df2 <= floorR2[i]) fl = FLOOR_CUM_L[i]; else break;
+                }
+                lum += pulse * fl;
+              }
+              const dh2 = dx2 + dhy2;
+              if (dh2 <= hotR2[0]) {
+                let hl = HOT_CUM_L[0];
+                for (let i = 1; i < hotR2.length; i++) {
+                  if (dh2 <= hotR2[i]) hl = HOT_CUM_L[i]; else break;
+                }
+                lum += pulse * hl;
+              }
+              // §2.1-Muster: GENAU EINE Quantisierung auf die fertige Summe.
+              k = warmStufe(lum);
+            }
+          }
+          if (k !== runK) {
+            if (runK >= 0) {
+              const e = warmEimer[runK];
+              e.push(runStart * 2, by * WARM_RUN_H, (bx - runStart) * 2);
+            }
+            runK = k;
+            runStart = bx;
+          }
+        }
+      }
+    }
+    // EIMER-BUENDELUNG des Warm-Passes (Muster §2.3): die Laeufe einer Fackel
+    // sind disjunkt, mehrere Fackeln addieren sich unter 'lighter' —
+    // Reihenfolge also frei. 6 fillStyle-Zuweisungen je Frame.
+    for (let ki = 0; ki < warmEimer.length; ki++) {
+      const e = warmEimer[ki];
+      if (!e.length) continue;
+      ctx.fillStyle = WARM_RGBA[ki];
+      for (let i = 0; i < e.length; i += 3) {
+        ctx.fillRect(e[i], e[i + 1], e[i + 2], WARM_RUN_H);
       }
     }
     ctx.restore();
