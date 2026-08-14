@@ -86,6 +86,11 @@ export const BOSS_KAMMER = {
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],
+  // SLICE 5 §4.4 (additiv, geoHash-frei): Grundmusik der Kammer. Die zweite
+  // Ebene 'boss_aggro' schaltet main.js, sobald der Grabwaechter aus 'idle'
+  // heraus ist — nach dem Sieg existiert er nicht mehr, die ruhige Fassung
+  // kommt also von selbst zurueck.
+  music: 'boss_idle',
   // Grafikpass 5 §5.D4 BOSS-ARENA-LICHT (Jury STRUKTUR-6a): die sechs Wand-
   // fackeln sitzen ausschliesslich am Rand — die Arena-MITTE, in der der Kampf
   // stattfindet, war der dunkelste Punkt des Raums. EIN statisches Fuell-Licht

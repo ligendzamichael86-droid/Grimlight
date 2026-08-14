@@ -303,7 +303,18 @@ export function createInput() {
     recompute();
   }
 
-  function attach(canvasElement) {
+  // SLICE 5 §0.3 — GESTEN-UNLOCK (2. Parameter, optional).
+  //
+  // onFirstTouch ist der Rueckruf, mit dem main.js seinen AudioContext im
+  // ECHTEN touchstart-Handler freischaltet (WKWebView/iOS verlangt die
+  // transiente Aktivierung; aus update()/rAF heraus ist es zu spaet,
+  // Landkarte A §4 Risiken). Die Form ist die vom Pruefer GEMESSEN-GRUENE
+  // (SLICE5_SPEC_REVIEW P1-m1): EIGENER Listener VOR dem Bestands-Listener,
+  // typeof-Pruefung, try/catch. Alle Alt-Aufrufe mit EINEM Argument bleiben
+  // unveraendert gueltig (der Parameter ist dann undefined und es wird kein
+  // zusaetzlicher Listener registriert) — gemessen an smoke_test.mjs:4333,
+  // .tmp/probe_s4_engine.mjs:58, .tmp/dev_a_input.mjs:51.
+  function attach(canvasElement, onFirstTouch) {
     canvas = canvasElement;
     const doc = canvas.ownerDocument;
     const win = doc.defaultView;
@@ -314,6 +325,9 @@ export function createInput() {
       if (doc.hidden) onFocusLost();
     });
     const opts = { passive: false }; // iOS Safari: Zoom/Rubber-Banding unterbinden
+    if (typeof onFirstTouch === 'function') {
+      canvas.addEventListener('touchstart', () => { try { onFirstTouch(); } catch { /* inert */ } }, opts);
+    }
     canvas.addEventListener('touchstart', onTouchStart, opts);
     canvas.addEventListener('touchmove', onTouchMove, opts);
     canvas.addEventListener('touchend', onTouchEnd, opts);

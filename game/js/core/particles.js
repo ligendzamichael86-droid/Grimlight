@@ -141,8 +141,28 @@ const EMBER_FADE_STEPS = [0.72, 0.46, 0.22];
 const MOTE_FADE_START = 0.6;
 const MOTE_FADE_STEPS = [0.66, 0.4, 0.18];
 
+// ---------------------------------------------------------------------------
+// SLICE 5 §5.4 — TREFFER-BURSTS AUF EIGENER LISTE.
+//
+// PFLICHT (Review P1-M6/P2-M9): `list`, `spawnEmbers` und MAX_PARTICLES = 60
+// bleiben UNVERAENDERT — smoke_test.mjs:2185-2186 ruft 300x spawnEmbers und
+// prueft `list.length === 60` EXAKT. Wuerde man den Deckel fuer die Bursts
+// anheben, ginge die Assertion rot; teilten sich Bursts und Glut dieselbe
+// Liste, verhungerten die GP3-GP6-Glutfunken bei jedem Treffer.
+// Deshalb: ZWEITE Liste `burstList` mit EIGENEM Deckel 40; update/draw
+// bearbeiten beide Listen.
+const MAX_BURST = 40;
+// Zwei Sorten, beide 1x1 px und rein additiv-frei (source-over):
+//   'funke' — heisse Splitter am Treffer, fliegen radial, kurze Lebenszeit
+//   'staub' — Aufprall-/Bruchstaub, traeger, faellt leicht nach unten
+const BURST_FARBEN = {
+  funke: ['#fff0b4', '#f0963c', '#aa4619'],
+  staub: ['#d6cbb1', '#8a8072', '#4a4440'],
+};
+
 export function createParticles() {
   const list = [];
+  const burstList = [];
 
   // Spawnt Funken an (x, y) mit ~SPAWN_RATE Funken/s. dt steuert die Rate
   // (probabilistisch, höchstens ein Funke pro Aufruf). Harte Obergrenze zuerst.
@@ -205,6 +225,28 @@ export function createParticles() {
     });
   }
 
+  // §5.4: Treffer-/Bruch-/Aufprall-Burst. n Partikel radial um (x,y), harter
+  // EIGENER Deckel MAX_BURST — die Glut-Liste bleibt davon unberuehrt.
+  function spawnBurst(x, y, n, art) {
+    const farben = BURST_FARBEN[art] || BURST_FARBEN.funke;
+    const staub = art === 'staub';
+    for (let i = 0; i < n; i++) {
+      if (burstList.length >= MAX_BURST) return;
+      const w = Math.random() * Math.PI * 2;
+      const v = staub ? 8 + Math.random() * 14 : 22 + Math.random() * 34;
+      burstList.push({
+        x,
+        y,
+        vx: Math.cos(w) * v,
+        vy: Math.sin(w) * v * (staub ? 0.5 : 0.8),
+        g: staub ? 26 : 62,                      // Schwerkraft px/s^2
+        age: 0,
+        life: staub ? 0.30 + Math.random() * 0.22 : 0.16 + Math.random() * 0.16,
+        farben,
+      });
+    }
+  }
+
   function update(dt) {
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i];
@@ -216,6 +258,15 @@ export function createParticles() {
       // vy ist immer negativ, die Klammer ist die Absicherung gegen jede
       // spaetere Aenderung der Startwerte.
       if (p.baseY !== undefined && p.y > p.baseY) p.y = p.baseY;
+    }
+    // §5.4: zweite Liste, eigene Physik (ballistisch statt aufsteigend).
+    for (let i = burstList.length - 1; i >= 0; i--) {
+      const b = burstList[i];
+      b.age += dt;
+      if (b.age >= b.life) { burstList.splice(i, 1); continue; }
+      b.vy += b.g * dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
     }
   }
 
@@ -247,6 +298,7 @@ export function createParticles() {
   // optional — ohne sie zeichnet draw exakt wie bisher; der Smoke-Test §36 ruft
   // draw nie auf, die Erweiterung ist testneutral).
   function draw(ctx, camera, frameLights, ambient) {
+    zeichneBursts(ctx, camera);
     if (list.length === 0) return;
     // Runde 2: der JUENGSTE Funke JE FACKEL ist der 2x1-Kopf (alle anderen
     // 1x1). Einmal pro draw ermittelt — kein Sortieren, eine Liste-Schleife.
@@ -402,5 +454,26 @@ export function createParticles() {
     ctx.restore();
   }
 
-  return { list, spawnEmbers, update, draw };
+  // §5.4: Bursts zeichnen — 1x1 px, Ton aus der Alters-Rampe, Deckung in
+  // globalAlpha. Bewusst 'source-over' (kein 'lighter'): mehrere Splitter
+  // uebereinander duerfen sich nicht zu Weiss aufsummieren (der GP5-R3-Befund
+  // an den Motes). Kein strokeRect, kein Pfad — Stub-Vorrat der Flusstests.
+  function zeichneBursts(ctx, camera) {
+    if (burstList.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    for (const b of burstList) {
+      const t = b.age / b.life;
+      const stufe = Math.min(b.farben.length - 1, Math.floor(t * b.farben.length));
+      ctx.globalAlpha = t < 0.6 ? 1 : t < 0.85 ? 0.6 : 0.3;
+      ctx.fillStyle = b.farben[stufe];
+      ctx.fillRect(Math.round(b.x - camera.x), Math.round(b.y - camera.y), 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  return { list, burstList, spawnEmbers, spawnBurst, update, draw };
 }

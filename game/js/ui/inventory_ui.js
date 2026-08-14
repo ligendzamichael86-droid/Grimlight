@@ -13,18 +13,43 @@ const PANEL = { x: 8, y: 8, w: 304, h: 164 };
 const LIST_X0 = 48;
 const LIST_X1 = 304;
 const LIST_Y = 26;
-// SLICE 4 §5.5 — TREFFERFLAECHEN (ENG BEGRENZT, Review P1-M1). Geaendert
-// werden GENAU ZWEI Konstanten, beide mit FESTEM Anker:
-//   ROW_H 16 -> 20   Zeile 0 bleibt 26..46 (der Bestands-Tap y = 30 trifft
-//                    weiter; smoke_test.mjs:1249). 20 px = 7,5 mm.
-//   BTN_CLOSE 20 -> 24 bei UNVERAENDERTEM Anker (288,10) — der Bestands-Tap
-//                    (290,12) bleibt drin (smoke_test.mjs:1256). 24 px =
-//                    9,0 mm.
-// LIST_Y und der X-Anker sind TABU (die harten Koordinaten stehen im
-// BESTANDS-Smoke, nicht in den Flusstests).
-const ROW_H = 20;
+// ===========================================================================
+// SLICE 5 §6.3 — LAYOUT-FIX (sanktionierter Umfang §7.C).
+//
+// BEFUND aus Slice 4 (uebergaben/2026-08-13_slice4_mobile.md:50-53) und dem
+// Slice-5-Review (P1-M5/P2-M10): mit ROW_H 20 reichte die Liste bis y 166 und
+// lag damit UNTER dem ANLEGEN-Knopf (142..164, x 232..304). Zeilen 5 und 6
+// waren im rechten Drittel nicht mehr anwaehlbar, weil der Tap-Hittest unten
+// ANLEGEN VOR der Zeilenauswahl prueft — das war der eigentliche Defekt, nicht
+// die Optik. Der Knopf verdeckte ausserdem die Affix-Spalte beider Zeilen.
+//
+// RECHNUNG (Panel 8..172, Innenkante nach Doppelrahmen ~170):
+//   nutzbar ab LIST_Y 26 bis 170            = 144 px
+//   Fussband (2 Textzeilen links | ANLEGEN rechts, h 22, Bestandshoehe)
+//                                            = 22 px
+//   bleibt fuer 7 Zeilen                     = 122 px  ->  ROW_H 17
+// 7 x 20 + 22 = 162 > 144: eine Anordnung mit 20-px-Zeilen UND einem Knopf im
+// Panel gibt es schlicht nicht. ROW_H 17 = 6,40 mm liegt weiter ueber dem
+// 6-mm-Gate (smoke:4047 MM_PRO_PX 0,3764), der Knopf behaelt seine 22 px
+// (8,28 mm) und 72 px Breite (27,1 mm).
+//
+// GEAENDERT werden GENAU ZWEI Zahlen:
+//   ROW_H     20 -> 17   Liste jetzt 26..145 (vorher 26..166)
+//   BTN_EQUIP y 142 -> 145, Rest unveraendert -> 145..167
+// Beide Rechtecke sind damit in y DISJUNKT (Zeilentest y < 145, Knopftest
+// y >= 145); die Vorrang-Frage im Hittest kann gar nicht mehr auftreten.
+// LIST_Y (26) und der X-Anker (288,10) bleiben UNVERAENDERT — der
+// Bestands-Tap (100,30) trifft weiter Zeile 0 (smoke:1249, smoke:4531) und
+// (290,12) schliesst weiter (smoke:1253, smoke:4541).
+// EINZIGE Bestandszeile, die sich verschiebt: "Zeile 0 reicht bis y 45"
+// (smoke:4535-4537) — Zeile 0 endet jetzt bei y 42 (26..42), y 45 liegt in
+// Zeile 1. Sie steht auf der §7.C-Liste und wird vom INTEGRATOR nachgezogen.
+// Die Fusszeilen wandern von y 144/156 auf 148/158 und STUFE von (302,148) in
+// die Kopfzeile — sonst laege beides unter dem verschobenen Knopf.
+// ===========================================================================
+const ROW_H = 17;
 const ROWS = 7;
-const BTN_EQUIP = { x: 232, y: 142, w: 72, h: 22 };
+const BTN_EQUIP = { x: 232, y: 145, w: 72, h: 22 };
 const BTN_CLOSE = { x: 288, y: 10, w: 24, h: 24 };
 
 const COLOR_NORMAL = '#d6cbb1';
@@ -99,6 +124,9 @@ export function createInventoryUI() {
       // Tap-Hittest: X schliesst, ANLEGEN legt an, Listenzeile waehlt aus.
       // Der Tap schluckt die confirm-Flanke desselben touchstart, sonst
       // wuerde jede Zeilen-Auswahl sofort ANLEGEN ausloesen.
+      // §6.3: Listen- und ANLEGEN-Rechteck sind seit Slice 5 in y disjunkt
+      // (Liste 26..145, Knopf 145..167) — die Reihenfolge hier entscheidet
+      // nichts mehr, sie bleibt nur unveraendert stehen.
       if (inRect(input.tap, BTN_CLOSE)) return 'close';
       if (inRect(input.tap, BTN_EQUIP)) {
         equip(player);
@@ -175,6 +203,13 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
   ctx.textAlign = 'left';
   ctx.fillStyle = COLOR_GOLD;
   ctx.fillText('AUSRUESTUNG', 16, 14);
+  // §6.3: STUFE steht jetzt in der KOPFZEILE (rechtsbuendig vor dem X-Knopf).
+  // Am alten Platz (302,148) laege sie unter dem verschobenen ANLEGEN-Knopf.
+  if (player.prog) {
+    ctx.textAlign = 'right';
+    ctx.fillText(`STUFE ${player.prog.level}`, 282, 14);
+    ctx.textAlign = 'left';
+  }
   ctx.strokeStyle = '#575061';
   ctx.strokeRect(BTN_CLOSE.x + 0.5, BTN_CLOSE.y + 0.5, BTN_CLOSE.w - 1, BTN_CLOSE.h - 1);
   ctx.textAlign = 'center';
@@ -197,7 +232,9 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
     const item = inv.items[i];
     if (!item) continue;
     const icon = gfx[`icon_${item.slot}`];
-    if (icon) ctx.drawImage(icon, LIST_X0 + 2, y + 2);
+    // §6.3: 16-px-Icon in der 17-px-Zeile -> Offset 1 statt 2 (bei 2 ragte es
+    // in die Folgezeile).
+    if (icon) ctx.drawImage(icon, LIST_X0 + 2, y + 1);
     ctx.textAlign = 'left';
     ctx.fillStyle = item.rare ? COLOR_RARE : COLOR_NORMAL;
     ctx.fillText(item.name, LIST_X0 + 18, y + 4);
@@ -216,20 +253,22 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
       player.prog
     );
     const diffs = statDiffs(player.stats, next);
+    // §6.3: Fusszeilen 144/156 -> 148/158 (unter die auf 145 verschobene
+    // Bandkante; links vom ANLEGEN-Knopf, der bei x 232 beginnt).
     if (diffs.length === 0) {
       ctx.fillStyle = COLOR_DIM;
-      ctx.fillText('KEIN UNTERSCHIED', 16, 144);
+      ctx.fillText('KEIN UNTERSCHIED', 16, 148);
     } else {
       let x = 16;
       for (const d of diffs.slice(0, 2)) {
         ctx.fillStyle = d.better ? COLOR_GOLD : COLOR_BAD;
-        ctx.fillText(d.text, x, 144);
+        ctx.fillText(d.text, x, 148);
         x += (d.text.length + 2) * 5;
       }
     }
     const old = inv.equipped[selected.slot];
     ctx.fillStyle = COLOR_DIM;
-    ctx.fillText(`angelegt: ${old ? old.name : 'nichts'}`, 16, 156);
+    ctx.fillText(`angelegt: ${old ? old.name : 'nichts'}`, 16, 158);
   } else {
     const s = player.stats;
     ctx.fillStyle = COLOR_NORMAL;
@@ -239,15 +278,10 @@ export function drawInventoryUI(ctx, ui, player, gfx) {
     );
   }
 
-  // §3: STUFE als SEPARATES fillText (rechtsbuendig), damit der Bestands-String
-  // 'HERZ x  SCHADEN y  TEMPO z%' zeichenidentisch zusammenhaengend bleibt
-  // (check_inventory_slice2:331 assertet ihn per includes auf EINEM fillText).
-  if (player.prog) {
-    ctx.textAlign = 'right';
-    ctx.fillStyle = COLOR_GOLD;
-    ctx.fillText(`STUFE ${player.prog.level}`, LIST_X1 - 2, 148);
-    ctx.textAlign = 'left';
-  }
+  // §3/§6.3: STUFE bleibt ein SEPARATES fillText (damit der Bestands-String
+  // 'HERZ x  SCHADEN y  TEMPO z%' zeichenidentisch zusammenhaengend bleibt —
+  // check_inventory_slice2:331 assertet ihn per includes auf EINEM fillText);
+  // gezeichnet wird es seit Slice 5 oben in der Kopfzeile.
 
   // ANLEGEN-Button (gedimmt ohne Auswahl; Panel bleibt nach ANLEGEN offen)
   ctx.fillStyle = '#0a0810';

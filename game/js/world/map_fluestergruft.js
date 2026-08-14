@@ -177,6 +177,7 @@ export const FLUESTERGRUFT = {
   playerLightRadius: 52,
   fog: false,             // Mobile-Overdraw (§2.5)
   torchChars: ['W'],
+  music: 'fluestergruft', // SLICE 5 §4.4 (additiv, geoHash-frei)
   // -------------------------------------------------------------------------
   // GRAFIKPASS 6 §3.3 — ZWEI FUELL-LICHTER IM KANALRAUM. Der Gruftkanal
   // (Wasser-Kachelblock tx 18..22 / ty 9..16) ist der dunkelste Ort der

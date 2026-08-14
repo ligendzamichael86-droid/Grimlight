@@ -759,12 +759,28 @@ export function drawTitle(ctx, timeSec, menu) {
 // 'GAME OVER', 'GRIMLIGHT', 'STUFE', 'AUSRUESTUNG', 'x 0').
 //
 // PAUSE_MENU_ZONES ist die EINE Geometriequelle: hud.js zeichnet daraus,
-// main.js macht daraus den Tap-Hittest. Hoehe 18 px = 6,8 mm, Breite 128 px.
+// main.js macht daraus den Tap-Hittest.
+//
+// SLICE 5 §6.1 — FUENF ZONEN OHNE PANELWACHSTUM (Review P1-m5, GEMESSEN).
+// Bindend ist nicht "Unterkante <= 172", sondern h >= 16 px: smoke_test.mjs
+// :4047 MM_PRO_PX = 0,3764 und :4567 h * MM_PRO_PX >= 6 ergeben h >= 15,94.
+// Fuenf Zonen a 16 px passen LUECKENLOS in den Bestand:
+//   y 66 / 82 / 98 / 114 / 130, Unterkante 146 < Panel-Unterkante 150
+//   (fillRect(80,40,160,110) unten). Damit bleibt das drawFps-Fenster
+//   (y 158-175, smoke:4618-4619) frei — mit dem alten 18er-Raster + 4 px
+//   Luecke braeuchte man 106 px und landete bei 172, mitten im FPS-Overlay.
+// REIHENFOLGE EINGEFROREN: WEITER 0 / GOTT 1 / FPS 2 — MUSIK 3 und TON 4
+// werden ANGEHAENGT (check_save_slice4 faehrt die Pause, main.js:993/1004
+// iterieren/klemmen ueber length, es verschiebt sich nichts, Review P1-m7).
+// Alle Zonen tragen dieselbe w/h — der Auswahlbalken-Test (smoke:4590-4601)
+// misst w/h aus Zone 0.
 // ===========================================================================
 export const PAUSE_MENU_ZONES = [
-  { x: 96, y: 74, w: 128, h: 18 },
-  { x: 96, y: 96, w: 128, h: 18 },
-  { x: 96, y: 118, w: 128, h: 18 },
+  { x: 96, y: 66, w: 128, h: 16 },
+  { x: 96, y: 82, w: 128, h: 16 },
+  { x: 96, y: 98, w: 128, h: 16 },
+  { x: 96, y: 114, w: 128, h: 16 },
+  { x: 96, y: 130, w: 128, h: 16 },
 ];
 
 // 1-px-Rahmen AUSSCHLIESSLICH aus fillRect. Bewusst KEIN strokeRect: die
@@ -790,10 +806,14 @@ export function drawPause(ctx, menu) {
   rahmen(ctx, 80, 40, 160, 110, '#575061');
   rahmen(ctx, 82, 42, 156, 106, '#3a3542');
   centerText(ctx, 'PAUSE', 50, '#f0bf4e', 'bold 16px monospace');
+  // §6.1: MUSIK/TON ANGEHAENGT. Die Texte meiden weiter jede Flusstest-Sonde
+  // ('GOLD','SIEG','GAME OVER','GRIMLIGHT','STUFE','AUSRUESTUNG','x 0').
   const zeilen = [
     'WEITER',
     `GOTT: ${menu.god ? 'AN' : 'AUS'}`,
     `FPS: ${menu.fps ? 'AN' : 'AUS'}`,
+    `MUSIK: ${menu.musik ? 'AN' : 'AUS'}`,
+    `TON: ${menu.ton ? 'AN' : 'AUS'}`,
   ];
   for (let i = 0; i < zeilen.length; i++) {
     const z = PAUSE_MENU_ZONES[i];
@@ -802,7 +822,7 @@ export function drawPause(ctx, menu) {
       ctx.fillStyle = '#3a3542';
       ctx.fillRect(z.x, z.y, z.w, z.h);
     }
-    centerText(ctx, zeilen[i], z.y + 5, gewaehlt ? '#f0bf4e' : '#d6cbb1', '8px monospace');
+    centerText(ctx, zeilen[i], z.y + 4, gewaehlt ? '#f0bf4e' : '#d6cbb1', '8px monospace');
   }
   ctx.textAlign = 'left';
 }

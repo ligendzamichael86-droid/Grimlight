@@ -655,6 +655,11 @@ export const GRAVEYARD = {
   playerLightRadius: 40,
   fog: true,
   torchChars: ['F'],
+  // SLICE 5 §4.4 — KARTENMUSIK, datengetrieben am mapDef (Muster
+  // mapDef.extraLights: fehlt das Feld, passiert nichts). Der Schluessel
+  // zeigt in game/js/audio/songs/index.js. §36-geoHash-frei: gehasht werden
+  // playerSpawn/Spawns/Portale/torchChars-findTiles, nicht dieses Feld.
+  music: 'graveyard',
 };
 
 export const CATACOMBS = {
@@ -726,6 +731,7 @@ export const CATACOMBS = {
   playerLightRadius: 52,
   fog: false,
   torchChars: ['W'],
+  music: 'catacombs',   // SLICE 5 §4.4
 };
 
 export const MAPS = { GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER };

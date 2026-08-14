@@ -30,6 +30,16 @@ import {
   SAVE_KEY, serialize, deserialize, applyToPlayer,
   titleMenuStep, TITLE_MENU_ITEMS, TITLE_MENU_ZONES,
 } from './items/save.js';
+// SLICE 5 §2/§8 — AUDIO-KERN. Alle vier Module sind REIN (kein window, kein
+// AudioContext, kein Modul-Zustand) und damit von den Flusstests importierbar;
+// den AudioContext fasst AUSSCHLIESSLICH main.js an (Muster save.js/Storage).
+import { compileSong } from './audio/chiptune.js';
+import { sfxRender } from './audio/sfx.js';
+import { SONGS } from './audio/songs/index.js';
+import {
+  defaultSettings, parseSettings, serializeSettings, toggle as mixerToggle,
+  BUS, sfxBusGain, leereStimmen, allocVoice, freeVoice, aktiveStimmen,
+} from './audio/mixer.js';
 
 const VIEW_W = 320;
 const VIEW_H = 180;
@@ -239,7 +249,10 @@ const tintCtx = new Proxy(ctx, {
 const TINT_PREV = new WeakMap();
 
 const input = createInput();
-input.attach(canvas);
+// §0.3: der Gesten-Unlock haengt am ECHTEN touchstart-Handler (2. Parameter,
+// input.js). audioUnlock ist eine Funktionsdeklaration weiter unten und damit
+// hier bereits gebunden (Hoisting); gerufen wird sie erst aus dem Listener.
+input.attach(canvas, audioUnlock);
 const camera = createCamera(VIEW_W, VIEW_H);
 const lighting = createLighting(VIEW_W, VIEW_H);
 // Grafikpass 3 §2.4: Glut-Funken über Fackeln (moderne Alpha-Deko). Einmal
@@ -288,6 +301,553 @@ function storeLesen(key) {
 }
 function storeSchreiben(key, wert) {
   try { if (store) store.setItem(key, wert); } catch { /* Quota/Privatmodus: still */ }
+}
+
+// ===========================================================================
+// SLICE 5 §4 — WEBAUDIO-ADAPTER. Der EINZIGE Ort im Projekt, der WebAudio
+// anfasst (Landkarte A §4; chiptune/sfx/mixer/songs rechnen nur).
+//
+// EISERNE REGELN, die hier gelten:
+//   §0.2 ZEITARGUMENT: JEDER Knoten wird mit explizitem Zeitargument
+//        gestartet/gestoppt — osc.start(t0), osc.stop(t1). NIE mit leeren
+//        Klammern: der Quelltext-Waechter smoke_test.mjs:4854-4858 zaehlt
+//        `.start()`/`.stop()` in main.js und erlaubt GENAU EIN `.start()`
+//        (das des Loops am Dateiende).
+//   §0.2 SINGLETON: genau EIN AudioContext fuer die Lebensdauer des
+//        Dokuments, nie close(), nie neu bauen (Review P2-m7 — Chromium
+//        erlaubt >32 Kontexte ohne Wurf, ein Mehrfachbau flaege nie auf).
+//   §0.3 GUARDFORM: typeof-Pruefung VOR jedem new, try/catch, kein Zugriff
+//        auf event.*; resume() IMMER fire-and-forget mit state-Check, NIE
+//        await (P2-M5: das Promise erfuellt sich ohne Aktivierung nie).
+//   Ohne AudioContext (Node, alle Flusstest-Stubs) ist ALLES hier inert:
+//   jede Funktion faellt an `if (!audioCtx) return;` heraus.
+// ===========================================================================
+
+const AUDIO_KEY = 'grimlight.audio.v1';
+// §4.2 (P2-B4, bindend): Lookahead-Fenster und Resync-Vorlauf in Sekunden.
+const MUSIK_LOOKAHEAD = 0.10;
+const MUSIK_RESYNC = 0.05;
+// §4.4: Blenden. Portal bringt seinen Rahmen mit (FADE_TIME 0,3 s je
+// Richtung), die drei fade-losen buildWorld-Pfade bekommen 0,25 s rein
+// audioseitig (die Welt entsteht dort in EINEM Frame, Review P2-m5).
+const MUSIK_CROSSFADE = 0.3;
+const MUSIK_BLENDE = 0.25;
+// Referenz-Tonhoehe des Rauschpuffers: chiptune.renderPCM haelt jeden
+// Rauschwert rate/f Samples lang. Ein Puffer mit Haltelaenge rate/440 und
+// playbackRate f/440 erzeugt exakt dieselbe Haltelaenge in der Ausgabe.
+const RAUSCH_F0 = 440;
+
+let audioCtx = null;
+let masterGain = null;
+let musicBusA = null;
+let musicBusB = null;
+let sfxBus = null;
+let uiBus = null;
+let rauschPuffer = null;
+// §4.2 (P2-M6): createPeriodicWave kostet ~1 ms je Aufruf, gecacht 0,013 ms.
+// Pro Note gebaut waere das Spiel tot — je duty EINE Welle, fuer immer.
+let wellenCache = null;
+// §6.2: {music, sfx}. Ohne Storage liefert storeLesen null und parseSettings
+// die Werkseinstellung an/an — der BOOT-5-Pfad bleibt damit byte-gleich.
+let audioSettings = defaultSettings();
+let audioSettingsGeladen = false;
+// §4.3: geduckt wird NUR ueber die Handpause/das Inventar; suspend() macht
+// ausschliesslich der Lifecycle-Pfad (§4.5).
+let audioGeduckt = false;
+// A1(c): <= 12 SFX-Stimmen, aelteste fliegt (reine Datenstruktur aus mixer.js).
+let sfxStimmen = leereStimmen(BUS.maxStimmen);
+const sfxKnotenReg = new Map(); // id -> { quellen: [], gain }
+let sfxLaufNr = 0;
+
+// §5.5 Rig-Schalter. Gelesen wie main.js __noTint: NUR main.js liest window.
+function rigAus(name) {
+  try {
+    return typeof window !== 'undefined' && window && window[name] === true;
+  } catch { return false; }
+}
+
+// §4.3/§4.1 ANKERFORM JEDER PEGELAENDERUNG (Review P2-M4, GEMESSEN):
+// ohne cancelScheduledValues + setValueAtTime(momentanwert) findet eine
+// zweite Rampe 0,7 s lang GAR NICHT statt und laeuft danach trotzdem auf den
+// alten Zielwert durch. Exponentiell auf 0 wirft RangeError — deshalb IMMER
+// linear.
+function rampe(param, ziel, dauer) {
+  if (!param || !audioCtx) return;
+  try {
+    const t = audioCtx.currentTime;
+    param.cancelScheduledValues(t);
+    param.setValueAtTime(param.value, t);
+    param.linearRampToValueAtTime(ziel, t + Math.max(0.005, dauer));
+  } catch { /* inert */ }
+}
+
+// GEMESSEN im Browser (Chromium, .tmp/slice5_probe-Sonde): ein GainNode OHNE
+// anliegende Quelle wird von Chrome NICHT mehr gerechnet — seine AudioParam-
+// Automation steht dann still. Eine auf dem leeren sfxBus geplante Rampe auf 0
+// bleibt bei 0,75 stehen (selbst setValueAtTime greift nicht), waehrend
+// dieselbe Rampe auf einem frisch gebauten Knoten DERSELBEN Uhr sauber laeuft.
+// Auf einem STUMMEN Bus ist eine Rampe ohnehin unhoerbar — dort wird der Pegel
+// deshalb HART gesetzt. So steht der Bus in jedem Fall auf dem Wert, den
+// §4.3/§6.2 verlangen, bevor wieder eine Quelle anliegt.
+function setzeHart(param, ziel) {
+  if (!param || !audioCtx) return;
+  try {
+    param.cancelScheduledValues(audioCtx.currentTime);
+    param.value = ziel;
+  } catch { /* inert */ }
+}
+
+// §4.1 BUS-GRAPH (bindend):
+//   masterGain <- musicBusA + musicBusB   (Crossfade-Paar)
+//   masterGain <- sfxBus                  (Weltklaenge)
+//   masterGain <- uiBus                   (Menue; wird NIE geduckt, P2-B3 —
+//                                          sonst sind die neuen Pause-Schalter
+//                                          unhoerbar)
+// Idempotent: der zweite Aufruf ist ein No-Op.
+function baueGraph() {
+  if (!audioCtx || masterGain) return;
+  try {
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = BUS.master;      // §4.1 Startwert 0,8
+    masterGain.connect(audioCtx.destination);
+    musicBusA = audioCtx.createGain();
+    musicBusB = audioCtx.createGain();
+    musicBusA.gain.value = 0;
+    musicBusB.gain.value = 0;
+    musicBusA.connect(masterGain);
+    musicBusB.connect(masterGain);
+    sfxBus = audioCtx.createGain();
+    sfxBus.gain.value = audioSettings.sfx ? BUS.sfx : 0;
+    sfxBus.connect(masterGain);
+    uiBus = audioCtx.createGain();
+    uiBus.gain.value = audioSettings.sfx ? BUS.ui : 0;
+    uiBus.connect(masterGain);
+    wellenCache = new Map();
+  } catch { /* inert */ }
+}
+
+// §0.3 UNLOCK — WOERTLICH die vom Pruefer GEMESSEN-GRUENE Form (P1-m1).
+// Bindend daran: `typeof AC !== 'function'` VOR jedem new, kein Zugriff auf
+// event.*, Rueckgabe undefined, aeusseres try um addEventListener.
+function audioUnlock() {
+  try {
+    const AC = (typeof window !== 'undefined' && window)
+      ? (window.AudioContext || window.webkitAudioContext) : null;
+    if (typeof AC !== 'function') return;        // Node/Stubs: vollstaendig inert
+    if (!audioCtx) audioCtx = new AC();
+    baueGraph();                                  // idempotent
+    audioEinstellungenLaden();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    musikFuerZustand(MUSIK_BLENDE);               // Titelmusik erst nach der Geste
+  } catch { /* inert */ }
+}
+try {
+  if (typeof window !== 'undefined' && window
+    && typeof window.addEventListener === 'function') {
+    window.addEventListener('keydown', () => { try { audioUnlock(); } catch { /* inert */ } });
+  }
+} catch { /* inert */ }
+
+// §4.5 LIFECYCLE. resume() ist IMMER fire-and-forget mit state-Check.
+function audioResume() {
+  if (!audioCtx) return;
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    musikResync();
+  } catch { /* inert */ }
+}
+function audioSuspend() {
+  if (!audioCtx) return;
+  try { if (audioCtx.state === 'running') audioCtx.suspend(); } catch { /* inert */ }
+}
+
+// §6.2 Persistenz ueber storeLesen/storeSchreiben und den mixer-Reducer.
+// GELESEN wird beim ersten Unlock (nicht im Boot-Pfad), GESCHRIEBEN nur beim
+// Umschalten — NIE in saveNow() (sonst wandert der Zug in die BOOT-1/2/3-
+// Vergleiche von check_save_slice4, Review "geprueft und gruen").
+function audioEinstellungenLaden() {
+  if (audioSettingsGeladen) return;
+  audioSettingsGeladen = true;
+  audioSettings = parseSettings(storeLesen(AUDIO_KEY));
+  audioPegelSetzen(0.02);
+}
+function audioEinstellungenSchreiben() {
+  storeSchreiben(AUDIO_KEY, serializeSettings(audioSettings));
+}
+
+// --------------------------------------------------------------- KLANGBAU
+
+function holeRauschPuffer() {
+  if (rauschPuffer || !audioCtx) return rauschPuffer;
+  try {
+    const rate = audioCtx.sampleRate || 44100;
+    const n = Math.max(1, Math.floor(rate));
+    rauschPuffer = audioCtx.createBuffer(1, n, rate);
+    const d = rauschPuffer.getChannelData(0);
+    // Deterministischer LFSR wie chiptune.js (kein Math.random im Klangpfad).
+    let s = 0xC0FFEE;
+    const halteLaenge = Math.max(1, Math.round(rate / RAUSCH_F0));
+    let halt = 0;
+    let wert = 0;
+    for (let i = 0; i < n; i++) {
+      if (halt <= 0) {
+        s ^= s << 13; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+        wert = (s / 0xFFFFFFFF) * 2 - 1;
+        halt = halteLaenge;
+      }
+      halt--;
+      d[i] = wert;
+    }
+  } catch { rauschPuffer = null; }
+  return rauschPuffer;
+}
+
+// Pulswelle mit Tastgrad. 32 Harmonische (Review P2-M6: 64 kosten das Vier-
+// bis Zehnfache), je duty genau EINE Welle im Cache.
+function pulsWelle(duty) {
+  if (!audioCtx || !wellenCache) return null;
+  const key = Math.round(duty * 1000) / 1000;
+  let w = wellenCache.get(key);
+  if (w === undefined) {
+    try {
+      const n = 32;
+      const real = new Float32Array(n + 1);
+      const imag = new Float32Array(n + 1);
+      for (let k = 1; k <= n; k++) real[k] = (2 / (k * Math.PI)) * Math.sin(Math.PI * k * key);
+      w = audioCtx.createPeriodicWave(real, imag);
+    } catch { w = null; }
+    wellenCache.set(key, w);
+  }
+  return w;
+}
+
+// Ein Ereignis {t,dauer,ch,freq,instr,vol,fx,slideTo} zu Knoten machen.
+// Huellkurve wie chiptune.renderPCM: Attack -> Decay auf Sustain -> Release,
+// dauer schliesst den Release EIN.
+function baueTon(ziel, instrumente, e, t0, pegel) {
+  if (!audioCtx || !ziel) return null;
+  const inst = instrumente[e.instr];
+  if (!inst) return null;
+  const dauer = Math.max(0.01, e.dauer);
+  const spitze = Math.max(0.0001, (e.vol ?? inst.vol ?? 0.2) * pegel);
+  const a = Math.min(dauer * 0.5, Math.max(0.001, inst.attack ?? 0.005));
+  const r = Math.min(dauer - a, Math.max(0.005, inst.release ?? 0.05));
+  const dec = Math.max(0, inst.decay ?? 0);
+  const sus = inst.sustain ?? 1;
+  const g = audioCtx.createGain();
+  g.connect(ziel);
+  const p = g.gain;
+  p.setValueAtTime(0, t0);
+  p.linearRampToValueAtTime(spitze, t0 + a);
+  const relStart = t0 + Math.max(a, dauer - r);
+  if (dec > 0) {
+    const decEnde = t0 + a + dec;
+    if (decEnde < relStart) {
+      p.linearRampToValueAtTime(spitze * sus, decEnde);
+      p.setValueAtTime(spitze * sus, relStart);
+    } else {
+      const anteil = Math.min(1, (relStart - t0 - a) / dec);
+      p.linearRampToValueAtTime(spitze * (1 + (sus - 1) * anteil), relStart);
+    }
+  } else {
+    p.setValueAtTime(spitze, relStart);
+  }
+  p.linearRampToValueAtTime(0, t0 + dauer);
+
+  const art = inst.art || 'pulse';
+  const hatSlide = e.slideTo !== null && e.slideTo !== undefined;
+  const arp = inst.arp || [0, 3, 7];
+  let quelle = null;
+  let tonParam = null;   // frequency (Oszillator) bzw. playbackRate (Rauschen)
+  let bezug = 1;         // Umrechnung Hz -> Parameterwert
+  if (art === 'noise') {
+    const puf = holeRauschPuffer();
+    if (!puf) { try { g.disconnect(); } catch { /* inert */ } return null; }
+    quelle = audioCtx.createBufferSource();
+    quelle.buffer = puf;
+    quelle.loop = true;
+    tonParam = quelle.playbackRate;
+    bezug = 1 / RAUSCH_F0;
+  } else {
+    quelle = audioCtx.createOscillator();
+    if (art === 'tri') quelle.type = 'triangle';
+    else if (art === 'sine') quelle.type = 'sine';
+    else {
+      const w = pulsWelle(inst.duty ?? 0.5);
+      if (w) quelle.setPeriodicWave(w); else quelle.type = 'square';
+    }
+    tonParam = quelle.frequency;
+    bezug = 1;
+  }
+  try {
+    tonParam.setValueAtTime(e.freq * bezug, t0);
+    if (hatSlide) tonParam.linearRampToValueAtTime(e.slideTo * bezug, t0 + dauer);
+    if (e.fx.includes('a')) {
+      // Arpeggio: 32 Stufen je Sekunde, hoechstens ueber die Notendauer.
+      const schritte = Math.min(64, Math.floor(dauer * 32));
+      for (let i = 0; i < schritte; i++) {
+        const halbton = arp[i % arp.length];
+        const basis = hatSlide ? e.freq + (e.slideTo - e.freq) * (i / Math.max(1, schritte)) : e.freq;
+        tonParam.setValueAtTime(basis * Math.pow(2, halbton / 12) * bezug, t0 + i / 32);
+      }
+    }
+  } catch { /* inert */ }
+  quelle.connect(g);
+  let lfo = null;
+  let lfoGain = null;
+  if (e.fx.includes('v') && art !== 'noise') {
+    try {
+      lfo = audioCtx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(6, t0);          // §2.1: 6 Hz, +-0,6 %
+      lfoGain = audioCtx.createGain();
+      lfoGain.gain.setValueAtTime(e.freq * 0.006, t0);
+      lfo.connect(lfoGain);
+      lfoGain.connect(tonParam);
+      lfo.start(t0);                                 // §0.2 ZEITARGUMENT
+      lfo.stop(t0 + dauer + 0.02);                   // §0.2 ZEITARGUMENT
+    } catch { lfo = null; }
+  }
+  quelle.start(t0);                                  // §0.2 ZEITARGUMENT
+  quelle.stop(t0 + dauer + 0.02);                    // §0.2 ZEITARGUMENT
+  quelle.onended = () => {
+    try { quelle.disconnect(); } catch { /* inert */ }
+    try { g.disconnect(); } catch { /* inert */ }
+    try { if (lfoGain) lfoGain.disconnect(); } catch { /* inert */ }
+  };
+  return quelle;
+}
+
+// ------------------------------------------------------------------- SFX
+
+function audioPegelSetzen(dauer) {
+  if (!audioCtx || !masterGain) return;
+  const stimmen = aktiveStimmen(sfxStimmen);
+  const n = Math.max(1, stimmen);
+  const sfxZiel = (audioGeduckt || !audioSettings.sfx) ? 0 : sfxBusGain(n);
+  const uiZiel = audioSettings.sfx ? BUS.ui : 0;   // §4.3: uiBus wird NIE geduckt
+  if (stimmen === 0) {          // stummer Bus -> harter Wert (s. setzeHart)
+    setzeHart(sfxBus.gain, sfxZiel);
+    setzeHart(uiBus.gain, uiZiel);
+  } else {
+    rampe(sfxBus.gain, sfxZiel, dauer);
+    rampe(uiBus.gain, uiZiel, dauer);
+  }
+  musikPegelSetzen(dauer);
+}
+
+function stoppeStimme(id) {
+  const eintrag = sfxKnotenReg.get(id);
+  sfxKnotenReg.delete(id);
+  if (!eintrag || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  for (const q of eintrag.quellen) {
+    try { q.stop(t); } catch { /* inert */ }     // §0.2 ZEITARGUMENT
+  }
+}
+
+/**
+ * §3 SFX abspielen. key ist ein Schluessel aus game/js/audio/sfx.js.
+ * opts: { stufe } Gold-Tonhoehentreppe, { variante } Schritt links/rechts.
+ * Ohne AudioContext, mit __noAudio oder bei TON: AUS passiert nichts.
+ */
+function spieleSfx(key, opts) {
+  if (!audioCtx || !masterGain || rigAus('__noAudio')) return;
+  if (!audioSettings.sfx) return;
+  let buendel = null;
+  try { buendel = sfxRender(key, opts || {}); } catch { return; }
+  const ziel = buendel.bus === 'ui' ? uiBus : sfxBus;
+  if (buendel.bus !== 'ui' && audioGeduckt) return; // §4.3: Weltklaenge stumm
+  const t0 = audioCtx.currentTime;                  // P2-m8: nie mit Vorlauf
+  const id = ++sfxLaufNr;
+  const alloc = allocVoice(sfxStimmen, id, t0);
+  sfxStimmen = alloc.state;
+  if (alloc.evicted) stoppeStimme(alloc.evicted.id);
+  const quellen = [];
+  for (const e of buendel.events) {
+    const q = baueTon(ziel, buendel.instruments, e, t0 + e.t, 1);
+    if (q) quellen.push(q);
+  }
+  if (quellen.length === 0) {
+    sfxStimmen = freeVoice(sfxStimmen, id);
+    return;
+  }
+  sfxKnotenReg.set(id, { quellen });
+  let offen = quellen.length;
+  for (const q of quellen) {
+    const vorher = q.onended;
+    q.onended = () => {
+      if (typeof vorher === 'function') vorher();
+      offen -= 1;
+      if (offen <= 0) {
+        sfxKnotenReg.delete(id);
+        sfxStimmen = freeVoice(sfxStimmen, id);
+        audioPegelSetzen(0.02);
+      }
+    };
+  }
+  audioPegelSetzen(0.02);
+}
+
+/** Menue-/Systemklang. Laeuft ueber den uiBus und bleibt in der Pause hoerbar. */
+function uiTon(key) {
+  spieleSfx(key);
+}
+
+// ----------------------------------------------------------------- MUSIK
+// §4.2 SEQUENCER. Zwei Slots A/B = das Crossfade-Paar aus §4.1. Jeder Slot
+// haelt seine EIGENE Musik-Uhr (idx/basis), NICHT currentTime-Differenzen:
+// currentTime laeuft bei blockiertem Main-Thread weiter (gemessen, P2-B4) und
+// steht bei suspend() — beides wuerde die Pattern-Position zerstoeren.
+
+const musikSlots = [
+  { key: null, bundle: null, bus: null, idx: 0, basis: 0, ersterLoopIdx: 0, ziel: 0, einmalig: false, fertig: false },
+  { key: null, bundle: null, bus: null, idx: 0, basis: 0, ersterLoopIdx: 0, ziel: 0, einmalig: false, fertig: false },
+];
+let musikAktiv = 0;          // Index des Slots, der gerade den Ton fuehrt
+let musikSchluessel = null;  // laufender Song-Schluessel (Respawn-Vergleich)
+const musikKompiliert = new Map(); // key -> {instruments, events, loopFrom, loopTime}
+
+function holeMusik(key) {
+  if (!key) return null;
+  if (musikKompiliert.has(key)) return musikKompiliert.get(key);
+  let b = null;
+  try {
+    const song = SONGS[key];
+    if (song) {
+      const k = compileSong(song);
+      b = {
+        instruments: song.instruments,
+        events: k.events,
+        loopFrom: k.loopFrom,
+        loopTime: k.loopTime,
+        einmalig: song.einmalig === true,
+      };
+    }
+  } catch { b = null; }
+  musikKompiliert.set(key, b);
+  return b;
+}
+
+function musikPegelSetzen(dauer) {
+  if (!audioCtx || !musicBusA) return;
+  // §4.3: Ducking wirkt als FAKTOR auf das Crossfade-Paar — der Bus-Graph aus
+  // §4.1 bleibt damit exakt so, wie die Spec ihn festschreibt (kein
+  // Zusatzknoten zwischen Paar und Master).
+  const faktor = (audioSettings.music ? 1 : 0) * (audioGeduckt ? BUS.duck : 1);
+  const busse = [musicBusA, musicBusB];
+  for (let i = 0; i < 2; i++) {
+    const s = musikSlots[i];
+    const ziel = s.ziel * BUS.music * faktor;
+    // Nur ein Slot mit laufendem Song hat eine Quelle am Bus (s. setzeHart).
+    if (!s.bundle || s.fertig) setzeHart(busse[i].gain, ziel);
+    else rampe(busse[i].gain, ziel, dauer);
+  }
+}
+
+function slotStoppen(s) {
+  s.key = null;
+  s.bundle = null;
+  s.ziel = 0;
+  s.fertig = true;
+}
+
+/**
+ * §4.4 Song wechseln. Gleicher Schluessel => NICHTS (Respawn auf derselben
+ * Karte laesst die Musik durchlaufen, P2-m5). Sonst Crossfade ueber das
+ * A/B-Paar: der abgehende Slot rampt auf 0, der neue startet sofort.
+ */
+function musikStarten(key, blende) {
+  if (!audioCtx || !masterGain || rigAus('__noAudio')) return;
+  if (key === musikSchluessel) return;
+  musikSchluessel = key;
+  const alt = musikSlots[musikAktiv];
+  const neu = musikSlots[1 - musikAktiv];
+  alt.ziel = 0;
+  slotStoppen(neu);
+  const b = key ? holeMusik(key) : null;
+  if (b && b.events.length > 0) {
+    neu.key = key;
+    neu.bundle = b;
+    neu.bus = (1 - musikAktiv) === 0 ? musicBusA : musicBusB;
+    neu.idx = 0;
+    neu.basis = audioCtx.currentTime + MUSIK_RESYNC;
+    neu.einmalig = b.einmalig;
+    neu.fertig = false;
+    neu.ziel = 1;
+    neu.ersterLoopIdx = 0;
+    for (let i = 0; i < b.events.length; i++) {
+      if (b.events[i].t >= b.loopFrom - 1e-9) { neu.ersterLoopIdx = i; break; }
+    }
+  }
+  musikAktiv = 1 - musikAktiv;
+  musikPegelSetzen(blende || MUSIK_CROSSFADE);
+}
+
+/** §4.2 RESYNC nach resume()/Sichtbarkeits-Rueckkehr: naechste Events ab
+ *  currentTime + 0,05. Es wird NIE nachgeholt — die Pattern-Position kommt
+ *  aus der eigenen Uhr (idx), nur der Zeitanker wird neu gesetzt. */
+function musikResync() {
+  if (!audioCtx) return;
+  const jetzt = audioCtx.currentTime;
+  for (const s of musikSlots) {
+    if (!s.bundle || s.fertig) continue;
+    const ev = s.bundle.events[Math.min(s.idx, s.bundle.events.length - 1)];
+    if (!ev) continue;
+    if (s.basis + ev.t < jetzt - MUSIK_RESYNC) s.basis = jetzt + MUSIK_RESYNC - ev.t;
+  }
+}
+
+/** §4.2 Fenster nachfuellen. GENAU EINE Nachfuellung je 60-Hz-Tick. */
+function musikTick() {
+  if (!audioCtx || !masterGain) return;
+  if (!audioSettings.music) return;
+  const horizont = audioCtx.currentTime + MUSIK_LOOKAHEAD;
+  for (const s of musikSlots) {
+    if (!s.bundle || s.fertig || s.ziel <= 0) continue;
+    const b = s.bundle;
+    let wache = 0;
+    while (wache++ < 96) {
+      if (s.idx >= b.events.length) {
+        if (s.einmalig) { s.fertig = true; break; }
+        s.basis += b.loopTime;          // loopFrom + loopTime === Gesamtdauer
+        s.idx = s.ersterLoopIdx;
+        continue;
+      }
+      const ev = b.events[s.idx];
+      let t = s.basis + ev.t;
+      if (t > horizont) break;
+      // §4.2 RESYNC-REGEL (P2-B4, woertlich): liegt das naechste Ereignis mehr
+      // als 0,05 s in der Vergangenheit (Main-Thread-Stall, Rueckkehr aus dem
+      // Hintergrund), wird NICHT nachgeholt — der Zeitanker springt auf
+      // currentTime + 0,05, die Pattern-Position bleibt, wo die Musik-Uhr
+      // steht. Ohne das schedult die Schleife alle verpassten Noten mit
+      // Startzeiten in der Vergangenheit: WebAudio startet sie sofort und
+      // alle gleichzeitig (Cluster-Knall).
+      if (t < audioCtx.currentTime - MUSIK_RESYNC) {
+        s.basis = audioCtx.currentTime + MUSIK_RESYNC - ev.t;
+        t = s.basis + ev.t;
+        if (t > horizont) break;
+      }
+      baueTon(s.bus, b.instruments, ev, t, 1);
+      s.idx += 1;
+    }
+  }
+}
+
+/**
+ * §4.4 Welcher Song gehoert zum aktuellen Zustand? EINE Quelle fuer alle
+ * Screen- und Kartenwechsel; der Boss-Aggro-Zweig ist die zweite Ebene
+ * (mapDef.music traegt 'boss_idle', der Kampf schaltet auf 'boss_aggro').
+ */
+function musikFuerZustand(blende) {
+  if (!audioCtx || !masterGain) return;
+  let key = null;
+  if (state === 'title') key = 'title';
+  else if (state === 'gameover') key = 'gameover';
+  else if (state === 'victory') key = 'victory';
+  else if (mapDef) key = bossAggro ? 'boss_aggro' : (mapDef.music || null);
+  musikStarten(key, blende);
 }
 
 // §3.3: der Spielstand wird beim Boot nur GELESEN, nicht angewandt. Er
@@ -362,12 +922,134 @@ let bossLagW = null;                  // nachlaufende ANZEIGE-Breite in px
 let bossLagFrames = 0;                // Frame-Zaehler (1 px je 2 Frames)
 let portalToastTimer = 0;             // Drossel fuer den VERSCHLOSSEN/VERSIEGELT-Toast (1x/s)
 
+// ===========================================================================
+// SLICE 5 §5 — GAME-FEEL-ZUSTAND (Hitstop / Shake / Flash) und §3 — die
+// Flanken-Speicher des Audio-Beobachters.
+//
+// §5.1 HITSTOP: 2 / 3 / 4 Frames fuer Schwert-Treffer / Kill / Spieler trifft
+// Boss. Die Zahlen sind GEMESSENE TEST-GRENZEN, kein Geschmack: bei H = 4
+// kippen 12 Assertions in check_inventory_slice2 (dessen Fenster :280 ist
+// 22 Frames gegen ATTACK_TOTAL = 21 Frames). SPIELER-SCHADEN loest NIEMALS
+// Hitstop aus — check_boss_slice3:253-255 hat GENAU EINEN Frame zwischen
+// hp = 0 und der GAME-OVER-Pruefung (Review P1-B2, gemessen rot).
+const HITSTOP_H = 2;   // Schwert trifft Gegner (OBERGRENZE)
+const HITSTOP_K = 3;   // Kill
+const HITSTOP_B = 4;   // Spieler trifft Boss
+let hitstop = 0;
+// §5.1 EINGABE-PUFFER: im Freeze laeuft player.update nicht, input.postUpdate
+// aber schon — ein Ein-Frame-Impuls (keydown/frame/keyup, check_main:180,
+// check_inventory:279) wuerde verschluckt. Das trifft auch Michael am Geraet
+// (schneller Doppelhieb). Der Pegel wird deshalb gemerkt und im ersten freien
+// Frame wieder gesetzt.
+let attackPuffer = false;
+// §5.2 SHAKE. NUR ganzzahliger Offset auf einer gemerkten Kamera-BASIS, neu
+// angewandt in JEDEM Zweig (auch Freeze), Abklingen auf der WANDUHR (der
+// Freeze zaehlt mit, sonst friert der Rest ein und schlaegt nach dem Respawn
+// zurueck — Review P1-M2/P2-M7, gemessen check_main:293 ROT ohne).
+const SHAKE_MAX_TICKS = 12;
+let shakeBasisX = 0;
+let shakeBasisY = 0;
+let shakeTicks = 0;
+let shakeAmp = 0;
+let shakePhase = 0;
+let shakeOffX = 0;
+let shakeOffY = 0;
+// §5.3 FLASH. Deckung in der rgba-FUELLFARBE bei globalAlpha 1, gezeichnet
+// NACH lighting.draw — beide Detektoren (fadeAlpha verlangt '#000',
+// ambientAlpha nur Nicht-Haupt-Canvas) bleiben stumm (Review P1-m4, gemessen).
+let flashFrames = 0;
+// §3 Flanken-Speicher. WeakMap, weil buildWorld neue Entities erzeugt
+// (Muster TINT_PREV, main.js oben).
+const AUDIO_HURT = new WeakMap();   // Gegner -> letzter hurtTimer
+const AUDIO_STATE = new WeakMap();  // Gegner -> letzter state
+const AUDIO_MARK = new WeakMap();   // Gegner -> hatte marker?
+const AUDIO_PROP = new WeakMap();   // Prop -> letzter state/opened
+let audioAttackId = -1;             // Flanke des Schwertschwungs
+let audioInvuln = 0;                // Flanke des Spielerschadens
+let audioAirVor = false;            // Bumerang in der Luft (Vorframe)
+let audioFadeVor = 'none';          // Portal-Fade-Flanke
+let audioSchrittFrame = -1;         // letzter Lauf-Frame-Index
+let audioSchrittZaehler = 0;        // jeder ZWEITE Frame-Wechsel klingt
+let audioSchrittUhr = 0;            // Mindestabstand 0,22 s (=> ~2,5 Schritte/s)
+let audioSchrittSeite = 0;          // links/rechts, deterministisch
+let goldKette = 0;                  // Tonhoehen-Treppe bei Muenzketten
+let goldKetteUhr = 0;               // Ketten-Fenster (Entprellung)
+let bossAggro = false;              // §4.4 zweite Musik-Ebene
+let audioPauseCursor = 0;           // Menue-Flanken (Pause)
+let audioTitleCursor = 0;           // Menue-Flanken (Titel)
+let audioInvCursor = 0;             // Menue-Flanken (Inventar)
+
 function pushToast(text, color, prio) {
   if (!toast || prio >= toast.prio) toast = { text, color, prio, t: 0 };
 }
 
+// §5.2 SHAKE — die drei Bausteine.
+//
+// (1) NULLUNG. Doppelt: enterState UND buildWorld. Ohne die enterState-Nullung
+//     friert der Restzaehler beim Tod ein und schlaegt nach dem Respawn zurueck
+//     (gemessen: check_main_slice1:293 Zentrum-screen 217 statt 216).
+function shakeNullen() {
+  shakeTicks = 0;
+  shakeAmp = 0;
+  shakePhase = 0;
+  shakeOffX = 0;
+  shakeOffY = 0;
+}
+
+// (2) AUSLOESEN. amp in px (1-2 normal, 3 Boss-Dash), Wirkzeit <= 12 Ticks.
+function shakeAusloesen(amp) {
+  if (rigAus('__noShake')) return;
+  const a = Math.max(0, Math.min(3, amp));
+  if (a <= 0) return;
+  if (a >= shakeAmp) {
+    shakeAmp = a;
+    shakeTicks = SHAKE_MAX_TICKS;
+  }
+}
+
+// (3) FORTSCHREIBEN auf der WANDUHR: genau einmal je update()-Tick, ganz oben,
+//     also AUCH im Freeze und im Fade. Der Offset ist IMMER ganzzahlig —
+//     playerScreen() misst Math.round(worldX - cam.x), und fuer ganzzahliges k
+//     gilt Math.round(a - (b + k)) = Math.round(a - b) - k: bei k = 0 ist die
+//     Messung BITGLEICH zum Bestand (Review P1-m2).
+function shakeFortschreiben() {
+  if (shakeTicks <= 0) {
+    shakeOffX = 0;
+    shakeOffY = 0;
+    shakeAmp = 0;
+    return;
+  }
+  shakeTicks -= 1;
+  shakePhase += 1;
+  const a = shakeAmp * (shakeTicks / SHAKE_MAX_TICKS);
+  shakeOffX = Math.round(a * (shakePhase % 2 ? 1 : -1));
+  shakeOffY = Math.round(a * (shakePhase % 4 < 2 ? 1 : -1) * 0.6);
+  if (shakeTicks === 0) {          // zweite Nullung: Ruhe ist exakt 0
+    shakeOffX = 0;
+    shakeOffY = 0;
+    shakeAmp = 0;
+  }
+}
+
+// (4) ANWENDEN auf die gemerkte Basis, MIT Nach-Klemmung auf den Weltrand
+//     (camera.follow klemmt, der Offset koennte sonst ueber den Kartenrand
+//     schieben — Review P1-m2). Wird in JEDEM Zweig gerufen, auch im Freeze.
+function shakeAnwenden() {
+  if (!map) return;
+  const maxX = Math.max(0, map.wPx - VIEW_W);
+  const maxY = Math.max(0, map.hPx - VIEW_H);
+  camera.x = Math.min(Math.max(shakeBasisX + shakeOffX, 0), maxX);
+  camera.y = Math.min(Math.max(shakeBasisY + shakeOffY, 0), maxY);
+}
+
 function followPlayer() {
   camera.follow(player.x + player.w / 2, player.y + player.h / 2, map.wPx, map.hPx);
+  // §5.2: die BASIS ist der geklemmte follow()-Wert; der Shake liegt als
+  // ganzzahliger Nachschlag DARUEBER (camera.follow setzt x/y absolut, ein
+  // davor addierter Offset waere wirkungslos).
+  shakeBasisX = camera.x;
+  shakeBasisY = camera.y;
+  shakeAnwenden();
 }
 
 function syncPlayerLight() {
@@ -487,6 +1169,22 @@ function buildWorld(mapKey, spawn, carry) {
   portalsArmed = mapDef.portals.map(() => false);
   levelupTimer = 0;
   portalToastTimer = 0;
+  // §5.2 ZWEITE harte Nullung (neben enterState): eine neue Welt startet nie
+  // mit einem Kamera-Rest.
+  shakeNullen();
+  hitstop = 0;
+  // §4.4 KARTENMUSIK am EINEN Umschaltpunkt. Gleicher Song-Schluessel =>
+  // musikStarten ist ein No-Op, der Respawn auf derselben Karte laesst die
+  // Musik also durchlaufen (P2-m5). Der Portal-Pfad laeuft mitten im Fade und
+  // bekommt die 0,3-s-Blende, die drei fade-losen Pfade 0,25 s.
+  bossAggro = false;
+  musikFuerZustand(fadePhase === 'none' ? MUSIK_BLENDE : MUSIK_CROSSFADE);
+  // §4.4: die Kampf-Ebene VORWAERMEN. compileSong('boss_aggro') kostet
+  // gemessen 2,19 ms (1027 Ereignisse) — auf einem 6x gedrosselten Handy
+  // waeren das ~13 ms und damit ein verlorener Frame GENAU im Moment, in dem
+  // der Grabwaechter erwacht. Hier laeuft es im ohnehin teuren Weltaufbau
+  // hinter der Blende. holeMusik cacht, der spaetere Wechsel ist dann gratis.
+  if (mapDef.music === 'boss_idle') holeMusik('boss_aggro');
   syncPlayerLight();
   followPlayer(); // Kamera VOR dem ersten Frame der neuen Map setzen
   // §3: beim (Wieder-)Betreten der BOSS_KAMMER mit lebendem Boss einmalig der
@@ -530,10 +1228,26 @@ function ladeSpielstand(snap) {
   applyToPlayer(player, snap);
 }
 
+// §3/§4.4: enterState ist der EINE Ort fuer Screen-Musik und Ducking (P2-M8:
+// ausserhalb feuert jedes Ereignis mehrfach). §5.1/§5.2: Hitstop und Shake
+// werden hier HART genullt — sonst laeuft ein Rest ueber den Zustandswechsel
+// hinweg weiter (gemessen rot, Review P1-M2).
 function enterState(next) {
+  shakeNullen();
+  hitstop = 0;
+  flashFrames = 0;
   state = next;
   stateTime = 0;
   input.consumeConfirm();
+  // §4.3: Handpause und Inventar DUCKEN nur (Musik laeuft weiter, sfxBus
+  // stumm, uiBus HOERBAR). Suspendiert wird ausschliesslich im Lifecycle.
+  audioGeduckt = next === 'paused' || next === 'inventory';
+  audioPegelSetzen(BUS.duckRampe);
+  // §4.4 Stinger/Screen-Musik. Game-Over und Sieg haben 0,7 s Mindest-
+  // Anzeigezeit — genau der Platz fuer den Stinger.
+  if (next === 'gameover') uiTon('game_over_stinger');
+  else if (next === 'victory') uiTon('victory_stinger');
+  musikFuerZustand(MUSIK_BLENDE);
 }
 
 // ===========================================================================
@@ -648,6 +1362,7 @@ function pausiere() {
   if (state !== 'playing') return;
   saveNow();
   pauseCursor = 0;
+  audioPauseCursor = 0;  // §3: sonst klingt beim Oeffnen ein falsches menu_move
   pauseHeldY = true; // eine gehaltene Richtung darf den Cursor nicht sofort bewegen
   enterState('paused');
 }
@@ -660,18 +1375,29 @@ function systemPause() {
   saveNow();          // §3.2 (c) — Android kann die App ohne weiteren Callback killen
   pausiere();
 }
+// SLICE 5 §4.5 (P1-M4/P2-B2, bindend): ctx.suspend() steht DIREKT im Listener
+// und VOR jedem `if (!player) return` — systemPause() faellt auf dem Titel,
+// im Inventar, im Game-Over und im Sieg an genau diesem Guard heraus
+// (main.js: `function systemPause() { if (!player) return; ... }`, player ist
+// im Boot-Pfad null). Ohne die Vorschaltung liefe Michaels Titelmusik im
+// Hintergrund weiter — genau sein A4-Pruefpunkt "Ton pausiert beim
+// App-Wechsel". Gegenstueck: resume() beim Zurueckkommen (§0.3).
 try {
   if (typeof document !== 'undefined' && document
     && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', () => {
-      try { if (document.hidden) systemPause(); } catch { /* inert */ }
+      try {
+        if (document.hidden) { audioSuspend(); systemPause(); } else audioResume();
+      } catch { /* inert */ }
     });
   }
 } catch { /* inert */ }
 try {
   if (typeof window !== 'undefined' && window
     && typeof window.addEventListener === 'function') {
-    window.addEventListener('pagehide', systemPause);
+    window.addEventListener('pagehide', () => {
+      try { audioSuspend(); systemPause(); } catch { /* inert */ }
+    });
   }
 } catch { /* inert */ }
 
@@ -723,9 +1449,214 @@ function starteQuerformat() {
   } catch { /* inert */ }
 }
 
+// ===========================================================================
+// SLICE 5 §3 — DER AUDIO-BEOBACHTER.
+//
+// GENAU EINE Stelle im playing-Update-Zweig, unmittelbar nach den
+// Welt-Updates (updateDrops) und VOR dem Setzen des Hitstop-Timers (Review
+// P2-M8/M8-Fix): ausserhalb des else-Zweigs behielte `events` waehrend Fade
+// und Hitstop den Inhalt des letzten aktiven Frames und wuerde 2-36 mal
+// erneut ausgewertet; und der ausloesende Frame soll SFX und Partikel noch zu
+// Ende spielen, bevor der Freeze greift.
+//
+// ZWEI QUELLEN, wie im Projekt dreifach etabliert (main.js:739 zeldaState,
+// main.js props-Scan, main.js Boss-Spiegel):
+//   1. der Event-Strom (hasEvent/getEvent) fuer die 13 vorhandenen Typen,
+//   2. FELD-FLANKEN auf vorhandenen Objekten fuer die 24 Luecken —
+//      entities/ bleibt damit unberuehrt (§0.1).
+// Flanken liegen in WeakMaps: buildWorld erzeugt neue Entities, die alten
+// Eintraege duerfen nicht lecken (Muster TINT_PREV).
+//
+// NICHT hier (und warum): Portal-Fade/Portal-blockiert haengen an ihren
+// eigenen Einmal-Flanken weiter unten im selben Zweig — sie entstehen ERST
+// nach diesem Block, und im Folge-Tick laeuft wegen des Fades gar kein
+// Beobachter mehr. Menue-Klaenge (Titel/Pause/Inventar) liegen in ihren
+// Zustandszweigen; sie lesen den Event-Strom nicht und koennen deshalb nicht
+// mehrfach feuern.
+// ===========================================================================
+function audioBeobachter(dt) {
+  let neuerHitstop = 0;
+
+  // --- (1) VASEN / TRUHEN: EIGENE, ZWEITE props-Schleife --------------------
+  // Die Bestandsschleife darueber bleibt ZEICHENIDENTISCH: der Regex-Waechter
+  // smoke_test.mjs:4772 hat nur 121 Zeichen Reserve in seinem 400-Zeichen-
+  // Fenster (Review P1-M7). Deshalb hier eine eigene Schleife in anderer
+  // Schreibweise, NACH dem Bestandsblock.
+  for (const p of props) {
+    const jetzt = p.kind === 'chest' ? (p.opened === true ? 1 : 0) : (p.state === 'break' ? 1 : 0);
+    const vor = AUDIO_PROP.get(p) || 0;
+    if (jetzt === 1 && vor === 0) {
+      if (p.kind === 'chest') {
+        spieleSfx('chest_open');
+      } else {
+        spieleSfx('vase_break');
+        shakeAusloesen(1);
+        particles.spawnBurst(p.x + p.w / 2, p.y + p.h / 2, 6, 'staub');
+      }
+    }
+    AUDIO_PROP.set(p, jetzt);
+  }
+
+  // --- (2) GEGNER-FLANKEN ---------------------------------------------------
+  let aggro = false;
+  for (const e of enemies) {
+    // Treffer: hurtTimer-Flanke. Der Schwert-Ton haengt zusaetzlich an
+    // e.hitAttackId === player.attackId — sonst klaenge er auch beim
+    // Bumerang-Treffer (Review P1-m8b).
+    const hurt = e.hurtTimer || 0;
+    const hurtVor = AUDIO_HURT.get(e) || 0;
+    if (hurt > hurtVor + 1e-9) {
+      const boss = e.kind === 'graveward';
+      const schwert = e.hitAttackId === player.attackId;
+      spieleSfx('sword_hit');   // Buendelung: der Bumerang-Treffer teilt ihn
+      particles.spawnBurst(e.x + e.w / 2, e.y + e.h / 2, boss ? 8 : 5, 'funke');
+      // §5.1 WHITELIST: Schwert-Treffer H, Spieler trifft Boss B.
+      if (boss) {
+        neuerHitstop = Math.max(neuerHitstop, HITSTOP_B);
+        shakeAusloesen(2);
+      } else if (schwert) {
+        neuerHitstop = Math.max(neuerHitstop, HITSTOP_H);
+        shakeAusloesen(1);
+      }
+    }
+    AUDIO_HURT.set(e, hurt);
+
+    // Zustands-Flanken: Boss-Aufschlag und Grufthund-Sprung.
+    const st = e.state;
+    const stVor = AUDIO_STATE.get(e);
+    if (st !== stVor) {
+      if (e.kind === 'graveward') {
+        if (st === 'dash' || st === 'sweep') {
+          spieleSfx('boss_dash');
+          shakeAusloesen(3);
+          flashFrames = Math.max(flashFrames, 2);
+          particles.spawnBurst(e.x + e.w / 2, e.y + e.h - 2, 10, 'staub');
+        }
+      } else if (e.kind === 'hound' && st === 'leap') {
+        spieleSfx('hound_jump');
+      }
+      AUDIO_STATE.set(e, st);
+    }
+
+    // Boss-Telegraph: marker null -> Objekt.
+    const hatMark = !!e.marker;
+    if (hatMark && !AUDIO_MARK.get(e)) spieleSfx('boss_telegraph');
+    AUDIO_MARK.set(e, hatMark);
+
+    // §4.4 zweite Musik-Ebene: der Kampf beginnt, sobald der Boss aus 'idle'
+    // heraus ist (boss.js:160 ist der Aggro-Punkt; nach dem Sieg existiert er
+    // gar nicht mehr, die ruhige Fassung kommt also von selbst zurueck).
+    if (e.kind === 'graveward' && e.state !== 'die' && e.state !== 'idle') aggro = true;
+  }
+  if (aggro !== bossAggro) {
+    bossAggro = aggro;
+    musikFuerZustand(MUSIK_CROSSFADE);
+  }
+
+  // --- (3) SPIELER-FLANKEN --------------------------------------------------
+  if (player.attackId !== audioAttackId) {
+    audioAttackId = player.attackId;
+    spieleSfx('sword_swing');
+  }
+  const inv = player.invulnTimer || 0;
+  if (inv > audioInvuln + 1e-9) {
+    // SPIELER-SCHADEN: Flash + Shake, aber NIEMALS Hitstop (§A3/P1-B2 —
+    // check_boss_slice3:255 hat null Frames Spielraum).
+    spieleSfx('player_hurt');
+    shakeAusloesen(2);
+    flashFrames = Math.max(flashFrames, 2);
+  }
+  audioInvuln = inv;
+
+  // Schritte: an den SPRITE-Frame gekoppelt (player.js:221
+  // Math.floor(animTimer*10)%4 = 10 Wechsel/s), nicht an einen freien Timer.
+  // Jeder ZWEITE Wechsel klingt, Mindestabstand 0,22 s -> ~2,5 Schritte/s
+  // (Review P2-m6: 5/s waere Sprint-Kadenz).
+  if (audioSchrittUhr > 0) audioSchrittUhr -= dt;
+  if (player.state === 'walk') {
+    const f = Math.floor((player.animTimer || 0) * 10) % 4;
+    if (f !== audioSchrittFrame) {
+      audioSchrittFrame = f;
+      audioSchrittZaehler += 1;
+      if (audioSchrittZaehler % 2 === 0 && audioSchrittUhr <= 0) {
+        audioSchrittUhr = 0.22;
+        audioSchrittSeite = (audioSchrittSeite + 1) % 2;
+        spieleSfx('step', { variante: audioSchrittSeite });
+      }
+    }
+  } else {
+    audioSchrittFrame = -1;
+  }
+
+  // --- (4) BUMERANG (die Spiegel existieren im Bestand) ---------------------
+  const inLuft = projectiles.list.length > 0;
+  if (inLuft && !audioAirVor) spieleSfx('boomerang_throw');
+  else if (!inLuft && audioAirVor) spieleSfx('boomerang_catch');
+  audioAirVor = inLuft;
+
+  // --- (5) EVENT-STROM ------------------------------------------------------
+  // §A1(d) ZUORDNUNGSTABELLE (jede Zeile zeigt auf einen existierenden
+  // SFX-Schluessel aus game/js/audio/sfx.js; Buendelung ist zulaessig):
+  //   player_died      -> player_hurt        potion_drunk    -> potion_drink
+  //   attack_blocked   -> sword_blocked      enemy_died      -> enemy_die
+  //   level_up         -> level_up           item_pickup     -> pickup_generic
+  //   inventory_full   -> portal_blocked     potion_pickup   -> potion_pickup
+  //   potion_full_gold -> gold               gold_pickup     -> gold
+  //   weapon_found     -> pickup_generic     key_found       -> pickup_generic
+  //   heart_found      -> pickup_generic     boss_died       -> boss_die
+  //   chest_opened     -> chest_open (ueber den props-Scan oben, alle Truhen)
+  if (hasEvent(events, 'player_died')) spieleSfx('player_hurt');
+  if (hasEvent(events, 'potion_drunk')) spieleSfx('potion_drink');
+  if (hasEvent(events, 'attack_blocked')) spieleSfx('sword_blocked');
+  if (hasEvent(events, 'enemy_died')) {
+    spieleSfx('enemy_die');
+    neuerHitstop = Math.max(neuerHitstop, HITSTOP_K);   // §5.1 Kill
+    shakeAusloesen(2);
+  }
+  if (hasEvent(events, 'level_up')) spieleSfx('level_up');
+  if (hasEvent(events, 'item_pickup')) spieleSfx('pickup_generic');
+  if (hasEvent(events, 'inventory_full')) spieleSfx('portal_blocked');
+  if (hasEvent(events, 'potion_pickup')) spieleSfx('potion_pickup');
+  if (hasEvent(events, 'potion_full_gold')) spieleSfx('gold');
+  if (hasEvent(events, 'weapon_found')) spieleSfx('pickup_generic');
+  if (hasEvent(events, 'key_found')) spieleSfx('pickup_generic');
+  if (hasEvent(events, 'heart_found')) spieleSfx('pickup_generic');
+  if (hasEvent(events, 'boss_died')) {
+    spieleSfx('boss_die');
+    shakeAusloesen(3);
+  }
+  // GOLD — Spam-Kandidat Nr. 1 (Boss-Tod streut 6-10 Muenzen, Truhen 8-12, der
+  // Bumerang-Magnet zieht sie gleichzeitig ein). ENTPRELLT: hoechstens EIN Ton
+  // je Frame, dafuer eine steigende Tonhoehen-Treppe bei Ketten.
+  if (goldKetteUhr > 0) {
+    goldKetteUhr -= dt;
+    if (goldKetteUhr <= 0) goldKette = 0;
+  }
+  if (hasEvent(events, 'gold_pickup')) {
+    spieleSfx('gold', { stufe: goldKette });
+    goldKette += 1;
+    goldKetteUhr = 0.5;
+  }
+
+  // --- (6) HITSTOP ZULETZT --------------------------------------------------
+  // Die WHITELIST ist vollstaendig: Schwert-Treffer (H), Kill (K), Spieler
+  // trifft Boss (B). SPIELER-SCHADEN taucht hier bewusst NIRGENDS auf — er
+  // bekommt Flash und Shake, aber niemals einen Freeze-Frame (§A3/P1-B2).
+  if (neuerHitstop > hitstop) hitstop = neuerHitstop;
+}
+
 function update(dt) {
   timeSec += dt;
   stateTime += dt;
+  // §5.2/§5.3 WANDUHR: Shake und Flash klingen in JEDEM Zustand und in JEDEM
+  // Zweig ab — auch im Freeze (sonst friert der Rest ein und schlaegt nach dem
+  // Respawn zurueck, Review P1-M2).
+  shakeFortschreiben();
+  if (flashFrames > 0) flashFrames -= 1;
+  // §4.2: das Lookahead-Fenster wird im 60-Hz-Tick nachgefuellt — GENAU EINE
+  // Nachfuellung je Tick, damit ein Main-Thread-Stall keinen Noten-Cluster
+  // nachholt (Review P2-B4).
+  musikTick();
 
   // §4.2: der Pause-Knopf ist NUR im Spielzustand scharf — sonst frisst seine
   // Zone Taps im Titel, im Game-Over und im Sieg (Muster hudBoxVisible).
@@ -769,8 +1700,12 @@ function update(dt) {
   pauseHeld = input.pause;
 
   if (pauseEdge && (state === 'playing' || state === 'paused')) {
+    uiTon('pause_toggle');   // §3: Einmal-Flanke, verbraucht den ganzen Frame
     if (state === 'playing') pausiere();
-    else enterState('playing');
+    else {
+      audioResume();         // §0.3: resume() haengt an JEDEM Pause-WEITER
+      enterState('playing');
+    }
   } else if (state === 'title') {
     // §3.3: OHNE Spielstand ist dieser Zweig byte-gleich zum Bestand — jeder
     // Confirm startet sofort einen frischen Run. Erst mit gueltigem Stand
@@ -786,6 +1721,13 @@ function update(dt) {
       });
       titleHeldY = yLevel;
       titleCursor = res.cursor;
+      // §3 Menue-Klaenge am Titel: reine Cursor-/Aktions-Flanken, kein
+      // Event-Strom (sie koennen deshalb nicht mehrfach feuern).
+      if (titleCursor !== audioTitleCursor) {
+        audioTitleCursor = titleCursor;
+        uiTon('menu_move');
+      }
+      if (res.action) uiTon('menu_confirm');
       if (res.action === 'continue') {
         ladeSpielstand(savedGame);
         savedGame = null;
@@ -806,9 +1748,20 @@ function update(dt) {
       enterState('playing');
     }
   } else if (state === 'playing') {
-    if (fadePhase !== 'none') {
+    if (hitstop > 0 && fadePhase === 'none') {
+      // §5.1 DRITTER FREEZE-ZWEIG neben dem Fade (der Praezedenzfall steht
+      // direkt darunter): KEINE Welt-Updates. timeSec/stateTime (oben) und
+      // input.postUpdate (unten) laufen weiter, ebenso der Shake — er klingt
+      // auf der WANDUHR ab und wird auch hier neu angewandt (§5.2).
+      // Der EINGABE-PUFFER rettet den Ein-Frame-Impuls ueber den Freeze.
+      if (input.attack) attackPuffer = true;
+      hitstop -= 1;
+      shakeAnwenden();
+    } else if (fadePhase !== 'none') {
       // Fade: KEINE Welt-Updates (player/enemies/props/drops); Fade-Timer,
       // timeSec/stateTime und input.postUpdate laufen weiter.
+      shakeAnwenden(); // §5.2: Re-Anwendung in JEDEM Zweig
+      if (input.attack) attackPuffer = true;
       fadeT += dt;
       if (fadePhase === 'out' && fadeT >= FADE_TIME) {
         buildWorld(pendingPortal.target, pendingPortal.spawn, true);
@@ -824,8 +1777,28 @@ function update(dt) {
         saveNow();
       }
     } else {
+      // §5.1: der im Freeze gemerkte Angriffs-Pegel wird im ersten freien
+      // Frame wieder gesetzt — sonst frisst jeder Hitstop den Folgehieb.
+      //
+      // ACHTUNG, GEMESSEN: input.attack ist ein PEGEL, den input.js NUR bei
+      // Tastatur-/Touch-Ereignissen neu rechnet (recompute) — postUpdate()
+      // loescht ihn NICHT. Ein einfaches `input.attack = true` bliebe deshalb
+      // stehen, bis die naechste Taste kommt, und der Spieler haute
+      // ununterbrochen weiter (Gate "Gegenprobe ohne Freeze" gemessen ROT).
+      // Der Puffer gilt darum fuer GENAU EINEN player.update-Aufruf und wird
+      // danach zurueckgenommen; das Bestandsmuster attackSwallow oben setzt
+      // aus demselben Grund nur auf false (das heilt sich von selbst).
+      let pufferAktiv = false;
+      if (attackPuffer) {
+        attackPuffer = false;
+        if (!input.attack) {
+          input.attack = true;
+          pufferAktiv = true;
+        }
+      }
       events.length = 0;
       player.update(dt, input, map, enemies, events);
+      if (pufferAktiv) input.attack = false;
       // Bumerang NACH dem Spieler, VOR den Gegnern: Stun wirkt im selben Tick
       projectiles.update(dt, input, player, enemies, props, map, drops, events);
       updateEnemies(dt, enemies, player, map, drops, events);
@@ -839,6 +1812,7 @@ function update(dt) {
         if (!runFlags.openedChests.includes(k)) runFlags.openedChests.push(k);
       }
       updateDrops(dt, drops, player, events);
+      audioBeobachter(dt);
       syncPlayerLight();
       followPlayer();
 
@@ -943,11 +1917,17 @@ function update(dt) {
                 if (portalToastTimer <= 0) {
                   pushToast(block === 'locked' ? 'VERSCHLOSSEN' : 'VERSIEGELT', '#d6cbb1', 1);
                   portalToastTimer = 1.0;
+                  // §3: Einmal-Flanke, schon vom Bestand auf 1x/s gedrosselt.
+                  spieleSfx('portal_blocked');
                 }
               } else {
                 pendingPortal = portal;
                 fadePhase = 'out';
                 fadeT = 0;
+                // §3: der Portal-Klang haengt an genau diesem Uebergang. Er
+                // steht NICHT im Beobachter: die Flanke entsteht erst hier,
+                // und ab dem naechsten Tick friert der Fade den Zweig ein.
+                spieleSfx('portal');
                 break;
               }
             }
@@ -964,8 +1944,10 @@ function update(dt) {
           // Inventar öffnen: Flanke auf input.inventory; Tod/Sieg oben
           // haben Vorrang (state wäre dann nicht mehr 'playing').
           if (state === 'playing' && input.inventory && !inventoryHeld) {
+            uiTon('pause_toggle');
             enterState('inventory');
             inventoryUI.open();
+            audioInvCursor = inventoryUI.cursor;
             player.inv.newFlag = false;
           }
         }
@@ -974,7 +1956,22 @@ function update(dt) {
   } else if (state === 'inventory') {
     // HARTE PAUSE: keine Welt-Updates, victoryTimer pausiert mit; timeSec
     // läuft oben weiter (Fackel-Flackern). Zurück per 'close' aus dem UI.
-    if (inventoryUI.update(input, player) === 'close') {
+    const eq = player.inv.equipped;
+    const invVorher = `${eq.weapon ? eq.weapon.name : ''}|${eq.armor ? eq.armor.name : ''}|${eq.ring ? eq.ring.name : ''}`;
+    const invErg = inventoryUI.update(input, player);
+    // §3 Menue-Klaenge im Inventar: Cursor-Flanke ueber den oeffentlichen
+    // inventoryUI.cursor (inventory_ui.js:62), Anlegen ueber den
+    // Ausruestungs-Wechsel. Beides sind Einmal-Flanken, kein Event-Strom.
+    if (inventoryUI.cursor !== audioInvCursor) {
+      audioInvCursor = inventoryUI.cursor;
+      uiTon('menu_move');
+    }
+    const eqN = player.inv.equipped;
+    if (`${eqN.weapon ? eqN.weapon.name : ''}|${eqN.armor ? eqN.armor.name : ''}|${eqN.ring ? eqN.ring.name : ''}` !== invVorher) {
+      uiTon('menu_confirm');
+    }
+    if (invErg === 'close') {
+      uiTon('pause_toggle');
       attackSwallow = true; // Schliess-Tap nicht als Hieb werten
       enterState('playing'); // consumeConfirm an beiden Übergängen (enterState)
     }
@@ -1004,7 +2001,16 @@ function update(dt) {
       if (down && pauseCursor < PAUSE_MENU_ZONES.length - 1) pauseCursor += 1;
       if (input.confirm) wahl = pauseCursor;
     }
+    // §3/§4.3: Menue-Klaenge laufen ueber den uiBus und bleiben in der Pause
+    // HOERBAR — sonst waeren die neuen Schalter per Ohr nicht abnehmbar
+    // (Review P2-B3).
+    if (pauseCursor !== audioPauseCursor) {
+      audioPauseCursor = pauseCursor;
+      uiTon('menu_move');
+    }
+    if (wahl >= 0) uiTon('menu_confirm');
     if (wahl === 0) {
+      audioResume();          // §0.3: resume() haengt an JEDEM Pause-WEITER
       enterState('playing');
     } else if (wahl === 1) {
       toggleGott();
@@ -1015,6 +2021,24 @@ function update(dt) {
       fpsFrames = 0;
       fpsSumme = 0;
       fpsSpitze = 0;
+      input.consumeConfirm();
+    } else if (wahl === 3) {
+      // §6.1/§6.2 MUSIK. Der Reducer rechnet, main.js reicht nur den String
+      // durch (mixer.js ist Node-pruefbar, main.js nicht).
+      audioSettings = mixerToggle(audioSettings, 'music');
+      audioEinstellungenSchreiben();
+      audioPegelSetzen(BUS.duckRampe);
+      if (audioSettings.music) musikFuerZustand(MUSIK_BLENDE);
+      input.consumeConfirm();
+    } else if (wahl === 4) {
+      // §6.1/§6.2 TON. Der Bestaetigungston oben lief NOCH auf dem alten
+      // Pegel (Review P2-B3: sonst waere das Ausschalten selbst
+      // rueckmeldungsfrei); stumm geschaltet wird erst jetzt. Beim
+      // EINschalten kommt die Rueckmeldung entsprechend danach.
+      audioSettings = mixerToggle(audioSettings, 'sfx');
+      audioEinstellungenSchreiben();
+      audioPegelSetzen(BUS.duckRampe);
+      if (audioSettings.sfx) uiTon('menu_confirm');
       input.consumeConfirm();
     }
   } else if (state === 'gameover') {
@@ -1393,6 +2417,17 @@ function drawWorld() {
   // (GP6 §4.1) und seither unveraendert.
   // §2.3: mapDef.ambientTint als 6. Argument durchreichen (Farbtemperatur je Map).
   lighting.draw(ctx, camera, frameLights, mapDef.ambient, timeSec, mapDef.ambientTint);
+  // SLICE 5 §5.3 — TREFFER-FLASH. NACH lighting.draw auf den HAUPT-ctx, die
+  // Deckung steckt in der rgba-FUELLFARBE bei globalAlpha 1 (Muster
+  // hud.js:785/833). Beide Detektoren bleiben damit stumm: fadeAlpha verlangt
+  // fillStyle === '#000' UND 0 < alpha < 1, ambientAlpha sieht nur
+  // Nicht-Haupt-Canvases. Vom Pruefer in genau dieser Form DAUERHAFT-AN
+  // gemessen: check_main 25 / check_boss 33 / check_inventory 25 gruen
+  // (Review P1-m4). __noFlash schaltet ihn fuer das Messrig ab.
+  if (flashFrames > 0 && !rigAus('__noFlash')) {
+    ctx.fillStyle = 'rgba(255,244,220,0.18)';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
   // §2.4: Funken NACH dem Dunkel-Overlay und VOR der Vignette — sie sind
   // selbstleuchtende Deko und werden vom Overlay NICHT abgedunkelt.
   // §5.D3 [GP5]: frameLights + ambient durchreichen — die Staub-Motes werden
@@ -1428,7 +2463,10 @@ function render() {
   else if (state === 'victory') drawVictory(ctx, player, timeSec);
   // §4.1 Pause-Overlay ueber der eingefrorenen Welt (HUD-Sprache).
   if (state === 'paused') {
-    drawPause(ctx, { cursor: pauseCursor, god: godMode, fps: fpsSichtbar });
+    drawPause(ctx, {
+      cursor: pauseCursor, god: godMode, fps: fpsSichtbar,
+      musik: audioSettings.music, ton: audioSettings.sfx,
+    });
   }
   if (state === 'playing' && fadePhase !== 'none') {
     const a = fadePhase === 'out'
