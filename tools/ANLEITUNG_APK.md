@@ -58,6 +58,45 @@ kommt nicht aus dem Play Store. Das ist bei selbstgebauten Apps immer so.
 
 ---
 
+## Für den Hörtest (Slice 5)
+
+Ab Slice 5 hat Grimlight Musik und Klang. Damit du in Ruhe zuhören kannst:
+
+**1. Bildschirm-Timeout hochstellen.**
+Ein Hörtest ist ein Zuhör-Test: wenn du das Handy fünf Minuten nicht
+anfasst, schaltet Android den Bildschirm ab, die App geht in den Hintergrund
+und **die Musik stoppt** (so ist es gewollt: beim App-Wechsel wird der Ton
+angehalten und der Spielstand geschrieben). Stell deshalb vorher unter
+*Einstellungen → Display → Bildschirm-Timeout* auf **5 Minuten oder länger**.
+Ein Wachhalte-Plugin bauen wir in diesem Slice bewusst nicht ein.
+
+**2. Lautstärke: erst der Handy-Lautsprecher, Bluetooth später.**
+Hör den ersten Durchgang über den **Gerätelautsprecher oder ein Kabel** und
+dreh die **Medien**-Lautstärke auf etwa zwei Drittel. Bluetooth-Kopfhörer
+legen 100 bis 300 ms Verzögerung obendrauf; dann klingt der Schwerthieb
+später, als er sich anfühlt. Das ist kein Fehler im Spiel, sondern der
+Funkweg. Zweiter Durchgang gern über Bluetooth, aber bewerte die
+**Treffer-Wucht** (Ruckler, Blitz, Erschütterung) nach dem ersten Durchgang:
+die wirkt sofort, auch wenn der Ton hinterherhinkt.
+
+**3. Die zwei neuen Schalter stecken in der Pause.**
+Zurück-Taste oder Pause-Knopf, dann stehen dort fünf Zeilen:
+WEITER / GOTT / FPS / **MUSIK** / **TON**. MUSIK schaltet die Hintergrund-
+musik, TON die Effekte. Beides bleibt gespeichert, auch nach dem Neustart.
+Die Menü-Klänge bleiben in der Pause hörbar, damit du die Schalter auch
+dann noch hörst, wenn du die Musik ausgeschaltet hast.
+
+**4. Der erste Ton kommt erst nach der ersten Berührung.**
+Android und iOS erlauben Klang erst nach einer echten Geste. Auf dem
+Titelbild bleibt es also still, bis du einmal tippst — danach läuft die
+Musik. Das ist Vorschrift des Systems, kein Fehler.
+
+Was du im Hörtest melden solltest: was **nervt** (zu laut, zu schrill, zu
+oft), was **fehlt** (eine Stelle, die sich stumm anfühlt) und ob die Musik
+zur jeweiligen Karte **passt**. Zwei Nachbesserungsrunden sind eingeplant.
+
+---
+
 ## Drei Dinge, die du wissen solltest
 
 **Die Zurück-Taste beendet das Spiel nicht.**

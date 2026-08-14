@@ -4531,9 +4531,16 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       tap(100, 30);
       check('S4-§7F(c) §5.5 Bestands-Tap (100,30) trifft weiter Zeile 0 (Anker LIST_Y unveraendert)',
         ui.cursor === 0);
-      ui.cursor = 0;
-      tap(100, 45);
-      check('S4-§7F(c) §5.5 Zeile 0 reicht jetzt bis y 45 (ROW_H 20 = 7,5 mm statt 16 = 6,0 mm)',
+      // S5-§7C SANKTIONIERT (Spec Slice 5 §6.3/§7.C): ROW_H 20 -> 17, damit die
+      // Liste (26..145) und der ANLEGEN-Knopf (145..167) in y DISJUNKT sind —
+      // vorher lagen Zeile 5/6 unter dem Knopf und waren im rechten Drittel
+      // nicht anwaehlbar. LIST_Y (26) und der X-Anker (288,10) bleiben
+      // UNVERAENDERT, deshalb bleiben (100,30) und (290,12) hier und in
+      // smoke:1249-1256 (Slice-2-Block) unangetastet gruen.
+      // 17 px = 6,40 mm liegt weiter ueber dem 6-mm-Gate.
+      ui.cursor = 1;
+      tap(100, 42);
+      check('S5-§7C §6.3 Zeile 0 reicht jetzt bis y 42 (ROW_H 17 = 6,40 mm statt 20 = 7,53 mm)',
         ui.cursor === 0);
       tap(100, 50);
       check('S4-§7F(c) §5.5 y 50 liegt in Zeile 1 (Zeilenhoehe wirklich 20, nicht groesser)',
@@ -4561,12 +4568,19 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
 
     // Pause-Menue-Geometrie: eine Quelle (hud.js), main.js macht daraus den
     // Hittest.
-    check('S4-§7F(d) §4.1 PAUSE_MENU_ZONES: 3 getrennte Zonen im Bild, >= 6 mm hoch',
-      PAUSE_MENU_ZONES.length === 3
+    // S5-§7B SANKTIONIERT (Spec Slice 5 §6.1/§7.B, Review P1-m6): das Menue
+    // traegt seit Slice 5 FUENF Zeilen (WEITER/GOTT/FPS/MUSIK/TON). Geaendert
+    // sind genau drei Dinge: die Anzahl 3 -> 5, der Prueftext (er wuerde sonst
+    // luegen) und die indexweise ausgeschriebene Nachbarschaftskette, die zur
+    // Schleife ueber ALLE Zonen wird. Das 6-mm-Gate bleibt Wort fuer Wort
+    // stehen (P1-m5: h >= 16 px ist die bindende Zahl); die vollstaendige
+    // Ueberlappungspruefung ueber alle 10 Paare steht additiv in S5-§7A(g).
+    check('S5-§7B §4.1/§6.1 PAUSE_MENU_ZONES: 5 getrennte Zonen im Bild, >= 6 mm hoch',
+      PAUSE_MENU_ZONES.length === 5
       && PAUSE_MENU_ZONES.every((z) => z.x >= 0 && z.y >= 0 && z.x + z.w <= 320 && z.y + z.h <= 180)
       && PAUSE_MENU_ZONES.every((z) => z.h * MM_PRO_PX >= 6)
-      && PAUSE_MENU_ZONES[1].y >= PAUSE_MENU_ZONES[0].y + PAUSE_MENU_ZONES[0].h
-      && PAUSE_MENU_ZONES[2].y >= PAUSE_MENU_ZONES[1].y + PAUSE_MENU_ZONES[1].h,
+      && PAUSE_MENU_ZONES.every((z, i) => i === 0
+        || z.y >= PAUSE_MENU_ZONES[i - 1].y + PAUSE_MENU_ZONES[i - 1].h),
       PAUSE_MENU_ZONES.map((z) => `${z.y}+${z.h}`).join(' '));
 
     const rec0 = mkRec();
@@ -4861,6 +4875,926 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     }
   }
 }
+
+// ===========================================================================
+// SLICE 5 — ADDITIVE BLOECKE S5-§7A(a)..(h) (Spec §7.A, Phase 2 / Integrator).
+//
+// REGELN, unter denen diese Bloecke stehen (Spec §0.4/§7.D):
+//   * NUR ADDITIV. Oberhalb dieser Zeile sind GENAU ZWEI Stellen angefasst,
+//     beide von §7 ABSCHLIESSEND sanktioniert und mit S5-§7B / S5-§7C
+//     markiert (Pause-Zonen 3->5 und die eine Inventar-Zeilenkante).
+//   * Alle neuen Module kommen per `await import(...)` IM BLOCK herein — die
+//     Kopf-Importe der Datei bleiben Bestand (Muster S4-§7F).
+//   * Die mm-Rechnung wird hier NEU hergeleitet und nicht aus dem
+//     S4-Block geerbt: der steht in einem eigenen {}-Rahmen.
+// ===========================================================================
+{
+  // Referenzgeraet wie S4-§7F (1080x2400, 6,5", dpr 3, quer) — NEU gerechnet,
+  // damit eine falsche Herleitung hier auffliegt und nicht abgeschrieben wird.
+  const PPI_S5 = Math.hypot(1080, 2400) / 6.5;
+  const MM_PRO_PX_S5 = Math.min(Math.floor(2400 / 320), Math.floor(1080 / 180)) * (25.4 / PPI_S5);
+
+  const quelle = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+  // Quelltext OHNE Kommentare — dieselbe Form wie der Bestands-Waechter
+  // smoke:4854 (ein Waechter, der Kommentare mitliest, faende dort seinen
+  // eigenen Suchbegriff).
+  const ohneKommentar = (s) => s.replace(/^[ \t]*\/\/.*$/gm, '').replace(/[ \t]+\/\/.*$/gm, '');
+  const jsDateien = (verz) => {
+    const out = [];
+    for (const e of readdirSync(new URL(`../${verz}`, import.meta.url), { withFileTypes: true })) {
+      if (e.isDirectory()) out.push(...jsDateien(`${verz}/${e.name}`));
+      else if (e.name.endsWith('.js')) out.push(`${verz}/${e.name}`);
+    }
+    return out;
+  };
+  const MAIN = ohneKommentar(quelle('game/js/main.js'));
+
+  const chip = await import('../game/js/audio/chiptune.js');
+  const mix = await import('../game/js/audio/mixer.js');
+  const sfxMod = await import('../game/js/audio/sfx.js');
+  const songMod = await import('../game/js/audio/songs/index.js');
+
+  // -----------------------------------------------------------------------
+  // (a) §2.1/A1(a)+(e) CHIPTUNE-KERN: Determinismus, Vertrag, Monophonie,
+  //     Notennamen, Song-Pruefung. Alles rein, alles in Node.
+  // -----------------------------------------------------------------------
+  {
+    const { compileSong, notenFreq, maxGleichzeitig, MAX_KANAELE } = chip;
+    const SONG_SCHLUESSEL = ['title', 'graveyard', 'catacombs', 'fluestergruft',
+      'boss_idle', 'boss_aggro', 'victory', 'gameover'];
+    check('S5-§7A(a) §2.3 alle acht Song-Schluessel liegen vor (4 Karten + Boss-Ebene + 2 Stinger)',
+      SONG_SCHLUESSEL.every((k) => !!songMod.SONGS[k]),
+      Object.keys(songMod.SONGS).join(','));
+
+    // A1(a): DREI Laeufe, identische Ereignisliste. Verglichen wird die
+    // EREIGNIS-Prüfsumme (nicht PCM): dieser Pfad ist reine IEEE754-Arithmetik
+    // und damit auch ueber Engine-Versionen bit-exakt (Review P2-m1).
+    const evHash = (ev) => createHash('sha256').update(ev.map(
+      (e) => `${e.t.toFixed(9)}|${e.dauer.toFixed(9)}|${e.ch}|${e.freq.toFixed(9)}|${e.instr}|${e.vol}|${e.fx}|${e.slideTo === null || e.slideTo === undefined ? '-' : e.slideTo.toFixed(9)}`,
+    ).join('\n')).digest('hex').slice(0, 16);
+    let determ = true;
+    let vertrag = true;
+    let mono = true;
+    let ueberhang = true;
+    let kanaele = true;
+    const det = [];
+    for (const k of SONG_SCHLUESSEL) {
+      const song = songMod.songFuer(k);
+      const a = compileSong(song);
+      const b = compileSong(song);
+      const c = compileSong(song);
+      const h = evHash(a.events);
+      if (h !== evHash(b.events) || h !== evHash(c.events)) determ = false;
+      det.push(`${k}:${h}`);
+      // P2-B5: GENAU diese drei Schluessel, loopFrom + loopTime = Gesamtdauer.
+      const schl = Object.keys(a).sort().join(',');
+      const ende = Math.max(...a.events.map((e) => e.t + e.dauer));
+      if (schl !== 'events,loopFrom,loopTime' || !(a.loopFrom >= 0)
+        || !(a.loopTime > 0) || !(a.loopFrom < a.loopFrom + a.loopTime)) vertrag = false;
+      // Loop-Naht: kein Ereignis ragt ueber das Songende hinaus.
+      if (ende > a.loopFrom + a.loopTime + 1e-9) ueberhang = false;
+      // Monophonie je Kanal (P2-m3): keine zwei Ereignisse desselben Kanals
+      // ueberlappen sich.
+      const proCh = new Map();
+      for (const e of a.events) {
+        if (!proCh.has(e.ch)) proCh.set(e.ch, []);
+        proCh.get(e.ch).push(e);
+      }
+      for (const liste of proCh.values()) {
+        liste.sort((x, y) => x.t - y.t);
+        for (let i = 0; i < liste.length - 1; i++) {
+          if (liste[i].t + liste[i].dauer > liste[i + 1].t + 1e-9) mono = false;
+        }
+      }
+      if (maxGleichzeitig(a.events) > MAX_KANAELE) kanaele = false;
+    }
+    check('S5-§7A(a) A1(a) compileSong ist deterministisch: 3 Laeufe je Song, identische Ereignis-Pruefsumme',
+      determ, det.join(' '));
+    check('S5-§7A(a) A1(a)/P2-B5 compileSong liefert GENAU {events, loopFrom, loopTime}',
+      vertrag);
+    check('S5-§7A(a) P2-B5 kein Ereignis ragt ueber das Songende hinaus (Loop-Naht ohne Klick)',
+      ueberhang);
+    check('S5-§7A(a) A1(e)/P2-m3 Monophonie je Kanal: keine Ueberlappung in einem Kanal',
+      mono);
+    check('S5-§7A(a) A1(c) hoechstens MAX_KANAELE = 4 gleichzeitige Musikstimmen je Song',
+      kanaele && MAX_KANAELE === 4, `MAX_KANAELE=${MAX_KANAELE}`);
+
+    // Monophonie SCHARF gestellt: ein Song, dessen erste Note ueber die
+    // zweite hinausragt, muss gekuerzt werden (nicht gestapelt).
+    {
+      const roh = {
+        bpm: 120,
+        rowsPerBeat: 4,
+        loopFrom: 0,
+        instruments: { p: { art: 'pulse', duty: 0.5, vol: 0.2 } },
+        patterns: { A: [['C-4:p:8', '...', 'E-4:p:1', '...']] },
+        order: ['A'],
+      };
+      const k = compileSong(roh);
+      const sekProReihe = 60 / 120 / 4;
+      check('S5-§7A(a) P2-m3 Gegenprobe: eine zu lange Note wird beim Neuanschlag ABGESCHNITTEN',
+        k.events.length === 2 && Math.abs(k.events[0].dauer - 2 * sekProReihe) < 1e-12,
+        `dauer ${k.events[0].dauer} statt ${2 * sekProReihe}`);
+    }
+
+    // A1(e) notenFreq: wirft bei unbekannt, kennt das deutsche H = B.
+    const wirft = (f) => { try { f(); return false; } catch { return true; } };
+    check('S5-§7A(a) A1(e) notenFreq: A-4 = 440 Hz und H-4 === B-4 (deutsches H, P2-m2)',
+      Math.abs(notenFreq('A-4') - 440) < 1e-9 && notenFreq('H-4') === notenFreq('B-4'));
+    check('S5-§7A(a) A1(e) notenFreq WIRFT bei unbekannter Note (kein stilles null)',
+      wirft(() => notenFreq('X-4')) && wirft(() => notenFreq('C4'))
+      && wirft(() => notenFreq('C-10')) && wirft(() => notenFreq(440)),
+      'X-4 / C4 / C-10 / Zahl');
+    check('S5-§7A(a) §2.1 Slide s<NOTE> traegt die Zielnote als Hz im Ereignis',
+      (() => {
+        const k = compileSong({
+          bpm: 120,
+          rowsPerBeat: 4,
+          loopFrom: 0,
+          instruments: { p: { art: 'pulse', duty: 0.5, vol: 0.2 } },
+          patterns: { A: [['C-4:p:4:sE-4', '...', '...', '...']] },
+          order: ['A'],
+        });
+        return Math.abs(k.events[0].slideTo - notenFreq('E-4')) < 1e-9 && k.events[0].fx.includes('s');
+      })());
+    check('S5-§7A(a) P2-m2 pruefeSong wirft bei ragged patterns, unbekanntem Instrument und > 4 Kanaelen',
+      wirft(() => compileSong({
+        bpm: 120, rowsPerBeat: 4, loopFrom: 0,
+        instruments: { p: { art: 'pulse', vol: 0.2 } },
+        patterns: { A: [['C-4:p:1', '...'], ['...']] }, order: ['A'],
+      }))
+      && wirft(() => compileSong({
+        bpm: 120, rowsPerBeat: 4, loopFrom: 0,
+        instruments: { p: { art: 'pulse', vol: 0.2 } },
+        patterns: { A: [['C-4:q:1']] }, order: ['A'],
+      }))
+      && wirft(() => compileSong({
+        bpm: 120, rowsPerBeat: 4, loopFrom: 0,
+        instruments: { p: { art: 'pulse', vol: 0.2 } },
+        patterns: { A: [['C-4:p:1'], ['...'], ['...'], ['...'], ['...']] }, order: ['A'],
+      })));
+  }
+
+  // -----------------------------------------------------------------------
+  // (b) A1(b) PEAK — ZWEISTUFIG (P1-M9/P2-B1). Gemessen wird ueber die
+  //     GEMEINSAME Signatur renderPCM({instruments, events}) — sie rendert
+  //     Songs UND SFX — und zwar VOR jedem Limiter: ein tanh im Messpfad
+  //     macht das Gate prinzipiell unverletzbar (tanh(x) < 1 fuer alle x).
+  // -----------------------------------------------------------------------
+  {
+    const { songBundle, renderPCM, pcmPeak } = chip;
+    const { sfxRender, SFX_KEYS } = sfxMod;
+    const RATE = 22050;   // Mess-Rate; halbiert die Laufzeit, aendert den Peak nicht
+
+    const chipQuelle = ohneKommentar(quelle('game/js/audio/chiptune.js'));
+    const renderKoerper = chipQuelle.slice(chipQuelle.indexOf('export function renderPCM'));
+    check('S5-§7A(b) P2-B1 KEIN tanh/Limiter im Messpfad von renderPCM (sonst misst das Gate sein Gegenteil)',
+      !/Math\.tanh|Math\.min\(1, Math\.max\(-1/.test(renderKoerper)
+      && !/Math\.tanh/.test(chipQuelle),
+      /Math\.tanh/.test(chipQuelle) ? 'tanh im Klangpfad' : 'sauber');
+
+    let maxSong = 0;
+    const songPeaks = [];
+    for (const k of Object.keys(songMod.SONGS)) {
+      const p = pcmPeak(renderPCM(songBundle(songMod.songFuer(k)), RATE));
+      songPeaks.push(`${k} ${p.toFixed(3)}`);
+      if (p > maxSong) maxSong = p;
+    }
+    check('S5-§7A(b) A1(b) EINZEL-Peak je Song <= 0,70 (gemessen vor jedem Limiter)',
+      maxSong <= 0.70, songPeaks.join(' | '));
+
+    let maxSfx = 0;
+    const sfxPeaks = [];
+    for (const k of SFX_KEYS) {
+      // Gold-Treppe und Schritt-Varianten in ihrer LAUTESTEN Auspraegung.
+      const varianten = k === 'gold'
+        ? [0, 1, 2, 3, 4, 5, 6, 7].map((stufe) => ({ stufe }))
+        : (k === 'step' ? [{ variante: 0 }, { variante: 1 }] : [{}]);
+      for (const o of varianten) {
+        const p = pcmPeak(renderPCM(sfxRender(k, o), RATE));
+        if (p > maxSfx) maxSfx = p;
+        sfxPeaks.push(p);
+      }
+    }
+    check('S5-§7A(b) A1(b) EINZEL-Peak je SFX <= 0,50 (alle Gold-Stufen und beide Schritt-Varianten)',
+      maxSfx <= 0.50, `max ${maxSfx.toFixed(3)} ueber ${sfxPeaks.length} Rezepte`);
+
+    // SUMMEN-Gate: Musik-Bus + die 12 lautesten SFX gleichzeitig, ueber den
+    // Master. Genau die Zahlen, mit denen main.js den Graphen baut.
+    const zwoelfLauteste = sfxPeaks.slice().sort((a, b) => b - a).slice(0, mix.BUS.maxStimmen);
+    const sfxSumme = zwoelfLauteste.reduce((a, b) => a + b, 0);
+    const gesamt = (maxSong * mix.BUS.music + sfxSumme * mix.sfxBusGain(mix.BUS.maxStimmen)) * mix.BUS.master;
+    check('S5-§7A(b) A1(b) SUMMEN-Gate: Musik-Bus + 12 Worst-Case-SFX ueber den Master <= 0,90',
+      gesamt <= 0.90,
+      `(${maxSong.toFixed(3)}*${mix.BUS.music} + ${sfxSumme.toFixed(3)}*${mix.sfxBusGain(12).toFixed(4)}) * ${mix.BUS.master} = ${gesamt.toFixed(4)}`);
+
+    // Gegenprobe, dass das Gate ueberhaupt zubeissen kann.
+    const kontrolle = (1.0 * mix.BUS.music + 12 * 0.9 * mix.sfxBusGain(12)) * mix.BUS.master;
+    check('S5-§7A(b) Gegenprobe: mit 12 SFX a 0,9 und einem Song a 1,0 REISST dasselbe Gate',
+      kontrolle > 0.90, kontrolle.toFixed(3));
+  }
+
+  // -----------------------------------------------------------------------
+  // (c) §2.4/A1(c)+(e) MIXER — reiner Reducer, Stimmenverwaltung, Busgewinne.
+  // -----------------------------------------------------------------------
+  {
+    const { defaultSettings, parseSettings, serializeSettings, toggle,
+      leereStimmen, allocVoice, freeVoice, aktiveStimmen, sfxBusGain, BUS } = mix;
+
+    const kombis = [{ music: true, sfx: true }, { music: true, sfx: false },
+      { music: false, sfx: true }, { music: false, sfx: false }];
+    check('S5-§7A(c) A1(e) Settings-Rundlauf: parse(serialize(s)) traegt beide Schalter zurueck',
+      kombis.every((s) => {
+        const r = parseSettings(serializeSettings(s));
+        return r.music === s.music && r.sfx === s.sfx;
+      }));
+    const muell = [null, undefined, '', '{', '[]', '{"v":2,"music":false}', '"text"', '{"v":1}'];
+    check('S5-§7A(c) A1(e) parseSettings wirft NIE und faellt hart auf die Werkseinstellung zurueck',
+      muell.every((m) => {
+        let r = null;
+        try { r = parseSettings(m); } catch { return false; }
+        return r && typeof r.music === 'boolean' && typeof r.sfx === 'boolean';
+      })
+      && parseSettings('{"v":2,"music":false}').music === true
+      && parseSettings(undefined).music === defaultSettings().music);
+    check('S5-§7A(c) §2.4 toggle ist ein REINER Reducer (neues Objekt, Original unveraendert)',
+      (() => {
+        const a = defaultSettings();
+        const b = toggle(a, 'music');
+        return b !== a && a.music === true && b.music === false && b.sfx === true
+          && toggle(a, 'unbekannt').music === a.music;
+      })());
+    check('S5-§7A(c) A1(e) Audio-Kern ist ohne AudioContext inert: kein Browser-Global in game/js/audio/**',
+      jsDateien('game/js/audio').every((f) => !/\b(window|document|localStorage|AudioContext)\b/
+        .test(ohneKommentar(quelle(f)))),
+      jsDateien('game/js/audio').length + ' Dateien');
+
+    // A1(c) Stimmen: <= 12, aelteste fliegt.
+    let st = leereStimmen();
+    const geworfen = [];
+    for (let i = 1; i <= 20; i++) {
+      const a = allocVoice(st, i, i * 0.01);
+      st = a.state;
+      if (a.evicted) geworfen.push(a.evicted.id);
+    }
+    check('S5-§7A(c) A1(c) hoechstens 12 SFX-Stimmen, und es fliegt genau die AELTESTE',
+      aktiveStimmen(st) === BUS.maxStimmen && BUS.maxStimmen === 12
+      && geworfen.join(',') === '1,2,3,4,5,6,7,8',
+      `${aktiveStimmen(st)} aktiv, geworfen ${geworfen.join(',')}`);
+    check('S5-§7A(c) A1(c) freeVoice gibt genau eine Stimme frei und liefert ein neues Objekt',
+      (() => {
+        const vor = aktiveStimmen(st);
+        const neu = freeVoice(st, 15);
+        return neu !== st && aktiveStimmen(neu) === vor - 1 && aktiveStimmen(st) === vor;
+      })());
+    check('S5-§7A(c) §4.1 Busgewinne: sfxBusGain faellt monoton und startet bei BUS.sfx',
+      Math.abs(sfxBusGain(1) - BUS.sfx) < 1e-12
+      && [2, 3, 6, 12].every((n) => sfxBusGain(n) < sfxBusGain(n - 1))
+      && BUS.master === 0.8 && BUS.duck === 0.32,
+      `1:${sfxBusGain(1).toFixed(3)} 12:${sfxBusGain(12).toFixed(3)} master ${BUS.master} duck ${BUS.duck}`);
+  }
+
+  // -----------------------------------------------------------------------
+  // (d) §2.2/A1(d) SFX-KATALOG + ZUORDNUNGSTABELLE. Die Pflichtliste steht
+  //     hier WOERTLICH aus der Spec — eine Umbenennung in sfx.js faellt damit
+  //     auf, statt still eine Leerstelle zu hinterlassen.
+  // -----------------------------------------------------------------------
+  {
+    const PFLICHT = ['sword_swing', 'sword_hit', 'sword_blocked', 'enemy_die', 'gold',
+      'potion_drink', 'potion_pickup', 'pickup_generic', 'chest_open', 'vase_break',
+      'boomerang_throw', 'boomerang_catch', 'portal', 'portal_blocked', 'step',
+      'pause_toggle', 'menu_move', 'menu_confirm', 'level_up', 'player_hurt',
+      'boss_telegraph', 'boss_dash', 'hound_jump', 'boss_die',
+      'game_over_stinger', 'victory_stinger'];
+    check('S5-§7A(d) §2.2 alle 26 Pflicht-SFX-Schluessel existieren',
+      PFLICHT.length === 26 && PFLICHT.every((k) => !!sfxMod.SFX[k]),
+      PFLICHT.filter((k) => !sfxMod.SFX[k]).join(',') || 'vollstaendig');
+    check('S5-§7A(d) §2.2 sfxRezept WIRFT bei unbekanntem Schluessel (kein stilles Schweigen)',
+      (() => { try { sfxMod.sfxRezept('gibt_es_nicht'); return false; } catch { return true; } })());
+    check('S5-§7A(d) P2-B3 Menue- und Stinger-Klaenge haengen am uiBus (in der Pause hoerbar)',
+      ['pause_toggle', 'menu_move', 'menu_confirm', 'game_over_stinger', 'victory_stinger']
+        .every((k) => sfxMod.sfxBusVon(k) === 'ui')
+      && ['sword_hit', 'step', 'gold'].every((k) => sfxMod.sfxBusVon(k) === 'sfx'));
+    check('S5-§7A(d) §2.2 Gold-Tonhoehentreppe: 8 Stufen, streng steigend',
+      sfxMod.GOLD_TREPPE.length === 8
+      && sfxMod.GOLD_TREPPE.every((v, i) => i === 0 || v > sfxMod.GOLD_TREPPE[i - 1])
+      && sfxMod.sfxRender('gold', { stufe: 7 }).events[0].freq
+        > sfxMod.sfxRender('gold', { stufe: 0 }).events[0].freq,
+      sfxMod.GOLD_TREPPE.join(','));
+
+    // A1(d) VOLLSTAENDIGKEIT: jeder Ereignistyp, den entities/ ueberhaupt in
+    // den Strom legt, hat im Beobachter eine Zeile — Buendelung erlaubt,
+    // Leerstellen nicht (P1-M3). Die Typen werden aus dem QUELLTEXT von
+    // entities/** gelesen, nicht abgeschrieben.
+    const entQuelle = jsDateien('game/js/entities').map((f) => quelle(f)).join('\n');
+    const typen = new Set();
+    for (const m of entQuelle.matchAll(/events\.push\(\s*'([a-z_]+)'\s*\)/g)) typen.add(m[1]);
+    for (const m of entQuelle.matchAll(/events\.push\(\s*\{\s*type:\s*'([a-z_]+)'/g)) typen.add(m[1]);
+    for (const m of entQuelle.matchAll(/deathEvent:\s*'([a-z_]+)'/g)) typen.add(m[1]);
+    const ohneZeile = [...typen].filter((t) => !new RegExp(`hasEvent\\(events, '${t}'\\)`).test(MAIN));
+    check('S5-§7A(d) A1(d) Zuordnungstabelle VOLLSTAENDIG: JEDER Ereignistyp aus entities/** wird ausgewertet',
+      typen.size >= 14 && ohneZeile.length === 0,
+      `${typen.size} Typen, ohne Zeile: ${ohneZeile.join(',') || '-'}`);
+    // Truhen klingen ueber die ZWEITE props-Schleife (Flanke opened), nicht
+    // ueber den Event-Strom — der traegt chest_opened nur fuer die Siegtruhe.
+    check('S5-§7A(d) A1(d) Truhen und Vasen haengen an der Flanke der zweiten props-Schleife',
+      /p\.kind === 'chest'/.test(MAIN) && /spieleSfx\('chest_open'\)/.test(MAIN)
+      && /spieleSfx\('vase_break'\)/.test(MAIN));
+    // Und die Gegenrichtung: jeder gespielte Schluessel existiert wirklich.
+    const gerufen = [...new Set([...MAIN.matchAll(/spieleSfx\('([a-z_]+)'/g)].map((m) => m[1]))];
+    check('S5-§7A(d) A1(d) jede spieleSfx-Zeile in main.js zeigt auf einen EXISTIERENDEN Schluessel',
+      gerufen.length >= 20 && gerufen.every((k) => !!sfxMod.SFX[k]),
+      `${gerufen.length} Schluessel, unbekannt: ${gerufen.filter((k) => !sfxMod.SFX[k]).join(',') || '-'}`);
+  }
+
+  // -----------------------------------------------------------------------
+  // (e) §0.2 ZEITARGUMENT-WAECHTER ueber game/js/** — der Grund, warum dieser
+  //     Slice den Bestands-Waechter smoke:4854 ueberhaupt ueberlebt: dort wird
+  //     `.stop()` in main.js VERBOTEN und `.start()` auf GENAU EINEN Treffer
+  //     festgenagelt (den Loop). Ein WebAudio-Knoten mit leeren Klammern
+  //     (osc.start()) haette den Slice unauflösbar in die Klemme gefahren.
+  // -----------------------------------------------------------------------
+  {
+    const dateien = jsDateien('game/js');
+    const treffer = [];
+    let starts = 0;
+    let stops = 0;
+    for (const f of dateien) {
+      const c = ohneKommentar(quelle(f));
+      const s = (c.match(/\.start\(\)/g) || []).length;
+      const t = (c.match(/\.stop\(\)/g) || []).length;
+      starts += s;
+      stops += t;
+      if (s || t) treffer.push(`${f.split('/').pop()} start${s}/stop${t}`);
+    }
+    check('S5-§7A(e) §0.2 game/js/** enthaelt KEIN einziges .stop() mit leeren Klammern',
+      stops === 0, treffer.join(' '));
+    check('S5-§7A(e) §0.2 genau EIN .start() ohne Zeitargument in game/js/** — und das ist loop.start()',
+      starts === 1 && /createLoop\(\{ update, render \}\)\.start\(\);/.test(MAIN),
+      `${starts} Treffer in ${dateien.length} Dateien: ${treffer.join(' ') || '-'}`);
+    // Und die Gegenrichtung: die WebAudio-Knoten werden wirklich MIT Zeit
+    // gestartet und gestoppt (behavioral nachgemessen in Block (h)).
+    check('S5-§7A(e) §0.2 der Adapter startet/stoppt AUSSCHLIESSLICH mit Zeitargument',
+      (MAIN.match(/\.start\(t0\)/g) || []).length >= 2
+      && (MAIN.match(/\.stop\(t0 \+/g) || []).length >= 2
+      && /q\.stop\(t\)/.test(MAIN));
+  }
+
+  // -----------------------------------------------------------------------
+  // (f) §5 GAME-FEEL — Quelltext-Waechter fuer die Zahlen und Orte, die die
+  //     Messungen des Reviews festgeschrieben haben, plus die beiden
+  //     Partikel-Deckel. Das VERHALTEN misst Block (h) am gebooteten Spiel.
+  // -----------------------------------------------------------------------
+  {
+    // A3: 2/3/4 sind gemessene TEST-Grenzen (H = 4 kippt check_inventory).
+    check('S5-§7A(f) A3 Hitstop-Zahlen stehen als Konstanten: H/K/B = 2/3/4',
+      /const HITSTOP_H = 2;/.test(MAIN) && /const HITSTOP_K = 3;/.test(MAIN)
+      && /const HITSTOP_B = 4;/.test(MAIN));
+    // P1-B2: der Spieler-Schaden-Zweig darf den Hitstop NICHT anfassen.
+    const schadenBlock = MAIN.slice(MAIN.indexOf('const inv = player.invulnTimer'),
+      MAIN.indexOf('audioInvuln = inv;'));
+    check('S5-§7A(f) A3/P1-B2 der SPIELER-SCHADEN-Zweig setzt NIRGENDS einen Hitstop (nur Flash + Shake)',
+      schadenBlock.length > 40 && !/hitstop/i.test(schadenBlock)
+      && /shakeAusloesen\(/.test(schadenBlock) && /flashFrames/.test(schadenBlock),
+      `${schadenBlock.length} Zeichen Zweig`);
+    check('S5-§7A(f) §7.A timeSec laeuft im Freeze weiter: update() zaehlt VOR jeder Zweigwahl',
+      /function update\(dt\) \{\s*timeSec \+= dt;\s*stateTime \+= dt;\s*/.test(MAIN)
+      && MAIN.indexOf('shakeFortschreiben();') < MAIN.indexOf("if (hitstop > 0 && fadePhase === 'none')"));
+    check('S5-§7A(f) §5.1 der Freeze-Zweig puffert den Angriffs-Pegel, statt ihn zu verschlucken',
+      /if \(hitstop > 0 && fadePhase === 'none'\) \{[\s\S]{0,600}?if \(input\.attack\) attackPuffer = true;/.test(MAIN)
+      && /attackPuffer = false;[\s\S]{0,200}?input\.attack = true;/.test(MAIN));
+    // P1-M2: doppelte Nullung. Ohne die enterState-Nullung war check_main:293
+    // GEMESSEN rot (Zentrum-screen 217 statt 216).
+    const buildWorldKoerper = MAIN.slice(MAIN.indexOf('function buildWorld('),
+      MAIN.indexOf('function enterState('));
+    check('S5-§7A(f) §5.2/P1-M2 Shake wird in enterState UND in buildWorld hart genullt (doppelt, gemessen noetig)',
+      /function enterState\(next\) \{\s*shakeNullen\(\);\s*hitstop = 0;/.test(MAIN)
+      && /shakeNullen\(\);/.test(buildWorldKoerper)
+      && (MAIN.match(/shakeNullen\(\);/g) || []).length >= 2,
+      `${(MAIN.match(/shakeNullen\(\);/g) || []).length} Nullungen`);
+    check('S5-§7A(f) §5.2/P1-m2 der Offset ist ganzzahlig und wird NACH der Weltrand-Klemmung angewandt',
+      /shakeOffX = Math\.round\(/.test(MAIN) && /shakeOffY = Math\.round\(/.test(MAIN)
+      && /camera\.x = Math\.min\(Math\.max\(shakeBasisX \+ shakeOffX, 0\), maxX\);/.test(MAIN));
+    check('S5-§7A(f) §5.2/P2-M7 shakeAnwenden laeuft in JEDEM Zweig — auch im Freeze und im Fade',
+      (MAIN.match(/shakeAnwenden\(\);/g) || []).length >= 3);
+    // P2-M8: der Beobachter haengt an GENAU EINER Stelle.
+    check('S5-§7A(f) §3/P2-M8 der Audio-Beobachter wird an GENAU EINER Stelle gerufen — nach updateDrops',
+      (MAIN.match(/audioBeobachter\(dt\);/g) || []).length === 1
+      && /updateDrops\(dt, drops, player, events\);\s*audioBeobachter\(dt\);/.test(MAIN));
+    // P2-m6: Schritt-Kopplung an den SPRITE-Frame, nicht an einen freien Timer.
+    check('S5-§7A(f) §3.3/P2-m6 Schritt-Ton haengt am Sprite-Frame: jeder ZWEITE Wechsel + 0,22 s Mindestabstand',
+      /Math\.floor\(\(player\.animTimer \|\| 0\) \* 10\) % 4/.test(MAIN)
+      && /audioSchrittZaehler % 2 === 0 && audioSchrittUhr <= 0/.test(MAIN)
+      && /audioSchrittUhr = 0\.22;/.test(MAIN));
+    // P1-M7: die BESTANDS-props-Schleife bleibt ZEICHENIDENTISCH. Hier steht
+    // sie als eingefrorener Text aus HEAD 80d5571 (vor Slice 5).
+    const BESTAND_PROPS = [
+      '      for (let i = 0; i < props.length; i++) {',
+      '        const p = props[i];',
+      "        if (p.kind !== 'chest' || p.opened !== true || p.siegChest === true) continue;",
+      '        const k = chestKey(currentMapKey, p);',
+      '        if (!runFlags.openedChests.includes(k)) runFlags.openedChests.push(k);',
+      '      }',
+    ].join('\n');
+    const MAIN_ROH = quelle('game/js/main.js');
+    check('S5-§7A(f) §3/P1-M7 die props-BESTANDSSCHLEIFE ist byte-identisch zum Stand vor Slice 5',
+      MAIN_ROH.includes(BESTAND_PROPS));
+    // Und der Waechter, dessen Fenster sie nicht sprengen darf (smoke:4772):
+    // 400 Zeichen Fenster, heute 279 belegt.
+    const fenster = /for \(let i = 0; i < props\.length; i\+\+\)([\s\S]{0,400}?)runFlags\.openedChests\.push\(k\)/.exec(MAIN);
+    check('S5-§7A(f) P1-M7 das 400-Zeichen-Fenster des Bestands-Waechters behaelt >= 100 Zeichen Reserve',
+      !!fenster && 400 - fenster[1].length >= 100,
+      fenster ? `${fenster[1].length} belegt, ${400 - fenster[1].length} frei` : 'Fenster nicht gefunden');
+    // Der Vasen-/Truhen-Beobachter ist die EIGENE zweite Schleife.
+    check('S5-§7A(f) §3/P1-M7 der Vasen-/Truhen-Beobachter ist eine EIGENE, zweite props-Schleife',
+      /for \(const p of props\) \{[\s\S]{0,600}?spieleSfx\('vase_break'\)/.test(MAIN));
+
+    // §5.4 Partikel: zwei getrennte Deckel. list/spawnEmbers/MAX_PARTICLES
+    // bleiben unveraendert (smoke:2185-2186 prueft exakt 60).
+    const parts = createParticles();
+    for (let i = 0; i < 300; i++) parts.spawnEmbers(100, 100, 1);
+    for (let i = 0; i < 300; i++) parts.spawnBurst(120, 90, 6, 'funke');
+    check('S5-§7A(f) §5.4/P1-M6 burstList hat einen EIGENEN Deckel 40 — die Glut-Liste bleibt bei 60',
+      parts.list.length === 60 && parts.burstList.length === 40,
+      `list ${parts.list.length}, burstList ${parts.burstList.length}`);
+    check('S5-§7A(f) §5.4/P2-M9 Gegenprobe: 300 Bursts hungern die Glut NICHT aus',
+      (() => {
+        const p2 = createParticles();
+        for (let i = 0; i < 300; i++) p2.spawnBurst(120, 90, 6, 'staub');
+        for (let i = 0; i < 300; i++) p2.spawnEmbers(100, 100, 1);
+        return p2.list.length === 60 && p2.burstList.length === 40;
+      })());
+    check('S5-§7A(f) §5.4 beide Listen werden abgebaut (update leert sie ohne Nachschub)',
+      (() => {
+        for (let i = 0; i < 200; i++) parts.update(1 / 60);
+        return parts.burstList.length === 0 && parts.list.length === 0;
+      })(), `list ${parts.list.length}, burstList ${parts.burstList.length}`);
+  }
+
+  // -----------------------------------------------------------------------
+  // (g) §6.1 PAUSE-GEOMETRIE — fuenf Zonen, Ueberlappungspruefung ueber ALLE
+  //     Paare (der Bestand prueft nur die Nachbarn 0/1/2), Panel- und
+  //     FPS-Fenster-Vertraeglichkeit.
+  // -----------------------------------------------------------------------
+  {
+    const hud = await import('../game/js/ui/hud.js');
+    const Z = hud.PAUSE_MENU_ZONES;
+    let ueberlappt = null;
+    for (let i = 0; i < Z.length; i++) {
+      for (let j = i + 1; j < Z.length; j++) {
+        const a = Z[i];
+        const b = Z[j];
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {
+          ueberlappt = `${i}/${j}`;
+        }
+      }
+    }
+    check('S5-§7A(g) §6.1 fuenf Zonen, KEIN Paar ueberlappt (alle 10 Paare geprueft, nicht nur die Nachbarn)',
+      Z.length === 5 && ueberlappt === null, ueberlappt ? `Paar ${ueberlappt}` : '10 Paare frei');
+    check('S5-§7A(g) §6.1/P1-m5 jede Zone >= 6 mm hoch (h >= 16 px) und alle tragen dieselbe w/h',
+      Z.every((z) => z.h * MM_PRO_PX_S5 >= 6)
+      && Z.every((z) => z.w === Z[0].w && z.h === Z[0].h),
+      `h ${Z[0].h} px = ${(Z[0].h * MM_PRO_PX_S5).toFixed(2)} mm`);
+    check('S5-§7A(g) §6.1/P1-m5 Unterkante 146 < Panel-Unterkante 150 — das drawFps-Fenster (158-175) bleibt frei',
+      Math.max(...Z.map((z) => z.y + z.h)) <= 150
+      && Math.max(...Z.map((z) => z.y + z.h)) < 158,
+      `Unterkante ${Math.max(...Z.map((z) => z.y + z.h))}`);
+    // P1-m7: 0/1/2 sind eingefroren, MUSIK/TON haengen HINTEN an.
+    const rec = { log: [], globalAlpha: 1, fillStyle: '', font: '', textAlign: '', textBaseline: '',
+      fillRect(...a) { this.log.push({ op: 'fillRect', alpha: this.globalAlpha, fill: this.fillStyle, args: a }); },
+      fillText(t, x, y) { this.log.push({ op: 'fillText', text: String(t), x, y }); },
+      clearRect() {}, drawImage() {}, beginPath() {}, arc() {}, fill() {}, stroke() {},
+      save() {}, restore() {}, createRadialGradient: () => ({ addColorStop() {} }) };
+    hud.drawPause(rec, { cursor: 0, god: false, fps: false, musik: true, ton: false });
+    const texte = rec.log.filter((o) => o.op === 'fillText').map((o) => o.text);
+    check('S5-§7A(g) §6.1 Reihenfolge eingefroren: WEITER / GOTT / FPS / MUSIK / TON',
+      texte.some((t) => t.includes('WEITER')) && texte.some((t) => t.startsWith('GOTT'))
+      && texte.some((t) => t.startsWith('FPS')) && texte.some((t) => t.startsWith('MUSIK'))
+      && texte.some((t) => t.startsWith('TON')), texte.join('/'));
+    check('S5-§7A(g) §6.1 die neuen Schalterzeilen spiegeln den Zustand und meiden JEDE Sonde',
+      texte.includes('MUSIK: AN') && texte.includes('TON: AUS')
+      && texte.every((t) => ['GOLD', 'SIEG', 'GAME OVER', 'GRIMLIGHT', 'STUFE', 'AUSRUESTUNG', 'x 0']
+        .every((s) => !t.includes(s))), texte.join('/'));
+    check('S5-§7A(g) §6.1 die Pause loest den Fade-Detektor der Flusstests NICHT aus',
+      !rec.log.some((o) => o.op === 'fillRect' && o.fill === '#000'
+        && o.alpha > 0 && o.alpha < 1 && o.args[2] === 320 && o.args[3] === 180));
+  }
+
+  // -----------------------------------------------------------------------
+  // (h) VERHALTEN AM GEBOOTETEN SPIEL. main.js hat keine Exporte; gefahren
+  //     wird es deshalb wie in tools/check_save_slice4.mjs ueber einen
+  //     vollstaendigen Stub-Satz (window/document/Canvas/rAF) und beobachtet
+  //     ueber das Zeichenprotokoll. NEU hier: ein aufzeichnender
+  //     AudioContext-Stub — damit ist der §4-Adapter (Bus-Graph, Ducking,
+  //     Lifecycle, Zeitargumente, Schrittrate) zum ersten Mal HEADLESS
+  //     messbar und nicht nur per Quelltext behauptet.
+  //
+  //     MESSPRINZIP HITSTOP: der Angriffs-Sprite steht genau ATTACK_BUSY lang
+  //     — in UPDATE-Ticks gerechnet. Ein Freeze-Frame rendert, ohne die Welt
+  //     zu updaten, verlaengert den Sprite also um genau seine Frame-Zahl.
+  //     Damit ist die Sprite-Dauer eine EXAKTE Uhr fuer den Hitstop:
+  //       Angriff ins Leere = B, Treffer = B + 2 (H), Kill = B + 3 (K).
+  //     Der Zeitschritt ist bewusst 1/60 s + 1 us: so liefert JEDER rAF-Frame
+  //     genau EIN Update (der Akkumulator aus loop.js kann sonst Frames mit 0
+  //     oder 2 Updates erzeugen und die Zaehlung um +-1 verschieben).
+  // -----------------------------------------------------------------------
+  {
+    const zufallVorher = Math.random;
+    const perfVorher = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+    const winVorher = globalThis.window;
+    const docVorher = globalThis.document;
+    Math.random = () => 0.5;          // wie check_main_slice1: volle Determinismus
+    const bops = [];
+    let uhrMs = 0;
+    try { globalThis.performance = { now: () => uhrMs }; }
+    catch { Object.defineProperty(globalThis, 'performance', { value: { now: () => uhrMs } }); }
+
+    function bctx(canvas) {
+      return {
+        canvas, imageSmoothingEnabled: false, globalAlpha: 1,
+        globalCompositeOperation: 'source-over',
+        fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
+        _stack: [],
+        fillRect(...a) { bops.push({ canvas, op: 'fillRect', alpha: this.globalAlpha, fill: this.fillStyle, args: a }); },
+        clearRect() {}, strokeRect() {},
+        drawImage(img, ...a) { bops.push({ canvas, op: 'drawImage', img, args: a }); },
+        fillText(t, x, y) { bops.push({ canvas, op: 'fillText', text: String(t), x, y }); },
+        beginPath() {}, arc() {}, fill() {}, stroke() {}, closePath() {}, moveTo() {}, lineTo() {}, rect() {},
+        save() { this._stack.push({ a: this.globalAlpha, f: this.fillStyle }); },
+        restore() { const s = this._stack.pop(); if (s) { this.globalAlpha = s.a; this.fillStyle = s.f; } },
+        createRadialGradient: () => ({ addColorStop() {} }),
+      };
+    }
+
+    // Aufzeichnender AudioContext. Er implementiert GENAU die Knoten, die
+    // main.js baut, und protokolliert jeden Aufruf mit seinen Argumenten.
+    function mkAudioStub() {
+      const log = [];
+      let uhr = 0;
+      let nr = 0;
+      const param = (node, name, v0) => ({
+        _v: v0,
+        get value() { return this._v; },
+        set value(x) { this._v = x; log.push({ op: 'setValue', node: node.id, param: name, v: x }); },
+        setValueAtTime(v, t) { log.push({ op: 'setValueAtTime', node: node.id, param: name, v, t }); return this; },
+        linearRampToValueAtTime(v, t) { log.push({ op: 'linearRamp', node: node.id, param: name, v, t }); return this; },
+        exponentialRampToValueAtTime(v, t) { log.push({ op: 'expRamp', node: node.id, param: name, v, t }); return this; },
+        cancelScheduledValues(t) { log.push({ op: 'cancel', node: node.id, param: name, t }); return this; },
+      });
+      const knoten = (art) => {
+        const n = { id: ++nr, art };
+        n.connect = (z) => log.push({ op: 'connect', node: n.id, art, to: z && z.id ? z.id : 'destination' });
+        n.disconnect = () => log.push({ op: 'disconnect', node: n.id });
+        return n;
+      };
+      const ctx = {
+        state: 'suspended', sampleRate: 44100,
+        get currentTime() { return uhr; },
+        destination: { id: 'destination' },
+        _log: log,
+        _tick(dt) { uhr += dt; },
+        resume() { log.push({ op: 'resume' }); ctx.state = 'running'; return Promise.resolve(); },
+        suspend() { log.push({ op: 'suspend' }); ctx.state = 'suspended'; return Promise.resolve(); },
+        createGain() { const n = knoten('gain'); n.gain = param(n, 'gain', 1); return n; },
+        createOscillator() {
+          const n = knoten('osc');
+          n.frequency = param(n, 'frequency', 440);
+          n.type = 'sine';
+          n.setPeriodicWave = () => {};
+          n.start = (...a) => log.push({ op: 'start', node: n.id, args: a });
+          n.stop = (...a) => log.push({ op: 'stop', node: n.id, args: a });
+          return n;
+        },
+        createBufferSource() {
+          const n = knoten('src');
+          n.playbackRate = param(n, 'playbackRate', 1);
+          n.start = (...a) => log.push({ op: 'start', node: n.id, args: a });
+          n.stop = (...a) => log.push({ op: 'stop', node: n.id, args: a });
+          return n;
+        },
+        createBuffer(kanaele, n) { return { getChannelData: () => new Float32Array(n) }; },
+        createPeriodicWave() { log.push({ op: 'periodicWave' }); return { periodic: true }; },
+      };
+      return ctx;
+    }
+
+    const FLIP = ['player_side_0', 'player_side_1', 'player_side_2', 'player_side_3',
+      'player_attack_side', 'sword_slash_side', 'skeleton_0', 'skeleton_1', 'skeleton_die',
+      'ghoul_0', 'ghoul_1', 'ghoul_die'];
+    const NAMEN = [...Object.keys(SPRITES), ...FLIP.map((k) => `${k}_flip`), ...Object.keys(TILE_ART)];
+
+    function boot({ search = '', rig = {} } = {}) {
+      const canvases = [];
+      const mkCanvas = () => {
+        const c = { width: 0, height: 0, style: {}, ownerDocument: null };
+        c.getContext = () => (c._ctx || (c._ctx = bctx(c)));
+        c.addEventListener = () => {};
+        c.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+        canvases.push(c);
+        return c;
+      };
+      const winL = {};
+      const docL = {};
+      const rafQ = [];
+      const actx = mkAudioStub();
+      const win = {
+        addEventListener: (t, f) => (winL[t] = winL[t] || []).push(f),
+        devicePixelRatio: 1, innerWidth: 960, innerHeight: 540,
+        location: { search },
+        requestAnimationFrame: (cb) => rafQ.push(cb),
+        AudioContext: function () { return actx; },
+      };
+      Object.assign(win, rig);
+      const haupt = { width: 320, height: 180, style: {} };
+      const doc = {
+        getElementById: () => haupt,
+        createElement: () => mkCanvas(),
+        addEventListener: (t, f) => (docL[t] = docL[t] || []).push(f),
+        defaultView: win, hidden: false,
+      };
+      haupt.getContext = () => (haupt._ctx || (haupt._ctx = bctx(haupt)));
+      haupt.addEventListener = () => {};
+      haupt.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+      haupt.ownerDocument = doc;
+      globalThis.window = win;
+      globalThis.document = doc;
+      const b = {
+        win, doc, haupt, rafQ, canvases, actx, nameOf: new Map(),
+        benenne() { canvases.forEach((c, i) => b.nameOf.set(c, NAMEN[i] || `extra_${i}`)); },
+        frame() {
+          bops.length = 0;
+          const cb = rafQ.shift();
+          if (!cb) throw new Error('kein rAF-Callback (Boot tot?)');
+          uhrMs += 1000 / 60 + 0.001;   // s. Messprinzip oben: genau 1 Update/Frame
+          actx._tick(1 / 60);
+          cb();
+        },
+        frames(n) { for (let i = 0; i < n; i++) b.frame(); },
+        key(typ, code) { for (const f of winL[typ] || []) f({ code, repeat: false, preventDefault() {} }); },
+        halte(code, n) { b.key('keydown', code); b.frames(n); b.key('keyup', code); },
+        feuereDoc(typ, ev = {}) { for (const f of docL[typ] || []) f(ev); },
+        texte: () => bops.filter((o) => o.op === 'fillText').map((o) => o.text),
+        hatText: (t) => b.texte().some((s) => s.includes(t)),
+        namen: () => bops.filter((o) => o.op === 'drawImage' && o.canvas === haupt)
+          .map((o) => String(b.nameOf.get(o.img) || '')),
+        zaehle: (re) => b.namen().filter((x) => re.test(x)).length,
+        spielerZug: () => {
+          const d = bops.filter((o) => o.op === 'drawImage' && o.canvas === haupt
+            && String(b.nameOf.get(o.img) || '').startsWith('player'));
+          return d.length ? { x: d[d.length - 1].args[0], y: d[d.length - 1].args[1] } : null;
+        },
+        vollbild: () => bops.filter((o) => o.op === 'fillRect' && o.canvas === haupt
+          && o.args[2] === 320 && o.args[3] === 180),
+      };
+      return b;
+    }
+
+    const angriffSteht = (b) => b.namen().some((x) => /player_attack|sword_slash/.test(x));
+
+    // --- BOOT 1: ?god=1 (unverwundbar => saubere Sprite-Laeufe, dmg 10) -----
+    const g = boot({ search: '?god=1' });
+    await import('../game/js/main.js?s5a=1');
+    g.benenne();
+    g.frames(5);
+    check('S5-§7A(h) Boot: der Titel steht und der Audio-Adapter ist VOR der ersten Geste vollstaendig inert',
+      g.hatText('GRIMLIGHT') && g.actx._log.length === 0 && g.actx.state === 'suspended',
+      `${g.actx._log.length} Audio-Aufrufe`);
+
+    // §0.3: die erste Taste schaltet frei (Titelmusik erst nach der Geste).
+    g.key('keydown', 'KeyQ'); g.key('keyup', 'KeyQ');
+    g.frames(2);
+    const graph = g.actx._log.filter((l) => l.op === 'connect');
+    const master = graph.find((l) => l.to === 'destination');
+    const amMaster = graph.filter((l) => l.to === (master && master.node)).map((l) => l.node);
+    check('S5-§7A(h) §0.3 die erste Taste schaltet den Kontext frei (resume, fire-and-forget)',
+      g.actx.state === 'running' && g.actx._log.some((l) => l.op === 'resume'));
+    check('S5-§7A(h) §4.1 BUS-GRAPH: genau EIN Knoten am Ziel, und daran haengen musicA/musicB/sfx/ui',
+      !!master && graph.filter((l) => l.to === 'destination').length === 1
+      && amMaster.length === 4,
+      `Master ${master && master.node}, daran ${amMaster.join(',')}`);
+    const ersterWert = (id) => (g.actx._log.find((l) => l.op === 'setValue' && l.node === id) || {}).v;
+    check('S5-§7A(h) §4.1 Master-Startwert 0,8; das Crossfade-Paar startet auf 0 (erste Wertsetzung je Knoten)',
+      ersterWert(master && master.node) === 0.8
+      && ersterWert(amMaster[0]) === 0 && ersterWert(amMaster[1]) === 0,
+      `master ${ersterWert(master && master.node)}, A ${ersterWert(amMaster[0])}, B ${ersterWert(amMaster[1])}`);
+
+    // §4.5/P1-M4/P2-B2: suspend() muss AUF DEM TITEL greifen (player === null).
+    const vorHidden = g.actx._log.length;
+    g.doc.hidden = true;
+    g.feuereDoc('visibilitychange', {});
+    check('S5-§7A(h) §4.5/P2-B2 visibilitychange suspendiert AUCH IM TITEL (vor jedem !player-Guard)',
+      g.actx._log.slice(vorHidden).some((l) => l.op === 'suspend') && g.actx.state === 'suspended');
+    g.doc.hidden = false;
+    g.feuereDoc('visibilitychange', {});
+    check('S5-§7A(h) §4.5 die Rueckkehr in den Vordergrund nimmt den Kontext wieder auf',
+      g.actx.state === 'running');
+
+    g.key('keydown', 'Enter'); g.key('keyup', 'Enter');
+    g.frames(3);
+    check('S5-§7A(h) Boot: ENTER startet das Spiel (HUD steht)', g.hatText('GOLD'));
+
+    // §3.3/P2-m6 SCHRITTRATE. Drei Sekunden geradeaus laufen; jeder spieleSfx-
+    // Aufruf hinterlaesst genau eine Pegel-Anker-Kette auf dem sfxBus.
+    const sfxBusId = amMaster[2];
+    const vorLauf = g.actx._log.length;
+    g.halte('ArrowRight', 180);
+    const imLauf = g.actx._log.slice(vorLauf);
+    const sfxRufe = imLauf.filter((l) => l.op === 'cancel' && l.node === sfxBusId).length;
+    check('S5-§7A(h) §3.3/P2-m6 Schritt-Rate liegt bei ~2,5/s (5/s waere Sprint-Kadenz)',
+      sfxRufe / 3 >= 2.0 && sfxRufe / 3 <= 3.2, `${sfxRufe} Klaenge in 3 s = ${(sfxRufe / 3).toFixed(2)}/s`);
+    // Links/rechts wechselt DETERMINISTISCH (kein Zufall): genau zwei
+    // Tonhoehen, streng abwechselnd.
+    const rauschTon = imLauf.filter((l) => l.op === 'setValueAtTime' && l.param === 'playbackRate')
+      .map((l) => Math.round(l.v * 1e6) / 1e6);
+    const seiten = [...new Set(rauschTon)];
+    check('S5-§7A(h) §3.3 Schritte wechseln deterministisch zwischen GENAU ZWEI Tonhoehen (links/rechts)',
+      seiten.length === 2 && rauschTon.length >= 4
+      && rauschTon.every((v, i) => i === 0 || v !== rauschTon[i - 1]),
+      `${rauschTon.length} Schritte, Werte ${seiten.map((v) => v.toFixed(3)).join('/')}`);
+
+    // §0.2 ZEITARGUMENT, behavioral: JEDER start/stop-Aufruf traegt eine Zeit.
+    const startStop = g.actx._log.filter((l) => l.op === 'start' || l.op === 'stop');
+    check('S5-§7A(h) §0.2 JEDER Knoten wurde mit Zeitargument gestartet/gestoppt (behavioral, nicht nur Quelltext)',
+      startStop.length >= 20
+      && startStop.every((l) => l.args.length === 1 && Number.isFinite(l.args[0]) && l.args[0] >= 0),
+      `${startStop.length} Aufrufe, ohne Zeit: ${startStop.filter((l) => l.args.length !== 1).length}`);
+
+    // --- HITSTOP-UHR ------------------------------------------------------
+    // Basiswert: ein Angriff, der nichts trifft.
+    const messeLauf = (b, maxF) => {
+      const folge = [];
+      let vorTod = 0;
+      for (let i = 0; i < maxF; i++) {
+        b.frame();
+        const tot = b.zaehle(/skeleton_die|ghoul_die/);
+        folge.push({ a: angriffSteht(b), neuerTod: tot > vorTod });
+        vorTod = tot;
+      }
+      const laeufe = [];
+      let cur = null;
+      for (const f of folge) {
+        if (f.a) {
+          if (!cur) cur = { n: 0, tod: false };
+          cur.n += 1;
+          if (f.neuerTod) cur.tod = true;
+        } else if (cur) { laeufe.push(cur); cur = null; }
+      }
+      if (cur) laeufe.push(cur);
+      return laeufe;
+    };
+    g.key('keydown', 'KeyJ');
+    const basisLaeufe = messeLauf(g, 40);
+    g.key('keyup', 'KeyJ');
+    const BASIS = basisLaeufe.length ? basisLaeufe[0].n : -1;
+    check('S5-§7A(h) Mess-Vorbedingung: ein Angriff ins Leere steht eine feste Zahl Frames (die Hitstop-Uhr)',
+      BASIS >= 12 && BASIS <= 24, `${BASIS} Frames`);
+
+    // GOD (dmg 10) => jeder Treffer ist ein Kill => HITSTOP_K = 3.
+    g.key('keydown', 'KeyJ');
+    g.key('keydown', 'ArrowRight');
+    const godLaeufe = messeLauf(g, 700);
+    g.key('keyup', 'ArrowRight');
+    g.key('keyup', 'KeyJ');
+    const kills = godLaeufe.filter((l) => l.tod);
+    const treffer = godLaeufe.filter((l) => l.n > BASIS);
+    check('S5-§7A(h) A3 KILL friert GENAU 3 Frames ein (HITSTOP_K): Kill-Laeufe messen Basis + 3',
+      kills.length >= 1 && kills.every((l) => l.n === BASIS + 3),
+      `${kills.length} Kills, Laengen ${kills.map((l) => l.n).join(',')} gegen Basis ${BASIS}`);
+    check('S5-§7A(h) A3 kein Freeze ist laenger als 3 Frames, wenn nur Kills vorkommen (Obergrenze haelt)',
+      treffer.every((l) => l.n <= BASIS + 3),
+      godLaeufe.map((l) => `${l.n}${l.tod ? 'K' : ''}`).join(' '));
+
+    // --- SHAKE-ZWILLING ---------------------------------------------------
+    // Zwei Boots mit IDENTISCHEM Drehbuch, einer mit __noShake. Die Differenz
+    // der gezeichneten Spielerposition IST der Kamera-Offset (playerScreen
+    // misst Math.round(worldX - cam.x), und fuer ganzzahliges k gilt
+    // Math.round(a - (b+k)) = Math.round(a - b) - k).
+    const drehbuch = (b) => {
+      const spur = [];
+      b.frames(5);
+      b.key('keydown', 'Enter'); b.key('keyup', 'Enter');
+      b.frames(3);
+      b.key('keydown', 'KeyJ');
+      b.key('keydown', 'ArrowRight');
+      for (let i = 0; i < 420; i++) { b.frame(); spur.push(b.spielerZug()); }
+      b.key('keyup', 'ArrowRight');
+      b.key('keyup', 'KeyJ');
+      // Zustandswechsel: Pause auf und wieder zu (enterState nullt den Shake)
+      b.key('keydown', 'Escape'); b.frame(); b.key('keyup', 'Escape');
+      const inPause = b.actx._log.length;
+      b.frames(4);
+      b.key('keydown', 'Escape'); b.frame(); b.key('keyup', 'Escape');
+      const nach = [];
+      for (let i = 0; i < 40; i++) { b.frame(); nach.push(b.spielerZug()); }
+      return { spur, nach, inPause };
+    };
+    const s1 = boot({ search: '?god=1' });
+    await import('../game/js/main.js?s5b=1');
+    s1.benenne();
+    const lauf1 = drehbuch(s1);
+    const s2 = boot({ search: '?god=1', rig: { __noShake: true } });
+    await import('../game/js/main.js?s5c=1');
+    s2.benenne();
+    const lauf2 = drehbuch(s2);
+
+    const offsets = [];
+    for (let i = 0; i < lauf1.spur.length; i++) {
+      const a = lauf1.spur[i];
+      const c = lauf2.spur[i];
+      if (a && c) offsets.push({ dx: c.x - a.x, dy: c.y - a.y });
+    }
+    const bewegt = offsets.filter((o) => o.dx !== 0 || o.dy !== 0);
+    check('S5-§7A(h) §5.2 der Shake WIRKT: gegen den __noShake-Zwilling weicht die Kamera messbar ab',
+      offsets.length > 300 && bewegt.length > 0,
+      `${bewegt.length} von ${offsets.length} Frames versetzt`);
+    check('S5-§7A(h) §5.2/P1-m2 jeder Offset ist GANZZAHLIG und bleibt in der Spec-Amplitude (<= 3 px)',
+      bewegt.every((o) => Number.isInteger(o.dx) && Number.isInteger(o.dy)
+        && Math.abs(o.dx) <= 3 && Math.abs(o.dy) <= 3),
+      `max |dx| ${Math.max(0, ...bewegt.map((o) => Math.abs(o.dx)))}, max |dy| ${Math.max(0, ...bewegt.map((o) => Math.abs(o.dy)))}`);
+    // Wanduhr-Abklingen: nach einem Auslöser ist spaetestens nach 12 Ticks Ruhe.
+    let laengsteStrecke = 0;
+    let strecke = 0;
+    for (const o of offsets) {
+      if (o.dx !== 0 || o.dy !== 0) { strecke += 1; if (strecke > laengsteStrecke) laengsteStrecke = strecke; }
+      else strecke = 0;
+    }
+    check('S5-§7A(h) §5.2 der Shake klingt auf der WANDUHR ab: keine Versatz-Strecke laenger als 12 Ticks',
+      laengsteStrecke <= 12, `laengste Strecke ${laengsteStrecke} Ticks`);
+    const nachOffsets = [];
+    for (let i = 0; i < lauf1.nach.length; i++) {
+      const a = lauf1.nach[i];
+      const c = lauf2.nach[i];
+      if (a && c) nachOffsets.push(Math.abs(c.x - a.x) + Math.abs(c.y - a.y));
+    }
+    check('S5-§7A(h) §5.2/P1-M2 nach enterState (Pause auf/zu) ist der Offset EXAKT 0 — in jedem Frame',
+      nachOffsets.length > 20 && nachOffsets.every((d) => d === 0),
+      `${nachOffsets.filter((d) => d !== 0).length} von ${nachOffsets.length} Frames versetzt`);
+
+    // §4.3 DUCKING in der Handpause: Anker-Form, Musik leiser, uiBus HOERBAR.
+    const duckLog = s1.actx._log.slice(lauf1.inPause - 40, lauf1.inPause + 10);
+    const kette = (knoten) => {
+      const idx = duckLog.findIndex((l) => l.op === 'cancel' && l.node === knoten);
+      if (idx < 0) return null;
+      return duckLog.slice(idx, idx + 3).map((l) => l.op).join('>');
+    };
+    const graph1 = s1.actx._log.filter((l) => l.op === 'connect');
+    const master1 = graph1.find((l) => l.to === 'destination');
+    const am1 = graph1.filter((l) => l.to === master1.node).map((l) => l.node);
+    check('S5-§7A(h) §4.3/P2-M4 jede Pegelaenderung laeuft in der ANKER-Form cancel > setValueAtTime > linearRamp',
+      ['cancel>setValueAtTime>linearRamp', 'cancel>setValue'].includes(kette(am1[0]) || '')
+      || (kette(am1[0]) || '').startsWith('cancel>setValue'),
+      `Musik-Bus: ${kette(am1[0])}`);
+    check('S5-§7A(h) §4.3/P2-M4 NIE exponentiell (exponentialRampToValueAtTime auf 0 wirft RangeError)',
+      !s1.actx._log.some((l) => l.op === 'expRamp'));
+    check('S5-§7A(h) §4.3/P2-B3 in der Pause bleibt der uiBus HOERBAR (sonst sind die neuen Schalter stumm)',
+      (() => {
+        const ui = am1[3];
+        const letzte = s1.actx._log.filter((l) => l.node === ui
+          && (l.op === 'linearRamp' || l.op === 'setValue')).slice(-1)[0];
+        return !!letzte && letzte.v > 0;
+      })(), `uiBus-Knoten ${am1[3]}`);
+
+    // §5.3 FLASH-VERTRAEGLICHKEIT: der Flash ist ein Vollbild-Rect bei
+    // globalAlpha 1 in einer WARMEN Fuellfarbe — der Fade-Detektor der drei
+    // Flusstests verlangt '#000' mit 0 < alpha < 1 und bleibt damit stumm.
+    const flashKandidaten = [];
+    {
+      const f = boot({ search: '' });
+      await import('../game/js/main.js?s5d=1');
+      f.benenne();
+      f.frames(5);
+      f.key('keydown', 'Enter'); f.key('keyup', 'Enter');
+      f.frames(3);
+      let fadeDetektor = 0;
+      let letztesHerz = -1;   // erste Frame ohne jedes volle Herz = hp 0
+      let gameOver = -1;
+      f.key('keydown', 'ArrowRight');
+      for (let i = 0; i < 1200; i++) {
+        f.frame();
+        for (const o of f.vollbild()) {
+          if (o.fill === '#000' && o.alpha > 0 && o.alpha < 1) fadeDetektor += 1;
+          else if (o.alpha === 1 && String(o.fill).startsWith('rgba(255,244,220')) flashKandidaten.push(o.fill);
+        }
+        if (letztesHerz < 0 && f.zaehle(/heart_full/) === 0) letztesHerz = i;
+        if (f.hatText('GAME OVER')) { gameOver = i; break; }
+      }
+      f.key('keyup', 'ArrowRight');
+      check('S5-§7A(h) §5.3/P1-m4 der Flash laeuft und loest den Fade-Detektor der Flusstests NICHT aus',
+        flashKandidaten.length > 0 && fadeDetektor === 0,
+        `${flashKandidaten.length} Flash-Zuege (${flashKandidaten[0] || '-'}), ${fadeDetektor} Fade-Treffer`);
+      check('S5-§7A(h) A3/P1-B2 der TODES-Frame hat null Toleranz: hp = 0 wird im NAECHSTEN Frame zu GAME OVER',
+        letztesHerz >= 0 && gameOver === letztesHerz + 1,
+        `hp 0 in Frame ${letztesHerz}, GAME OVER in Frame ${gameOver}`);
+    }
+
+    // Globale wieder herstellen: nachfolgende Bloecke sehen den Bestand.
+    Math.random = zufallVorher;
+    if (perfVorher) Object.defineProperty(globalThis, 'performance', perfVorher);
+    globalThis.window = winVorher;
+    globalThis.document = docVorher;
+  }
+}
+
 
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);
 if (totalTicks < 600) failures.push(`Zu wenige Ticks simuliert: ${totalTicks} < 600`);
