@@ -1,221 +1,225 @@
-# SPEC Slice 5 — "Sound & Game-Feel" (Rev 1, 13.08.2026, Fable)
+# SPEC Slice 5 — "Sound & Game-Feel" (Rev 2, 13.08.2026, Fable)
 
-Grundlage: design/SLICE5_LANDKARTE.md (Teil A Audio-Machbarkeit mit
-laufendem Prototyp, Teil B Sound-Haken + Game-Feel — Datei:Zeile-
-Belege von dort sind bindend). Programm-Rahmen: MASTERPLAN_TIEFE.md.
-Deliverable: **Grimlight KLINGT — Chiptune-Musik je Karte + Boss-
-Ebene, ~16 SFX, Hitstop/Shake/Flash/Partikel-Feel, Ton-Schalter im
-Pause-Menü — im Browser UND in der APK, abgenommen von Michael am
-Gerät.**
+Rev 1 + adversarialer Review design/SLICE5_SPEC_REVIEW.md
+(7 BLOCKER / 21 MAJOR / ~15 MINOR — ALLE eingearbeitet; die
+gemessenen Guard-/Probe-Formen der Prüfer sind BINDEND und werden
+wörtlich übernommen). Deliverable unverändert: Grimlight klingt +
+Game-Feel + Schalter, abgenommen von Michael am Gerät (≥ 2
+Musik-Iterationsrunden eingeplant).
 
 ---
 
 ## §0 Eiserne Regeln
 
-0.1 Kanonische Flusstests NULL. Golden sol/geo NULL. S4-GOLD-Hashes
-bleiben grün (lighting.js wird NICHT berührt). entities/ TABU
-(Landkarte B belegt: alle 24 Lücken sind aus main.js über
-vorhandene Felder beobachtbar).
+0.1 Flusstests NULL; sol/geo NULL; S4-GOLD grün (lighting.js
+unberührt); entities/ TABU; probe_god + check_save_slice4 grün.
 
-0.2 **Audio-Modul-Reinheit:** game/js/audio/* ist Node-importierbar
-und fasst beim Import KEIN Browser-Global an; AudioContext existiert
-in keinem Stub — der WebAudio-Adapter lebt AUSSCHLIESSLICH in
-main.js, lazy, in der etablierten §0.2-Guardform (main.js:270-291
-als Vorlage). Ohne AudioContext ist ALLES vollständig inert
-(Flusstests/Smoke laufen byte-gleich).
+0.2 Audio-Reinheit wie Rev 1. **NEU (P1-B1): JEDER WebAudio-Node
+wird ausschließlich MIT explizitem Zeitargument gestartet/gestoppt
+(`osc.start(t0)`, `osc.stop(t1)`) — NIE `.start()`/`.stop()` mit
+leeren Klammern** (der S4-Quelltext-Wächter smoke:4854-4858 zählt
+genau diese Muster in main.js). Additiver §7.A-Wächter prüft das
+über game/js/**.
 
-0.3 **Gesten-Regel (bewusste Browser/App-Gleichheit, Landkarte A
-1b):** Ton startet in Browser UND App erst nach der ersten
-Nutzergeste — obwohl die Capacitor-WebView Autoplay erlaubt
-(Bridge.java:567, hart aus). Unlock: (a) Canvas-touchstart-Callback
-(input.js attach bekommt einen OPTIONALEN onFirstTouch-Parameter —
-Signatur-Erweiterung nach litDitherCells-Muster, alte Aufrufe
-byte-gleich; Canvas-Listener sind Stub-No-Ops); (b) guarded
-window-keydown (⚠ Flusstests RUFEN window-Listener wirklich auf —
-exakte Guardform!); (c) resume() zusätzlich an den drei
-Titel-Übergängen (main.js:789-807, dort sitzt schon
-starteQuerformat). iOS-Vorbau dokumentiert (Callback in echtem
-Event-Handler), iOS bleibt aus Scope.
+0.3 Unlock EXAKT in den vom Prüfer GEMESSEN-GRÜNEN Formen
+(SLICE5_SPEC_REVIEW P1-m1, wörtlich übernehmen): input.js attach
+bekommt onFirstTouch als 2. Parameter (eigener Listener VOR dem
+Bestands-Listener, try/catch); main.js audioUnlock() mit
+`typeof AC !== 'function'`-Prüfung VOR jedem new, webkitAudio-
+Fallback, äußeres try um window.addEventListener, kein event.*-
+Zugriff. resume() IMMER fire-and-forget mit state-Check, NIE
+await (P2-M5: das Promise erfüllt sich ohne Aktivierung nie).
+**AudioContext ist ein Singleton in main.js** (P2-m7).
+resume() hängt an: onFirstTouch, window-keydown-Unlock, den drei
+Titel-Übergängen, jedem Pause-WEITER und dem Lifecycle-Fortsetzen.
 
-0.4 Smoke NUR additiv (Marker `S5-§7F(a)…`, await-import im Block)
-PLUS die in §7 ABSCHLIESSEND sanktionierten Bestandsstellen.
-Detektor-Regeln gelten unverändert: kein neuer Teilalpha-fillRect
-auf Offscreens; kein Vollbild-#000-Teilalpha auf dem Haupt-Canvas;
-kein translate/strokeRect/Pfad im kanonischen Zeichenpfad; neue
-Canvases nur nach dem Boot (KEINE nötig — der Flash zeichnet auf
-den Haupt-ctx). probe_god + check_save_slice4 bleiben grün.
-
-0.5 **Keine Binär-Audio-Assets:** Musik/SFX sind Text-Datenmodule
-("Musik als Code", Format aus Landkarte A §3 — bewiesen: 11,4 s =
-2,1 KB) + Laufzeit-Synthese über Oszillatoren/Rauschen (Option a);
-renderPCM dient NUR als Node-Test-Orakel (Option b wird NICHT im
-Spiel benutzt: Speicher + Fade-Ruckler, Landkarte A §2).
-
-0.6 Ports wie gehabt (8123 NIE, 8124 Prüfung, 8125 APK).
-Hauptloop committet jeden grünen Stand. Der Audio-Tick läuft in
-update(), der Sequencer auf der AudioContext-Uhr mit Lookahead
-(Landkarte B 4.1).
+0.4 Smoke additiv (S5-§7F(a)…, await-import im Block) + die in §7
+ABSCHLIESSEND sanktionierten Stellen. Detektor-/Stub-Regeln
+unverändert. 0.5 Keine Binär-Assets; Option (b) nur Test-Orakel.
+0.6 Ports/Commits wie gehabt.
 
 ---
 
 ## §1 ABNAHME
 
-A1 **Objektive Gates (Node, additiv):** Song-Compiler
-deterministisch (PCM-Prüfsumme stabil über 3 Läufe); kein Clipping
-(renderPCM-Peak ≤ 0,9 über alle Songs+SFX); Stimmen-Obergrenze
-eingehalten (≤ 12 gleichzeitige SFX-Stimmen, älteste fliegt);
-Event-Abdeckung: JEDES §3-Ereignis hat eine SFX-Zuordnung; Audio
-ohne AudioContext inert; Settings-Roundtrip (auch ohne Storage).
+A1 **Objektive Gates (Node, additiv):**
+(a) compileSong deterministisch (Prüfsumme 3 Läufe) und liefert
+`{events, loopFrom, loopTime}` (P2-B5);
+(b) Peak ZWEISTUFIG (P1-M9/P2-B1): Einzel-Peak je Song ≤ 0,7 und
+je SFX ≤ 0,5 über die GEMEINSAME Signatur
+`renderPCM({instruments, events})` (rendert Songs UND SFX), Peak
+gemessen VOR jedem Limiter (tanh raus aus dem Orakel-Messpfad);
+PLUS Summen-Gate: Musik-Bus + 12 Worst-Case-SFX über den
+Master-Gain ≤ 0,9;
+(c) Stimmen: ≤ 12 SFX-Stimmen (älteste fliegt) UND ≤ 2
+Song-Instanzen (Crossfade/Boss-Ebene);
+(d) Zuordnungstabelle §3 vollständig — jede Zeile zeigt auf einen
+EXISTIERENDEN SFX-Schlüssel, Bündelung erlaubt, Leerstellen nicht
+(P1-M3);
+(e) Audio ohne AudioContext inert; mixer-Reducer-Roundtrip (auch
+ohne Storage); notenFreq wirft bei unbekannter Note (und kennt
+deutsches H = B; P2-m2); Monophonie je Kanal: compileSong schneidet
+überlappende Noten ab (Note-off bei Neuanschlag; P2-m3);
+Zeitargument-Wächter (§0.2).
 
-A2 **Alle Suiten grün** (inkl. der zwei sanktionierten
-Bestandsstellen §7.B/§7.C mit git-diff-Beweis) + APK baut + alle
-GP6-/S4-Wächter unberührt grün.
+A2 Alle Suiten grün (sanktionierte Stellen §7.B/C per git-diff
+belegt) + APK baut + GP6-/S4-Wächter grün.
 
-A3 **Game-Feel-Verträglichkeit bewiesen:** Hitstop/Shake vorab in
-.tmp/slice5_probe gegen check_main_slice1 gemessen (die 5
-Positions-Assertions!); Shake nur über camera.x/y (ganzzahlig,
-≤ 12 Frames, Ruhe = exakt 0); Flash nach lighting.draw in
-rgba-Füllfarbe; Rig-Schalter __noShake/__noFlash/__noAudio für
-shot_gfx6/GP7-Messläufe.
+A3 **Game-Feel bewiesen — die BINDENDEN Zahlen aus den Messungen:**
+Hitstop H/K/B = **2/3/4** Frames (H ist OBERGRENZE — H=4 kippt
+check_inventory; P1-M1) und NUR für: Schwert trifft Gegner (H),
+Kill (K), SPIELER TRIFFT BOSS (B). **Spieler-Schaden löst NIEMALS
+Hitstop aus** (P1-B2 — der Todes-Frame hat null Toleranz), nur
+Flash+Shake. Eingaben überleben den Freeze (Angriffs-Pegel wird
+gepuffert, nicht verschluckt — sonst frisst jeder Hitstop den
+Folgehieb; Gate). check_main UND check_inventory UND check_boss
+namentlich grün. Shake: NUR ganzzahliger Offset NACH followPlayer
+auf gespeicherter Kamera-Basis, in JEDEM Zweig (auch Freeze) neu
+angewandt (P2-M7), Nach-Klemmung auf den Weltrand (P1-m2),
+Abklingen auf WANDUHR (Freeze zählt nicht), harte Nullung in
+enterState UND buildWorld (P1-M2, gemessen rot ohne!), Gate
+"Offset nach enterState exakt 0". Flash wie Rev 1 (vom Prüfer
+dauerhaft-an gemessen grün, P1-m4). Rig-Schalter __noShake/
+__noFlash/__noAudio werden in Phase 2 in .tmp/shot_gfx6.py
+DURCHGEREICHT (P2-M12).
 
-A4 **MICHAELS HÖRTEST AM GERÄT = finale Abnahme, mit
-EINGEPLANTEN ITERATIONEN:** mindestens 2 Feedback-Runden für
-Musik/Mix sind Teil des Slices (Programm-Direktive "perfekt" —
-Musik ist der kreative Block und wird wie ein Grafikpass
-behandelt: bauen → Michael hört → Rezepte → nachziehen).
-Checkliste für Michael: Musik passt zur Karte + Boss-Wechsel
-zündet, SFX fühlen sich richtig an (Schwert! Treffer! Gold!),
-nichts nervt/übersteuert, Schalter im Pause-Menü wirken, Ton
-pausiert beim App-Wechsel, Game-Feel (Hitstop/Shake) macht Treffer
-"dick" ohne zu stören.
+A4 Michaels Hörtest = finale Abnahme, ≥ 2 Iterationsrunden.
+Anleitung enthält: Bildschirm-Timeout fürs Zuhören hochstellen
+(kein Keep-Awake-Plugin in diesem Slice; P2-m9).
 
 ---
 
-## §2 PAKET A — Audio-Kern (rein)
+## §2 PAKET A — Audio-Kern (rein; API EINGEFROREN als
+Phase-1-Schnittstelle, P2-M11)
 
-2.1 game/js/audio/chiptune.js: notenFreq, compileSong(song) →
-Ereignisliste (Zeitplan, deterministisch), renderPCM (Test-Orakel,
-LFSR-Rauschen mit festem Keim), pcmSumme. Format wie Landkarte A
-§3 (bpm, rowsPerBeat, loopFrom, instruments {pulse/tri/noise,
-duty, vol, attack, release}, patterns als Zellen
-"NOTE:INSTR:LÄNGE:FX", order; FX: v Vibrato, a Arpeggio, + s Slide
-als dritter Effekt). Prototyp .tmp/slice5_probe/chiptune.js ist
-Referenz-Implementierung.
+2.1 chiptune.js: `notenFreq(note)` (wirft bei unbekannt, H→B),
+`compileSong(song) → {events, loopFrom, loopTime}` (monophon je
+Kanal, deterministisch), `renderPCM({instruments, events},
+sampleRate) → Float32Array` (Test-Orakel, LFSR-Keim fest, KEIN
+tanh im Messpfad), `pcmPeak(pcm)`, `pcmSumme(pcm)`.
+FX: `v` Vibrato, `a` Arpeggio, `s<NOTE>` Slide MIT Zielnote im
+FX-Feld (z. B. "C-4:lead:4:sE-4"; P2-M2).
 
-2.2 game/js/audio/sfx.js: ~16 SFX als Daten (Kurz-Synthese-Rezepte:
-sword_swing, sword_hit, sword_blocked, player_hurt, enemy_die,
-gold(mit Tonhöhen-Treppe bei Ketten), potion_drink, potion_pickup,
-item_pickup, chest_open, vase_break, boomerang_throw/catch,
-portal, menu_move, menu_confirm, level_up, boss_telegraph_a/b,
-boss_hit, boss_die, game_over, victory — Builder darf sinnvoll
-bündeln, Zuordnungstabelle in §3 ist Pflicht).
+2.2 sfx.js: Rezepte als Daten. PFLICHT-Schlüssel: sword_swing,
+sword_hit, sword_blocked, enemy_die, gold (Pitch-Treppe),
+potion_drink, potion_pickup, pickup_generic, chest_open,
+vase_break, boomerang_throw, boomerang_catch, portal,
+portal_blocked, step, pause_toggle, menu_move, menu_confirm,
+level_up, player_hurt, boss_telegraph, boss_dash, hound_jump,
+boss_die, game_over_stinger, victory_stinger (P1-M3-Liste).
 
-2.3 game/js/audio/songs/*.js: **6 Songs** — title (ruhig,
-Erkennungsmotiv), graveyard (getragen, Diablo-Tristram-Geist),
-catacombs (treibender), fluestergruft (dunkel, wenig), boss
-(2 Intensitäten: idle-Grundbett + Aggro-Ebene; Phasen optional),
-victory+gameover als Stinger (kurz). Loop-fähig (loopFrom).
-Länge je 45-90 s Loop. DAS ist der kreative Block (A4-Iterationen).
+2.3 songs/*.js: 6 Songs wie Rev 1, loopFrom/loopTime über
+compileSong ausgeliefert (P2-B5).
+
+2.4 **mixer.js (NEU, P1-M8/P2-M1):** reiner Reducer —
+`defaultSettings()`, `parseSettings(str) → settings|default`,
+`serializeSettings(s)`, `toggle(s, 'music'|'sfx')`. main.js reicht
+nur Strings über storeLesen/storeSchreiben durch.
 
 ## §3 PAKET E — Ereignis-Verdrahtung (nur main.js)
 
-3.1 Die 8 TOTEN Events verdrahten (Landkarte B 1.2) — gold_pickup
-MIT Frame-Entprellung (max 1 Ton/Frame, Pitch-Treppe). 3.2 Die 5
-gelesenen Events im Toast-Block mitnehmen. 3.3 Beobachter-Block
-(Landkarte B 1.3/4.2, Muster props-Scan/WeakMap): Schwert-Schwung
-(attackId-Flanke), Schwert-Treffer (hurtTimer-Flanke),
-Spieler-Schaden (invulnTimer-Flanke), Vase/Truhe (props-Scan),
-Bumerang Wurf/Fang (bestehende Spiegel), Portal-Fade + blockiert,
-Menü-Navigation (Titel/Pause/Inventar), Pause auf/zu, Titel-Start,
-Game-Over/Sieg, Boss-Telegraph A/B + Dash/Sweep (marker/state-
-Flanken), Boss-Aggro, Grufthund-Sprung, Schritte (an Sprite-Frame
-gekoppelt, NIE Timer — Spam-Kandidat 2). Flanken-Zustände in
-WeakMap (Objekt-Neubau bei buildWorld!).
+Wie Rev 1, PLUS bindend: **Der gesamte Audio-Beobachter läuft an
+GENAU EINER Stelle im playing-Update-Zweig** (nach den
+Welt-Updates, gebündelt beim Toast-Block; Screen-Wechsel via
+enterState — P2-M8: außerhalb feuert jedes Event mehrfach).
+Vasen/Truhen-Beobachter als EIGENE ZWEITE props-Schleife NACH dem
+Bestandsblock — die Bestandsschleife bleibt ZEICHENIDENTISCH (der
+Regex-Wächter smoke:4772 hat nur 121 Zeichen Reserve; P1-M7).
+Schritt-Rate: jeder ZWEITE Frame-Wechsel (≈2,5/s; P2-m6).
+Flanken-Zustände in WeakMap.
 
-## §4 PAKET M — Musik-Logik
+## §4 PAKET M — Musik-Logik (KONKRETISIERT)
 
-4.1 Zuordnung DATENGETRIEBEN: mapDef.music (neues additives Feld in
-den vier Karten-Defs; world/*.js ist dafür freigegeben — sol/geo-
-frei, additiv; Muster mapDef.extraLights). 4.2 Wechsel: Portal =
-Crossfade im vorhandenen Fade-Fenster (0,3 s je Richtung); die 3
-fade-losen Pfade (resetRun/FORTSETZEN/Respawn) bekommen eine kurze
-Audio-Blende (~0,25 s), KEINEN Welt-Fade. 4.3 enterState = Screen-
-Musik (title/gameover/victory-Stinger); paused+inventory = DUCKING
-(Musik −10 dB, SFX stumm), timeSec läuft weiter — Sequencer auf
-AudioContext-Uhr stört das nicht. 4.4 Boss: Grundbett auf der
-Karte, Aggro-Ebene über den vorhandenen Boss-Fund (state!=='idle'),
-zurück zu ruhig wenn tot (Filter existiert). 4.5 systemPause →
-ctx.suspend(); Fortsetzen → resume() (Landkarte B 2.4 PFLICHT).
+4.1 **Bus-Graph (P2-M3, bindend):** masterGain ← musicBusA +
+musicBusB (Crossfade-Paar) ← je Song-Instanz (Kanal-Gains);
+masterGain ← sfxBus; masterGain ← **uiBus** (Menü-Sounds).
+Master-Startwert 0,8.
 
-## §5 PAKET F — Game-Feel (jede Zutat mit Vorab-Probe)
+4.2 **Sequencer-Zahlen (P2-B4, bindend):** Lookahead **0,10 s**,
+nachgefüllt im 60-Hz-update (max 1 Nachfüllung/Tick); nach
+resume()/Sichtbarkeits-Rückkehr RESYNC: nächste Events ab
+`currentTime + 0,05`, Pattern-Position aus der Musik-Uhr
+(eigener Zähler, NICHT currentTime-Differenzen — currentTime
+läuft bei Main-Thread-Stall weiter, bei suspend() steht sie).
+PeriodicWave je Instrument-Duty EINMAL gecacht (P2-M6 — ~1 ms
+je Aufruf, pro Note wäre das Spiel tot).
 
-5.1 **Hitstop:** dritter Freeze-Zweig neben dem Fade (main.js:809-
-825-Muster): 2 Frames bei Schwert-Treffer, 3 bei Kill, 4 bei
-Boss-Treffer; timeSec/stateTime laufen weiter; Vorab-Probe gegen
-check_main (A3). 5.2 **Screen-Shake:** NUR camera.x/y-Offset nach
-follow() (nie ctx-Transform — Stub-TypeError!), ganzzahlig,
-Amplitude 1-2 px (Boss-Dash 3), Dauer ≤ 12 Frames, exponentieller
-Abfall, Ruhe = exakt 0; __noShake-Schalter. 5.3 **Treffer-Flash:**
-Haupt-ctx NACH lighting.draw, rgba-Füllfarbe bei globalAlpha=1
-(Muster drawPause), NIE #000, Vollbild-Weiß max rgba(255,244,220,
-0.18) für 2 Frames nur bei Spieler-Schaden/Boss-Aufschlag;
-__noFlash-Schalter. 5.4 **Partikel-Bursts:** additive spawnBurst
-in particles.js mit EIGENEM Budget (40; der 60er-Deckel-Wächter
-prüft nur spawnEmbers): Treffer-Funken, Todes-Puff, Boss-Dash-
-Staub, Vasen-Splitter. 5.5 Rig: window.__noAudio (Adapter
-komplett aus) für Messläufe.
+4.3 **Ducking (P2-M4/B3):** Handpause/Inventar ducken musicBus
+per `linearRampToValueAtTime` über 0,15 s auf 0,32 (−10 dB);
+sfxBus stumm; **uiBus bleibt HÖRBAR** (sonst sind die neuen
+Pause-Schalter unhörbar). Rückweg identische Rampe.
+
+4.4 Karten/Boss wie Rev 1 (mapDef.music; Crossfade 0,3 s über das
+A/B-Bus-Paar; die 3 fade-losen Pfade 0,25-s-Audio-Blende;
+**Respawn auf DERSELBEN Karte: Song läuft WEITER**, kein Neustart
+— P2-m5). Boss-Aggro-Ebene wie Rev 1.
+
+4.5 **Lifecycle (P1-M4/P2-B2, bindend):** `ctx.suspend()` wird
+DIREKT in den visibilitychange/pagehide-LISTENERN gerufen, VOR
+jedem `if (!player) return` — es muss auch im Titel/Game-Over/
+Inventar greifen. resume() an jedem Unlock-/Fortsetz-Punkt (§0.3).
+Handpause DUCKT nur; NUR der Lifecycle-Pfad suspendiert.
+
+## §5 PAKET F — Game-Feel
+
+5.1 Hitstop nach A3 (2/3/4, Auslöser-Whitelist, Eingabe-Puffer,
+dritter Freeze-Zweig). 5.2 Shake nach A3 (Basis-Speicher +
+Re-Anwendung in jedem Zweig + Wanduhr-Abklingen + doppelte
+Nullung + Klemmung; Amplitude 1-2 px, Boss-Dash 3, ≤ 12
+Update-Ticks Wirkzeit). 5.3 Flash wie Rev 1 (bewiesen grün).
+5.4 **Partikel: EIGENE burstList mit Deckel 40** — MAX_PARTICLES
+= 60, list und spawnEmbers bleiben UNVERÄNDERT (smoke:2185-2186
+prüft exakt 60; P1-M6/P2-M9); update/draw bearbeiten beide Listen.
 
 ## §6 PAKET U — UI & Persistenz
 
-6.1 **Pause-Menü 3→5 Zeilen** (WEITER / GOTT / FPS / MUSIK AN-AUS /
-TON AN-AUS): Panel wächst (Geometrie neu, alle Zonen ≥ 6 mm,
-keine Überlappung, Unterkante ≤ 172); Texte meiden die Flusstest-
-Sonden ('MUSIK'/'TON' sind frei, Landkarte); drawPause bleibt im
-Stub-Vorrat. Die Smoke-Assertion PAUSE_MENU_ZONES.length === 3
-(smoke:4564-4570) wird per §7.B sanktioniert auf === 5.
-6.2 Persistenz: EIGENER Key grimlight.audio.v1 über
-storeLesen/storeSchreiben (NIE save.js — Schema-v1-Härte!),
-Defaults an/an. 6.3 **Slice-4-Nachzug (sanktioniert §7.C):**
-Inventar-Layout-Fix — die 20-px-Zeilen dürfen bei vollem Beutel
-(7 Items) nichts mehr überlappen; Builder bekommt Layout-Freiheit
-(LIST_Y/ANLEGEN-Position), Flusstest-TEXT-Sonden bleiben
-unberührt, die betroffenen Smoke-Konstanten werden im selben Zug
-nachgezogen (Marker S5-§7C).
+6.1 **Pause-Menü 5 Zonen OHNE Panel-Wachstum** (P1-m5, gemessen):
+h = 16 px (≥ 6-mm-Gate), y 66/82/98/114/130, Unterkante 146 <
+Panel 150 — drawFps-Fenster (y 158-175) bleibt frei. Reihenfolge:
+WEITER / GOTT / FPS / MUSIK / TON (GOTT/FPS behalten ihre Indizes
+1/2 — check_save_slice4 nutzt die Pause; Prüfer-Hinweis).
+Texte 'MUSIK'/'TON' (Sonden-frei). 6.2 grimlight.audio.v1 via
+mixer.js-Reducer + storeLesen/storeSchreiben; BOOT-5-Pfad (kein
+Storage) bleibt byte-gleich. 6.3 Inventar-Fix mit dem KOMPLETTEN
+sanktionierten Umfang aus §7.C.
 
 ## §7 TEST-KATALOG (abschließend)
 
-**A. ADDITIV** (S5-§7F(a)…): A1-Gates komplett; Hitstop-Freeze
-(timeSec läuft, Welt steht); Shake (Ruhe exakt 0, Ganzzahligkeit,
-Abklingzeit); Flash-Detektor-Verträglichkeit (fadeAlpha/
-ambientAlpha bleiben sauber — im Stub bewiesen); spawnBurst-Budget;
-Pause-Menü-Geometrie 5 Zonen; Schritt-Kopplung an Sprite-Frame;
-Audio-Settings-Roundtrip. **B. SANKTIONIERT #1:** smoke:4564-4570
-PAUSE_MENU_ZONES 3→5 (Marker S5-§7B). **C. SANKTIONIERT #2:** die
-Inventar-Layout-Konstanten-Assertions aus S4-§7F(c) für den
-§6.3-Fix (Marker S5-§7C, minimaler Umfang, im Bericht einzeln
-gelistet). **D. Verboten:** alles andere Bestehende.
+**A. ADDITIV** S5-§7F(a)…: alle A1-Gates; Zeitargument-Wächter
+(kein `.start()`/`.stop()` leer in game/js/**); Hitstop-Gates
+(hp=0 → gameover im NÄCHSTEN Frame; Angriffs-Pegel überlebt
+Freeze; timeSec läuft); Shake-Gates (Offset 0 nach enterState,
+Ganzzahligkeit, Wanduhr-Abklingen); Flash-Verträglichkeit;
+burstList-Budget + spawnEmbers-Deckel unverändert;
+Pause-Geometrie 5 Zonen (Überlappungs-Prüfung über ALLE Paare —
+der Bestand prüfte nur 0/1/2); Schritt-Kopplung; props-
+Bestandsschleifen-Byte-Identität.
+**B. SANKTIONIERT #1** (S5-§7B): smoke:4564-4570 KOMPLETT
+(length 3→5, Überlappungs-Schleife generalisiert, h-Gate bleibt).
+**C. SANKTIONIERT #2** (S5-§7C, EXAKTE Liste — P1-M5/P2-M10):
+smoke:4531-4546 (die sechs S4-§7F(c)-Inventar-Assertions) UND
+smoke:1249-1256 (Slice-2-Block Tap→Cursor/Close) UND der
+TABU-Kommentar inventory_ui.js:23-24 wird im selben Zug
+aktualisiert. NICHTS darüber hinaus.
+**D. Verboten:** alles andere Bestehende.
 
 ## §8 BUILD-TOPOLOGIE (Opus, exklusiver Besitz)
 
-**Phase 1 parallel:** AUDIO-KERN (game/js/audio/** komplett:
-chiptune.js, sfx.js, songs/*.js — mit Node-Selbsttests und
-renderPCM-Belegen; .tmp/slice5_probe als Startpunkt) · ENGINE
-(main.js: Adapter/Guards/Unlock/Beobachter/Musik-Logik/Hitstop/
-Flash + camera.js Shake + input.js onFirstTouch + hud.js
-Pause-Menü/Ducking-Anzeige + particles.js spawnBurst +
-world/maps.js+map_*.js NUR mapDef.music + ui/inventory_ui.js
-§6.3). **Phase 2:** INTEGRATOR (Smoke §7.A additiv + §7.B/C
-sanktioniert, alle Suiten, APK-Build, kurzer 8124-Browser-Rundlauf
-mit Konsolen-Log). **Phase 3:** MICHAEL-HÖRTEST (A4) → Musik-
-Iterationsrunden (mind. 2 budgetiert) → Übergabe.
+**Phase 1 parallel** (Schnittstelle = §2-API, eingefroren):
+AUDIO-KERN (game/js/audio/**: chiptune.js, mixer.js, sfx.js,
+songs/*.js + Node-Selbstbelege) · ENGINE (main.js, camera.js,
+input.js, hud.js, particles.js, world/maps.js+map_*.js NUR
+mapDef.music, ui/inventory_ui.js §6.3 — gegen die §2-API,
+Adapter mit Stub-Attrappe testbar).
+**Phase 2 INTEGRATOR:** Smoke §7.A + §7.B/C, shot_gfx6-Rig-
+Schalter-Nachzug, alle Suiten, APK-Build + 8125 lokal, kurzer
+8124-Browser-Rundlauf (Konsole 0).
+**Phase 3:** MICHAEL-HÖRTEST (≥ 2 Runden) → Übergabe.
 
 ## §9 DEKLARATIONEN
 
-Gesten-Regel vereinheitlicht Browser/App (bewusst strenger als
-nötig in der App); Ducking statt Stopp in Pause/Inventar; Musik
-läuft im Titel erst NACH der ersten Geste (Autoplay); Schritte nur
-bei Bewegung hörbar gemacht, dezent; kein Volume-Slider in diesem
-Slice (binäre Schalter — Iteration falls Michael ihn will);
-Hitstop pausiert Partikel mit (Welt-Freeze); iOS-Eigenheiten
-dokumentiert, aus Scope; Song-Qualität wird über A4-Iterationen
-mit Michael getrieben, nicht selbst abgenommen.
+Wie Rev 1, plus: uiBus in Pause hörbar; Respawn ohne Musik-
+Neustart; Schritt-Rate 2,5/s; kein Keep-Awake (Anleitung:
+Timeout hochstellen); H-Obergrenze 2 Frames ist eine
+TEST-GRENZE, nicht Geschmack (check_inventory:280); Titel-Musik
+erst nach erster Geste; Latenz am Gerät ist A4-Beobachtungspunkt.
