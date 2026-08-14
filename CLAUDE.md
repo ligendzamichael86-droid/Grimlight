@@ -18,10 +18,13 @@ im Browser sofort spielen kann.
 
 ## Technische Grundentscheidungen (nicht ohne Absprache ändern)
 
-1. **HTML5 / Canvas 2D, Vanilla-JavaScript (ES-Module), KEIN Build-Toolchain.**
-   In dieser Umgebung gibt es Node 20, aber kein npm. Das Spiel läuft als statische
-   Website direkt im Browser. Für die Handy-Apps wird das Web-Spiel in einem
-   späteren Slice per Capacitor verpackt (npm dann via corepack beschaffen).
+1. **HTML5 / Canvas 2D, Vanilla-JavaScript (ES-Module), KEIN Build-Toolchain
+   für das SPIEL selbst.** Das Spiel läuft als statische Website direkt im
+   Browser. Für die Android-App verpackt Slice 4 das Web-Spiel per Capacitor:
+   `mobile/` + `toolchain/` (gitignored) + `bash tools/build_apk.sh`.
+   npm gibt es NUR gepinnt als `corepack npm@10.9.2` (nie `corepack enable`,
+   bloßes `corepack npm` zieht ein inkompatibles npm 12 — Beleg:
+   design/SLICE4_LANDKARTE.md).
 2. **SNES-Look als STIL, das Handy als PLATTFORM:** interne Auflösung
    **320×180**, ganzzahlig hochskaliert, `image-rendering: pixelated`,
    16×16-Pixel-Tiles.
