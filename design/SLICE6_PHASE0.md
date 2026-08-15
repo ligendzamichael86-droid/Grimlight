@@ -16,9 +16,16 @@ Code-Fakten geprueft 15.08.: kinds heissen 'skeleton'/'ghoul'/
 genau 3 rust (maps.js:622-699).
 
 **Q1 "Der letzte Docht" (Hedda, Tutorial).** Toete 5 Skelette auf
-dem FRIEDHOF. Trigger (a): kind 'skeleton', Karte GRAVEYARD.
-Belohnung: 1 Trank + 15 Gold; bei vollem Trank-Beutel stattdessen
-+10 Gold (deklariert: Belohnung verpufft nie folgenlos).
+dem FRIEDHOF. Trigger (a): kind 'skeleton', Karte GRAVEYARD; der
+Zaehler zaehlt NUR Kills nach Quest-Annahme (deklariert).
+Belohnung PRAEZISE (Pruefer-Befund 6): 1 Trank + 15 Gold; ist der
+Beutel voll, ersetzen 10 Gold den Trank — Auszahlung dann 25 Gold
+gesamt, nie weniger. Q1 ist zugleich die Antwort auf Pruefer-
+Befund 5 (Erstbesuchs-Kaufkraft ~45 Gold): die Docht-Schleife
+(annehmen -> 5 Kills -> zurueck) hebt den Erstbesuch auf ~65-70 —
+Brans 60er-Angebot ist damit IM ersten Dorfbesuch verdienbar,
+nicht geschenkt. Preise 60/90/120 bleiben (deklariert: erster
+Besuch = Schaufenster + Trank + Quests; kaufen nach der Schleife).
 
 **Q2 "Glut fuer die Esse" (Bran).** Toete die 3 Rostpanzer in den
 KATAKOMBEN. Trigger (a): kind 'rust', Karte CATACOMBS (genau 3
@@ -34,8 +41,12 @@ Grabwaechter. Stufen: aktiv (Dialog) -> erfuellt
 
 **Q4 "Was der Wind mitbringt" (Kette).** Sprich mit Bran, Hedda
 und dem Torwaechter (beliebige Reihenfolge; npcFlags, Trigger (c));
-der Dritte verraet die vergessene Friedhof-Truhe (BESTEHENDE Truhe,
-reiner Hinweistext — kein neuer content-Wert). Belohnung: 10 Gold.
+der Dritte verraet die vergessene GOLD-TRUHE IN DER SCHATZKAMMER
+DER KATAKOMBEN (BESTEHENDE Truhe tc(36,15), maps.js:711, hinter
+Ghul-Wachen + Rostpanzer; reiner Hinweistext — kein neuer
+content-Wert). KORRIGIERT nach Pruefer-Befund 3: der FRIEDHOF hat
+NULL Truhen (maps.js:635-641 nur vase/urn) — die Rev-2-Formulierung
+"Friedhof-Truhe" war am Code nicht einloesbar. Belohnung: 10 Gold.
 (ERSETZT die gekippte Nachtwache/portalBlocked-Skizze, Review B4.)
 
 Vier Quests (Soll 3-5). Gestrichen: "Brans Werkzeug" (props.js),
@@ -43,17 +54,36 @@ Vier Quests (Soll 3-5). Gestrichen: "Brans Werkzeug" (props.js),
 Deklariert: Respawn laesst runFlags stehen — Zaehler ueberleben
 den Tod; resetRun leert alle Quest-Felder (SPEC §5).
 
-## 2. OEKONOMIE-VORRECHNUNG (Fable; Agent-Pruefung PFLICHT)
+## 2. OEKONOMIE — GEPRUEFT UND KORRIGIERT (P0-OEKONOMIE, 15.08.)
 
-Einnahmen Erstdurchlauf: ~137 (Landkarte 3.1, gemessen) + 75
-Quest-Gold = ~212. Katakomben-Runde ~58 in 2-3 min.
-Ausgaben-Katalog (SPEC §3.1): Trank 15, Slot-Angebot 60/90/120
-(rare +50 %), Herzcontainer 250 einmalig, Hedda-Heilung 10,
-Mile 2,5x Basis, Ankauf 12/28.
-Prognose: Erstdurchlauf deckt 2 Traenke + Heilungen + EIN
-90er-Angebot (~140); Herzcontainer kostet ~1 Katakomben-Runde
-extra. Farming bleibt Option, nicht Pflicht. -> Bestaetigung/
-Korrektur durch P0-OEKONOMIE-Agent gegen den echten Code.
+Der Pruefer fand 6 Befunde gegen die Fable-Vorrechnung; die Zahlen
+hier ERSETZEN sie (Rechenweg: .tmp/slice6_p0/oekonomie_sim.mjs,
+deterministische Erwartungswerte aus den echten Modul-Importen).
+
+Einnahmen: Erstdurchlauf 137,2 als UNTERGRENZE; realistisch
+137..187 (drei vorher fehlende Stroeme: Trank-Ueberlauf +2 Gold
+[8,6 Trank-Drops erwartet gegen MAX_POTIONS 3 — Ueberlauf ist der
+NORMALFALL], Gear-Ankauf ~+26 Erstdurchlauf / +37,5 je Farmrunde,
+Boss-Adds +4..12). Mit Quest-Gold 75: ~212..262 NACH dem Boss.
+**Farm-Runde Katakomben = 47,8, NICHT 58** (Befund 1: die
+Gold-Truhe filtert runFlags.openedChests dauerhaft weg,
+main.js:1134-1137; 57,8 gilt nur beim Erstbetreten).
+**Kaufkraft ist eine SEQUENZ, kein Kassensturz** (Befund 5): beim
+Erstbesuch im Dorf liegen ~45,5 vor — Aufloesung ueber die
+Q1-Schleife (siehe §1). Nach Katakomben ~113, vor dem Boss ~154,
+nach Boss+Q3 ~212 (Untergrenzen).
+**Herzcontainer:** nach einem 140er-Ausgabenpaket ~3-4 Farmrunden
+(pessimistisch mit 1 Tod: 4) — DECKT sich mit SPEC §3.1 "~3
+Runden"; die PHASE0-Behauptung "~1 Runde extra" war falsch
+(Befund 2). Mit Gear-Ankauf sinkt es auf ~2 Runden. Farming
+bleibt Option, nicht Pflicht — bestaetigt.
+Q2-Fairness bestaetigt: rust ist Frontkegel-Block ±60°
+(enemies.js:250-257, Schwert UND Bumerang), hp 5, langsamster
+Gegner, Blick dreht max. alle 0,4 s — Flankieren toetet normal.
+Deklariert (Nebenbefund, NICHT Slice-6-Scope): die Siegtruhe ist
+von openedChests ausgenommen und respawnt je BOSS_KAMMER-Betreten
+inkl. Victory-Screen (main.js:1810/1139-1141) — bekanntes
+Bestands-Konsistenzloch, als Farm unpraktisch, bleibt liegen.
 
 ## 3. OFFENE PHASE-0-PAKETE (Opus, parallel)
 
@@ -76,4 +106,7 @@ Korrektur durch P0-OEKONOMIE-Agent gegen den echten Code.
 - [ ] Eichung: Band = __ .. __, E1-Schwelle = __, L<16-Deckel = __
 - [ ] c = #______, G = #______ (Auflagen nachgerechnet)
 - [ ] Boden-Mischung: __ (gebunden)
-- [ ] Oekonomie: bestaetigt / korrigiert: __
+- [x] Oekonomie: KORRIGIERT (6 Befunde, siehe §2; Q4-Truhe ->
+      Katakomben-Schatzkammer, Farm-Rate 47,8, Herz ~3-4 Runden,
+      Q1-Klausel praezisiert, Erstbesuchs-Kaufkraft ueber
+      Q1-Schleife geloest)
