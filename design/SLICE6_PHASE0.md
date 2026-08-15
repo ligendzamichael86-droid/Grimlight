@@ -104,7 +104,15 @@ Bestands-Konsistenzloch, als Farm unpraktisch, bleibt liegen.
 ## 4. ERGEBNISSE (werden nachgetragen -> Rev 2.1)
 
 - [ ] Eichung: Band = __ .. __, E1-Schwelle = __, L<16-Deckel = __
-- [ ] c = #______, G = #______ (Auflagen nachgerechnet)
+- [x] **c = #805f3a** (Holz-Dach-Zwischenstufe, L 100,65 — schliesst
+      die Q->J-Luecke: Rampe q 44,7 < j 64,4 < Q 83,8 < c 100,7 <
+      J 117,8 streng monoton, Hue+R-B ebenfalls) und
+      **G = #8f4c5d** (NPC-Stoff, gedaempftes Krapp-Altrosa,
+      L 97,97; Kontrast zum Helden-Violett min. 16,1 dE00 =
+      isolierter als 90 % aller Bestandstoene). Beide S_hsv<=0,55;
+      Zensus-Beweis: 0 Texel in allen 360 Grids (inkl. ICON_APP —
+      vom Landkarten-Zensus uebersehene dritte Quelle); Rost-Rampe
+      ungestoert (alle 6 Paare >= 5,7 dE00-Referenzabstand).
 - [x] Boden-Mischung GEBUNDEN (P0-GEN, .tmp/slice6_p0/
       dorf_boden_pool.json): Palette-L-Mittel der Bodenflaeche
       **75,46** ueber 260 608 Texel; Flaechen-Mix der 1022
@@ -162,6 +170,44 @@ fuenfte Musterzeile — der Torbogen laeuft als dorf_dach_tor).
 E9 Der Dach-Zensus verschiebt sich, sobald P0-FARBE 'c' setzt
 (Blaupausen nutzen bewusst kein c/G) — die EICHUNG wartet deshalb
 auf P0-FARBE und rechnet mit dem finalen c-Wert.
+
+## 6. FARBE-BEFUNDE — FABLE-ENTSCHEIDE (15.08., bindend fuer Rev 2.1)
+
+F1 **Fackelkern-Auflage wechselt die Metrik: C*ab < 30,5**
+(CIELAB-Buntheit des Fackelkerns '1' #ffe9b0). Begruendung
+(Pruefer-Beweis): S_hsl ist wirkungslos (Rotkanal 255 -> jeder Ton
+besteht), S_hsv unerfuellbar (35/64 Bestandstoene verletzen sie).
+c: 27,7 OK, G: 30,3 OK. Der separate S_hsv<=0,55-Deckel fuer die
+zwei NEUEN Werte bleibt daneben bestehen (Review B1). Die
+Interpolations-Alternative c=#825f37 ist damit VERWORFEN
+(S_hsv 0,577 reisst den Deckel); der Preis — S-Folge der
+Holzrampe nicht monoton — ist deklariert und akzeptiert
+(L/Hue/R-B monoton genuegen der Rampen-Auflage).
+F2 **G = Krapp-Altrosa ANGENOMMEN** (Stilentscheid): gefaerbter
+Stoff liest mittelalterlich, Sektor 330-350° ist der einzige
+semantisch freie Platz (Teal = Seelenglut, Indigo = Held, Warm =
+noch ein Braun); Zahlen dominieren jede Alternative. Ablesbarkeit
+prueft die Sichtjury, final Michael am Geraet.
+F3 **c nahe P (Erde hell, 5,8 dE00; Dach ueber Lehmboden
+dL 2,18) AKZEPTIERT mit Auflage:** die Dach-Unterkante liegt
+konstruktiv IMMER ueber der Bake-/Schattenzone (dorf_bake_*, E3-
+Transparenzkante) — die Trennung Dach/Boden kommt aus dem Bake,
+nicht aus dem Farbabstand. Sichtjury-Punkt. Ebenso G~X dL 1,22
+akzeptiert (Praezedenz w~e: Gleichstand erlaubt, wenn der
+Farbort abweicht — 76,4° Hue-Abstand, 16,1 dE00).
+F4 **Doku-Nachzug an ART:** die zwei dokumentierten Rampen
+verlieren eine Stufe (Stahl c>C>i>I -> C>i>I; Ghul d>G>H>3 ->
+d>H>3) — palette.js:97/98/171-172/174 + ART_DIRECTION.md:16/44
+zieht der ART-Agent im Umwidmungs-Commit nach (nur Kommentar/
+Doku-Zeilen, keine Pixelwirkung).
+F5 Namensraum-Deklaration ERWEITERT (zu E7): GRAVEYARD-Legende
+'G' = gravestone, BOSS_KAMMER-Legende 'c' = floor_decal_crack —
+Karten-Legenden sind vom Paletten-Zensus unberuehrt; ein
+spaeterer Agent darf den Fund NICHT als Widerspruch werten.
+Die mobile/-Spiegelkopie der Palette entsteht je APK-Build neu —
+kein Nachzug noetig. Die zwei abgeloesten Alt-Waechter
+(check_art_gfx3:57, dev_art_slice2:124) bleiben unangefasst wie
+in Rev 1 deklariert.
 - [x] Oekonomie: KORRIGIERT (6 Befunde, siehe §2; Q4-Truhe ->
       Katakomben-Schatzkammer, Farm-Rate 47,8, Herz ~3-4 Runden,
       Q1-Klausel praezisiert, Erstbesuchs-Kaufkraft ueber
