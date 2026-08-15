@@ -13,7 +13,7 @@ SNES-Pixel-Look, Diablo-Stimmung: entsättigt, dunkel, warme Lichtinseln.
 | Knochen | B, b | #948b76, #d6cbb1 | Skelette, Knochenreste |
 | Blut | r, R | #6e1a20, #ae2f2a | Herzen, Treffer |
 | Feuer/Gold | Y, o, y | #97662a, #d8722a, #f0bf4e | Fackeln, Münzen, Griffe |
-| Kaltblau/Stahl | c, C, i | #1d2f3d, #3c5a70, #92aec0 | Wasser-Ripple, Klingen |
+| Kaltblau/Stahl | C, i | #3c5a70, #92aec0 | Wasser-Ripple, Klingen (`c` ist seit Slice 6 warmes Holz, siehe palette.js) |
 | Held | u, U, h | #2c2434, #4a3d57, #c29267 | Umhang violett, Haut |
 | Wasser | w | #0a0f14 | Teich, fast schwarz |
 
@@ -41,7 +41,7 @@ Neue Palettenrampen (10 Farben, insgesamt 34):
 | Rampe | Schlüssel | Farben | Einsatz |
 |---|---|---|---|
 | Katakomben-Stein (kalt) | t, T, L | #23262d, #3d434d, #5f6774 | Boden, Ziegelwand, Säulen, Urnen |
-| Ghul-Fleisch | d, G, H | #4c5a3a, #75855a, #a9b287 | Ghul: fahle Haut hell oben, dunkle Glieder |
+| Ghul-Fleisch | d, H | #4c5a3a, #a9b287 | Ghul: fahle Haut hell oben, dunkle Glieder (`G` ist seit Slice 6 NPC-Stoff; der Ghul zeichnete nie mit ihm) |
 | Holz | q, Q | #3a291d, #6f4d2f | Truhe, Vase |
 | Trank | x | #e0524c | Heiltrank-Flasche (leuchtend) |
 | Nebel | f | #8a92a0 | fog_blob, einziger Fog-Ton |

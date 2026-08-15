@@ -232,7 +232,11 @@ const gespeichert = standRoh();
 ok(gespeichert !== null, '§3.2 Boot 1: visibilitychange hat den Stand geschrieben');
 
 const s1 = stand();
-ok(!!s1 && s1.v === 1, `§3.1 Boot 1: Stand traegt Schema v1 (ist ${s1 && s1.v})`);
+// S6-§7B(5) SANKTION (SPEC Slice 6 §7.B(5)): der vom Spiel GESCHRIEBENE Stand
+// traegt ab Slice 6 Schema v2 (save.js SAVE_VERSION 2, §5). Der v1-LADE-Beweis
+// laeuft nicht mehr ueber diesen Stand, sondern ueber ein rohes v1-Fixture
+// (§0.1) — dieser Boot prueft nur noch, was das Spiel selbst schreibt.
+ok(!!s1 && s1.v === 2, `§3.1 Boot 1: Stand traegt Schema v2 (ist ${s1 && s1.v})`);
 ok(!!s1 && s1.mapKey === 'CATACOMBS' && s1.spawn.x === MAPS.CATACOMBS.playerSpawn.x
   && s1.spawn.y === MAPS.CATACOMBS.playerSpawn.y,
   `§3.1 Boot 1: Karte + Eintritts-Spawn im Stand (${s1 && s1.mapKey} ${JSON.stringify(s1 && s1.spawn)})`);
@@ -332,13 +336,16 @@ ok(Math.abs(b4.ambient() - 0.22) < 1e-9 && b4.goldText() === 'GOLD 0',
   '§3.1 Boot 4: ENTER startet trotzdem sofort einen frischen Run');
 
 // Auch ein SCHEMA-fremder (aber syntaktisch gueltiger) Stand fliegt raus.
-SPEICHER.set(SAVE_KEY, JSON.stringify({ ...JSON.parse(standNachBoot1), v: 2 }));
+// S6-§7B(6) SANKTION (SPEC Slice 6 §7.B(6), gleiche Logik wie §7.B(4)): v:2 ist
+// ab Slice 6 die EIGENE Version und wird geladen. Das Fixture muss eine
+// ABGELEHNTE Zukunfts-Version bleiben -> v:3 (nicht in SAVE_VERSIONEN [1,2]).
+SPEICHER.set(SAVE_KEY, JSON.stringify({ ...JSON.parse(standNachBoot1), v: 3 }));
 const b4b = mkStubs({ search: '' });
 await import('../game/js/main.js?boot=4b');
 benenne(b4b);
 b4b.frames(5);
 ok(!b4b.hatText('FORTSETZEN') && b4b.hatText('ENTER'),
-  '§3.1 Boot 4b: fremde Schema-Version -> kein Menue (ein v2-Stand kann nichts kaputt machen)');
+  '§3.1 Boot 4b: fremde Schema-Version -> kein Menue (ein v3-Stand kann nichts kaputt machen)');
 
 // ===========================================================================
 // BOOT 5 — GAR KEIN localStorage (Zustand der drei kanonischen Flusstests)

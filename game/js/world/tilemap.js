@@ -507,6 +507,28 @@ const ANCHOR_CLAMP = {
   tree_canopy_xl_b_m: 4,
   tree_canopy_xl_c: 4,
   tree_canopy_xl_c_m: 4,
+  // SLICE 6 §6.1 — Gebaeude sind KEINE Kronen: ihr Dach darf nicht von
+  // der Wand rutschen. W = 0 haelt den Span pixelgenau auf dem Wandblock.
+  // (Entscheid E1, SLICE6_PHASE0 §5: der Generator hat am ungeklammerten
+  // Default 14 Versatz bis +14 px (Kate I) und -13 px (Osttor) gemessen —
+  // das Dach stand neben dem Haus. Rein ADDITIVE Tabellenzeilen: kein
+  // Bestands-Key, kein Logik-Edit; die vier Bestandskarten fuehren keinen
+  // dorf_*-Key, ihre Op-Stream-Hashes bleiben byte-gleich.)
+  // Der Lookup laeuft ueber def.art (anchorOffset unten), NICHT ueber die
+  // gewaehlte swayPose — die vier Posen-Keys dorf_segel_(r|l)(1|2) brauchen
+  // deshalb KEINE eigene Zeile (Beleg: der Over-Zweig bestimmt erst NACH
+  // anchorOffset ueber def.swayPoses[swayPose8(...)] den Zeichen-Key).
+  // dy bleibt ungeklammert (±4 px) — ART-Auflage: >= 4 px senkrechte
+  // Transparenz-Reserve am Rand jedes Dachgrids.
+  dorf_dach_a: 0,
+  dorf_dach_a_m: 0,
+  dorf_dach_b: 0,
+  dorf_dach_c: 0,
+  dorf_dach_d: 0,
+  dorf_dach_d_m: 0,
+  dorf_dach_tor: 0,
+  dorf_glocke: 0,
+  dorf_segel: 0,
 };
 const ANCHOR_CLAMP_DEFAULT = 14; // Front ohne Stammdeckung
 

@@ -22,9 +22,13 @@
 // BOSS_KAMMER kommen aus eigenen Dateien; MAPS setzt die Portal-Kette
 // GRAVEYARD > CATACOMBS > FLUESTERGRUFT > BOSS_KAMMER zusammen.
 
+// Slice 6: die FUENFTE Karte DORF (Gramfeld) kommt ebenfalls aus einer eigenen
+// Datei (world/map_dorf.js); MAPS haengt sie unten ein und GRAVEYARD bekommt
+// dafuer sein Westtor-Portal (§6.2, geo-Sanktion §9.M2).
 import { tc, tileRect } from './coords.js';
 import { FLUESTERGRUFT } from './map_fluestergruft.js';
 import { BOSS_KAMMER } from './map_bosskammer.js';
+import { DORF } from './map_dorf.js';
 
 export { tc, tileRect };
 
@@ -641,8 +645,21 @@ export const GRAVEYARD = {
   ],
   // Krypta-Treppe (die beiden D-Tiles) → Katakomben, Spawn in der
   // Eingangskammer NEBEN der Treppe nach oben (nicht im Gegenportal).
+  //
+  // SLICE 6 §6.2 — WESTTOR NACH GRAMFELD (die EINZIGE geo-Aenderung, Michael-
+  // Entscheid §9.M2 JA vom 15.08.2026; sanktioniert an GENAU zwei Orten:
+  // smoke_test.mjs:2150 und smoke_test.mjs:3572, nichts weiter).
+  // Der Anker ist die BESTEHENDE Wegkachel (1,12): GRAVEYARD_ROWS[12][1] === '='
+  // (Legende '=' -> art 'path', solid:false) — die westlichste Zelle des
+  // Hauptwegs, der quer durch den Friedhof laeuft. Es wird KEIN Zeichen
+  // getauscht und KEINE Legende angefasst: das Soliditaets-Raster (sol-Hash)
+  // bleibt byte-identisch, nur der geo-Hash (er hasht die Portal-Liste mit)
+  // aendert sich. Ziel-Spawn tc(39,15) = der DORF-Eintritt am Osttor.
+  // GDDs "oben das Dorf" meint die vertikale Erzaehlung (Dorf ueber den
+  // Katakomben), nicht die Himmelsrichtung — deklariert (§6.2).
   portals: [
     { ...tileRect(32, 2, 2, 1), target: 'CATACOMBS', spawn: tc(6, 4) },
+    { ...tileRect(1, 12, 1, 1), target: 'DORF', spawn: tc(39, 15) },
   ],
   // GRAFIKPASS 6 §3.2 BELICHTUNGS-SOCKEL (GP6-§7A): 0.45 -> 0.22. Die
   // Paletten-Offsets (§3.1) heben die Grundtoene um +15 L an; ohne die
@@ -734,7 +751,11 @@ export const CATACOMBS = {
   music: 'catacombs',   // SLICE 5 §4.4
 };
 
-export const MAPS = { GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER };
+// Slice 6: DORF haengt ANS ENDE (die Reihenfolge ist die Erzaehlung: Friedhof ->
+// Katakomben -> Gruft -> Bosskammer, das Dorf als fuenfte, gegnerfreie Karte).
+// Der Zaehler in .tmp/check_builderA_slice3.mjs:55 (MAPS hat 4 Eintraege) ist
+// dafuer als §7.B(7) sanktioniert.
+export const MAPS = { GRAVEYARD, CATACOMBS, FLUESTERGRUFT, BOSS_KAMMER, DORF };
 
 // Portal-Gate (Slice 3 §3). PURE Funktion, KEINE Imports/Seiteneffekte —
 // main.js ruft sie im Portal-Loop, Smoke 33 testet sie headless direkt

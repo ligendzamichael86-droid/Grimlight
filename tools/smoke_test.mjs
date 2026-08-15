@@ -1729,6 +1729,18 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     // Zeile. Das GATE wird dadurch nicht schwaecher, sondern gilt fuer sechs
     // Keys mehr; ohne die Ergaenzung fielen sie in den 16x16-Default und der
     // Test waere ROT, obwohl die Masse korrekt ist.
+    // S6-§7B(8) SANKTION (SPEC Slice 6 §7.B(8), Wortlaut fix aus SLICE6_PHASE0
+    // §5 E8): die sechs DORF-Musterzeilen. Die Waechter matchen NAMEN, nicht
+    // Groessen — ohne diese Zeilen fielen die 15 Grossgrids des Dorfs in den
+    // 16x16-Default und der Test waere rot, obwohl die Masse korrekt sind.
+    // Es kommt KEINE Masse-KLASSE hinzu (alle drei Masse gibt es schon), und
+    // KEIN Bestands-Key wird umgeleitet (alle Muster beginnen mit 'dorf_').
+    // Haeuserdaecher gross 64x48, klein/Torbogen 48x32; der Glocken-Ueberbau
+    // und das Marktsegel (inkl. der vier Sway-Posen) 48x32; die zwei
+    // Schatten-Bakes liegen flach: 64x32 bzw. 48x32.
+    // KEINE fuenfte Dach-Musterzeile — der Torbogen laeuft als dorf_dach_tor
+    // (E8). dorf_glocke_kopf/_fuss sind normale 16x16-Kacheln und bleiben
+    // deshalb bewusst im Default (das '$' am Zeilenende trennt sie ab).
     const MASSTABELLE = [
       [/^tree_canopy_xl_b(_m)?(_[rl][12])?$/, 64, 48],
       [/^canopy_shadow_xl_b(_[gd])?$/, 64, 32],
@@ -1736,6 +1748,12 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       [/^canopy_shadow_xl_[ac](_[gd])?$/, 48, 32],
       [/^tree_canopy_2x2_[abc]m?$/, 32, 32],
       [/^tree_canopy_back_[abc]$/, 32, 32],
+      [/^dorf_dach_(a|b)(_m)?$/, 64, 48],
+      [/^dorf_dach_(c|d|tor)(_m)?$/, 48, 32],
+      [/^dorf_bake_gross$/, 64, 32],
+      [/^dorf_bake_klein$/, 48, 32],
+      [/^dorf_segel(_[rl][12])?$/, 48, 32],
+      [/^dorf_glocke$/, 48, 32],
     ];
     const massOf = (name) => {
       for (const [re, w, h] of MASSTABELLE) if (re.test(name)) return [w, h];
@@ -2147,7 +2165,15 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     // sanktionierten Teich-Umformung (§2.7a, .tmp/gen_gfx4.mjs). geo BLEIBT
     // byte-identisch (Spawns/Portale/torch-findTiles unberuehrt) — ein geo-Drift
     // waere ein STOPP-Signal.
-    GRAVEYARD: { sol: '432b1c3217d1e70a560f98392f54fc29b021e3f86042283ee7fb5c4ec917b4a9', geo: '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e' },
+    // S6-§7B(1) SANKTION (SPEC Slice 6 §7.B(1), Michael-Entscheid §9.M2 JA vom
+    // 15.08.2026): GRAVEYARD.geo 4c9372d0... -> 4630a6ba... fuer das EINE neue
+    // Westtor-Portal nach GRAMFELD (Wegkachel (1,12), maps.js:662). URSACHE
+    // NACHGEWIESEN: von den sieben geo-Feldern (p/sk/gh/en/pr/po/torch) ist NUR
+    // 'po' laenger geworden — nimmt man das DORF-Portal aus der Liste, faellt der
+    // Hash exakt auf den 204e28f-Goldenen 4c9372d0... zurueck (die Bestandszeile
+    // {CATACOMBS} steht unveraendert an Position 0). GRAVEYARD.sol bleibt
+    // BYTE-IDENTISCH: es wurde kein Zeichen getauscht und keine Legende angefasst.
+    GRAVEYARD: { sol: '432b1c3217d1e70a560f98392f54fc29b021e3f86042283ee7fb5c4ec917b4a9', geo: '4630a6ba302081f722068f263b1fac6c6481dee9a15f2788f36ff1ba67d01393' },
     CATACOMBS: { sol: '82c22c6d845065371389f5e0ecb9ee498543740c06391b85719ada8568c4394c', geo: 'ce78746ee9e243c44d6a6bb3779c5ca535c7cee764096f8a5d29fa992269b9cb' },
     FLUESTERGRUFT: { sol: '0cca3204f83878b54c5390aa1bc9c4159424f5424b1a749d6dad4e47fc273489', geo: '2ac0a890e545869220fec7fa8256da51192c2bc4a07bc8d8d68fb7a669f6fa7c' },
     BOSS_KAMMER: { sol: 'ebe999cf1e6023c6d169fa24a205e224c1dc36e4424938063cdedf045c7d611c', geo: 'a7d72c33f00b83c8d974e5d3161ca2315b7d0a24aa77f24204f386bb558885eb' },
@@ -3567,9 +3593,14 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       }));
       check('§7F(i) §6.3 geo-Hash: Spawns/Portale/torch-findTiles unberuehrt',
         geoF(tmNeu, GRAVEYARD) === geoF(tmAlt, GRAVEYARD));
+      // S6-§7B(2) SANKTION (SPEC Slice 6 §7.B(2), §9.M2): ZWEITORT desselben
+      // geo-Hashes. Derselbe Wert wie in §36 (smoke:2150) — gemessen: dieser
+      // Aufruf liefert byte-gleich 4630a6ba..., weil er dieselbe Portal-Liste
+      // hasht. Der sol-Teil der Zeile bleibt UNVERAENDERT (der P-Tausch und das
+      // neue Portal aendern das Soliditaets-Raster nicht).
       check('§7F(i) §6.3 sol/geo entsprechen weiterhin den §36-Goldenen von 204e28f',
         solF(GRAVEYARD.rows, GRAVEYARD.legend) === '432b1c3217d1e70a560f98392f54fc29b021e3f86042283ee7fb5c4ec917b4a9'
-        && geoF(tmNeu, GRAVEYARD) === '4c9372d0645b0743b6e80ed69dece913e3e62b156339bad96b6286d7a55b7f2e');
+        && geoF(tmNeu, GRAVEYARD) === '4630a6ba302081f722068f263b1fac6c6481dee9a15f2788f36ff1ba67d01393');
     }
   }
 
@@ -4127,8 +4158,12 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
       && roh.prog.level === 3 && roh.runFlags.bossDead === true
       && roh.runFlags.openedChests.length === 1,
       txt.slice(0, 120));
+    // S6-§7B(3) SANKTION (SPEC Slice 6 §7.B(3)): SAVE_VERSION 1 -> 2 (Save v2,
+    // §5). Der SCHLUESSEL bleibt bewusst 'grimlight.save.v1' — genau dafuer war
+    // er versioniert gedacht: v1-Staende werden migriert, nicht verwaist
+    // (save.js:43-63, SAVE_VERSIONEN [1,2]). Nur die Versions-Zahl wandert.
     check('S4-§7F(a) §3.1 SAVE_KEY ist versioniert (ein v2-Schema kollidiert nicht)',
-      SAVE_KEY === 'grimlight.save.v1' && SAVE_VERSION === 1, `${SAVE_KEY} / v${SAVE_VERSION}`);
+      SAVE_KEY === 'grimlight.save.v1' && SAVE_VERSION === 2, `${SAVE_KEY} / v${SAVE_VERSION}`);
     // maxHp ist ABGELEITET. Der Stand traegt weder das Feld noch die
     // Zeichenkette (die Test-Items oben nutzen bewusst KEINEN maxHp-Affix).
     check('S4-§7F(a) §3.1 maxHp wird NIE gespeichert (weder Feld noch Zeichenkette)',
@@ -4188,7 +4223,12 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
     pruefeAblehnung('Zahl statt Text', 42);
     pruefeAblehnung('JSON-Array statt Objekt', '[1,2,3]');
     pruefeAblehnung('JSON-null', 'null');
-    kaputt('fremde Schema-Version', (d) => { d.v = 2; });
+    // S6-§7B(4) SANKTION (SPEC Slice 6 §7.B(4)): v:2 ist ab Slice 6 die EIGENE
+    // Version und wird geladen — die Probe braucht weiter eine FREMDE, naemlich
+    // eine ZUKUNFTS-Version. v:3 steht nicht in SAVE_VERSIONEN [1,2] und muss
+    // wie zuvor mit null abgelehnt werden (die Sachaussage der Probe ist
+    // unveraendert: ein Stand aus einem fremden Schema kann nichts kaputt machen).
+    kaputt('fremde Schema-Version', (d) => { d.v = 3; });
     kaputt('fehlende Version', (d) => { delete d.v; });
     kaputt('unbekannte Karte', (d) => { d.mapKey = 'ATLANTIS'; });
     kaputt('geerbter Karten-Key (constructor)', (d) => { d.mapKey = 'constructor'; });

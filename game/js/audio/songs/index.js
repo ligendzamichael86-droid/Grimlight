@@ -8,12 +8,14 @@
 //   CATACOMBS     -> 'catacombs'
 //   FLUESTERGRUFT -> 'fluestergruft'
 //   BOSS_KAMMER   -> 'boss_idle'  (+ 'boss_aggro' als zweite Ebene, §4.4)
+//   DORF          -> 'dorf'       (SLICE 6 §0.9)
 //   Bildschirme   -> 'title', 'victory', 'gameover'
 
 import { SONG_TITLE } from './song_title.js';
 import { SONG_GRAVEYARD } from './song_graveyard.js';
 import { SONG_CATACOMBS } from './song_catacombs.js';
 import { SONG_FLUESTERGRUFT } from './song_fluestergruft.js';
+import { SONG_DORF } from './song_dorf.js';
 import { SONG_BOSS_IDLE, SONG_BOSS_AGGRO } from './song_boss.js';
 import { SONG_VICTORY, SONG_GAMEOVER } from './song_stinger.js';
 
@@ -22,6 +24,7 @@ export const SONGS = {
   graveyard: SONG_GRAVEYARD,
   catacombs: SONG_CATACOMBS,
   fluestergruft: SONG_FLUESTERGRUFT,
+  dorf: SONG_DORF,          // SLICE 6 §0.9 (STUB, Komposition iteriert danach)
   boss_idle: SONG_BOSS_IDLE,
   boss_aggro: SONG_BOSS_AGGRO,
   victory: SONG_VICTORY,
@@ -36,6 +39,6 @@ export function songFuer(key) {
 }
 
 export {
-  SONG_TITLE, SONG_GRAVEYARD, SONG_CATACOMBS, SONG_FLUESTERGRUFT,
+  SONG_TITLE, SONG_GRAVEYARD, SONG_CATACOMBS, SONG_FLUESTERGRUFT, SONG_DORF,
   SONG_BOSS_IDLE, SONG_BOSS_AGGRO, SONG_VICTORY, SONG_GAMEOVER,
 };

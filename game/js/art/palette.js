@@ -43,6 +43,50 @@
 //  * k / n / 0 / '*' / '+' und die Stein-Rampe t/T/L/D bleiben BEWUSST
 //    unverschoben (Silhouetten-Entscheid §3.1; das L<16-Band der Messziele
 //    ist darauf geeicht).
+// =============================================================================
+// SLICE 6 §0.5 / PHASE0 §4+§6 — UMWIDMUNG 'c' UND 'G'. GUELTIGER STAND.
+// =============================================================================
+// KEIN neuer Schluessel (§0.11 bleibt gewahrt: 61 alnum + 3 Symbole). Zwei
+// Toene hatten im GESAMTEN Bestand NULL Texel (Zensus ueber 360 Grids aus
+// SPRITES + TILE_ART + ICON_APP, .tmp/slice6_p0/zensus_nachweis.json) und
+// bekommen fuer das Dorf Gramfeld eine neue Rolle. Reine WERT-Aenderung ohne
+// Pixelwirkung im Bestand.
+//
+//   Ton | alt      | NEU      | L alt | L NEU  | S_hsv | C*ab | neue Rolle
+//   ----+----------+----------+-------+--------+-------+------+--------------
+//    c  | #1d2f3d  | #805f3a  |  43,2 | 100,65 | 0,547 | 27,7 | Holz-/Dach-
+//       |          |          |       |        |       |      | Zwischenstufe
+//    G  | #82854c  | #8f4c5d  | 125,6 |  97,97 | 0,469 | 30,3 | NPC-Stoff
+//       |          |          |       |        |       |      | (Krapp)
+//
+// AUFLAGEN (alle nachgerechnet, P0-FARBE):
+//  * HOLZ-RAMPE streng monoton in L, Farbton UND Waerme (R-B):
+//      q 44,72 < j 64,38 < Q 83,75 < c 100,65 < J 117,77
+//      Schritte 19,66 / 19,37 / 16,90 / 17,12 — 'c' halbiert die einzige
+//      Luecke (Q->J war 34,02 L, das 1,74-fache der uebrigen Schritte).
+//      Hue 24,8 < 26,8 < 28,1 < 31,7 < 35,3; R-B 29 < 47 < 64 < 70 < 85.
+//      DEKLARIERT (F1): die S_hsv-Folge ist als EINZIGE nicht monoton
+//      (0,500/0,553/0,577/0,547/0,574) — der 0,55-Deckel zwingt 'c' um 0,03
+//      unter die reine RGB-Interpolation #825f37. Bewusst akzeptiert.
+//  * FACKELKERN-AUFLAGE (F1, Metrik gewechselt): kein Dorf-Ton bunter als der
+//    Fackelkern '1' (#ffe9b0) in CIELAB-Buntheit C*ab = 30,5. c 27,7 / G 30,3
+//    liegen darunter. S_hsl waere wirkungslos (S('1') = 1), S_hsv unerfuellbar
+//    (35 von 64 BESTANDStoenen verletzen sie) — beide Lesarten sind untauglich.
+//  * Zusaetzlicher Deckel NUR fuer diese zwei NEUEN Werte: S_hsv <= 0,55.
+//  * 'G' ist mit dE00 16,1 zum naechsten Bestandston ('X') isolierter als 90 %
+//    aller Bestandstoene; Farbtonabstand zum Helden-Violett 74,8-77,9 Grad.
+//    Damit liest NPC-Stoff nie als Heldenumhang.
+//  * ROST-Rampe 4/5/6 ungestoert (alle 6 Paare >= 5,7 dE00 Referenzabstand).
+// FOLGE (F4, Doku-Nachzug, KEINE Pixelwirkung — beide Toene hatten 0 Texel):
+//  * Stahl-Rampe verliert ihre dunkelste Stufe:  c > C > i > I  ->  C > i > I
+//  * Ghul-Rampe verliert ihre Mittelstufe:       d > G > H > 3  ->  d > H > 3
+//    (der Ghul zeichnete schon immer nur mit d/H/3 — die Umwidmung macht den
+//    IST-Zustand nur sichtbar.) Nachgezogen sind: die Rampen-Kommentare hier
+//    unten und design/ART_DIRECTION.md:16 + :44.
+// NICHT ANFASSEN (namentlich deklariert, SPEC §0.5): die zwei ABGELOESTEN
+// Alt-Waechter .tmp/check_art_gfx3.mjs:57 (G = '#82854c') und
+// .tmp/dev_art_slice2.mjs:124 (c = '#1d2f3d') stehen nicht auf der Gruen-Liste.
+// Die mobile/-Spiegelkopie der Palette entsteht je APK-Build neu (F5).
 // FOLGE-ANPASSUNGEN in art/sprites.js (§3.1a/b, GP6): water_mid_calm 'k' -> '+'
 // (sonst verdoppelt sich der Zonensprung gegen das neue 'w'), Back-Kronen-Rim
 // Variante C (E-Zeile -> '*', 'e'-Rim eine Zeile nach innen).
@@ -94,8 +138,9 @@ export const PALETTE = {
   y: '#f0bf4e', // Fackel-Gelb / Gold hell
   Y: '#97662a', // Gold dunkel, Schwertgriff, Truhen-Beschlag
   1: '#ffe9b0', // Flammen-Kern, heißester Ton (NEU 1.5)
-  // Kaltes Blau / Stahl: c -> C -> i -> I
-  c: '#1d2f3d', // Kaltblau dunkel
+  // Kaltes Blau / Stahl: C -> i -> I
+  // (F4: die Rampe hat seit der Slice-6-Umwidmung DREI Stufen — 'c' ist raus
+  // und traegt jetzt warmes Holz. Pixelwirkung keine: 'c' hatte 0 Texel.)
   C: '#3c5a70', // Kaltblau mittel, Klingen-Schatten
   i: '#92aec0', // Stahl hell (Klinge)
   I: '#d9e6ee', // Stahl Glanzblitz (NEU 1.5, Klingenkante)
@@ -169,15 +214,29 @@ export const PALETTE = {
   L: '#687180', // Katakomben-Stein hell (Kanten, Licht)
   D: '#949eae', // Katakomben-Stein Spitzlicht (NEU 1.5, Ziegel-Oberkanten)
   // Ghul-Fleisch (GFX3 §3.4: krankhaftes Gelbgrün statt Hecken-Grün; +Rot,
-  // -Blau, Helligkeit je <=5% gehalten -> aufgedunsen, fiebrig): d -> G -> H -> 3
+  // -Blau, Helligkeit je <=5% gehalten -> aufgedunsen, fiebrig): d -> H -> 3
+  // (F4: DREI Stufen. Die alte Mittelstufe 'G' ist seit Slice 6 NPC-Stoff —
+  // der Ghul hat sie ohnehin nie gezeichnet, er nutzt nur d/H/3. Der
+  // dokumentierte Sprung d -> H ist damit der IST-Zustand seit GFX3.)
   d: '#585a2c', // Ghul-Fleisch dunkel (sanktionierte Hue-Verschiebung)
-  G: '#82854c', // Ghul-Fleisch mittel
+  G: '#8f4c5d', // NPC-STOFF, gedaempftes Krapp-Altrosa (SLICE 6, umgewidmet
+  //             aus "Ghul-Fleisch mittel" #82854c, 0 Texel). Leitfarbe der
+  //             Dorfkleidung: gefaerbte Wolle liest mittelalterlich, und der
+  //             Sektor 330-350 Grad ist der einzige semantisch freie Platz der
+  //             Palette (Teal = Seelenglut, Indigo = Held, Warm = noch ein
+  //             Braun). L 97,97 | S_hsv 0,469 | C*ab 30,3 | dE00 16,1 zum
+  //             naechsten Bestandston 'X' (Helden-Umhang hell).
   H: '#b0b478', // Ghul-Fleisch hell (fahle, kränkliche Haut)
   3: '#cbd090', // Ghul-Fleisch Spitzlicht (Schädel/Schultern)
-  // Holz/Leder (Truhe, Vase, Stiefel): n -> q -> j -> Q -> J
+  // Holz/Leder (Truhe, Vase, Stiefel, DORF): n -> q -> j -> Q -> c -> J
   q: '#3a291d', // Holz dunkel
   j: '#553b26', // Holz mittel (NEU 1.5, Zwischenton q->Q)
   Q: '#6f4d2f', // Holz hell
+  c: '#805f3a', // Holz-/Dach-Zwischenstufe (SLICE 6, umgewidmet aus "Kaltblau
+  //             dunkel" #1d2f3d, 0 Texel). Sitzt Q < c < J und halbiert die
+  //             einzige Luecke der Holzrampe: Schindeln, Balken, Bretterwand,
+  //             Torbogen und Palisade lesen damit als RUNDES Holz statt als
+  //             Zwei-Ton-Brett. L 100,65 | S_hsv 0,547 | C*ab 27,7.
   J: '#94713f', // Holz/Leder Spitzlicht, Maserung (NEU 1.5)
   // Trank (Slice 1)
   x: '#e0524c', // Trank-Rot hell (leuchtender Heiltrank)

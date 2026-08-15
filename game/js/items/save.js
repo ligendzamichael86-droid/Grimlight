@@ -28,11 +28,39 @@
 // unbekannte Karte, falsche Typen. Ein abgelehnter Stand fuehrt in main.js
 // dazu, dass der Titel byte-gleich zum Bestand aussieht.
 
+// ---------------------------------------------------------------------------
+// SCHEMA v2 (SPEC_SLICE_6 §5). VIER neue Felder unter runFlags:
+//   runFlags.quests      : { <id>: { status, zaehler } }   (quest.js)
+//   runFlags.npcFlags    : { <marke>: true|false|<int> }    (Dialog-Gedaechtnis)
+//   runFlags.gekauft     : [ 'herz', ... ]                  (Einmalwaren, shop_ui)
+//   runFlags.dorfBesuche : int                              (Angebots-Saat)
+//
+// AUF BEIDEN PFADEN OPTIONAL MIT DEFAULT (SPEC §5, Review M1): ein v2-Stand
+// OHNE diese Felder laedt fehlerfrei — sonst waeren alle Bestandsboots rot,
+// die einen Stand von Hand zusammensetzen (probe_s4_engine bleibt gruen).
+// Vorhanden, aber falsch getypt = HARTE ABLEHNUNG wie bisher.
+//
+// SAVE_KEY BLEIBT 'grimlight.save.v1' (Landkarte §5.3): ein neuer Schluessel
+// wuerde Michaels Bestandsstand stillschweigend verwaisen lassen. Stattdessen
+// nimmt deserialize BEIDE Versionen an und liefert IMMER v2-Form; v1 laeuft
+// dabei durch migrateV1 (verlustfrei, NIE null fuer einen gueltigen v1-Stand).
+// SAVE_VERSION 2 kippt vier Bestandszeilen in den Suiten — die stehen
+// abschliessend in SPEC §7.B (Sanktions-Katalog) und werden NICHT hier
+// mitgeaendert.
+//
+// UNANGETASTET (bindend): maxHp wird weiterhin NIE gespeichert und ein Stand
+// MIT maxHp weiterhin abgelehnt; der storage-Guard liegt weiterhin allein in
+// main.js; applyToPlayer behaelt die carry-Reihenfolge inv/prog ->
+// recalcStats -> hp -> gold -> potions.
+
 import { MAPS } from '../world/maps.js';
 import { AFFIXES } from './items.js';
+import { QUEST_STATUS, neueRunFelder } from './quest.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = 'grimlight.save.v1';
+// Versionen, die deserialize annimmt. v1 kommt NUR ueber migrateV1 herein.
+export const SAVE_VERSIONEN = [1, 2];
 
 const SLOTS = ['weapon', 'armor', 'ring'];
 // Zelda-Schiene (props.js: 'boomerang' | 'boss_key'). Fremde Eintraege
@@ -81,8 +109,44 @@ export function serialize(zustand) {
     runFlags: {
       bossDead: rf.bossDead === true,
       openedChests: Array.isArray(rf.openedChests) ? rf.openedChests.slice() : [],
+      // §5 v2: die vier neuen Felder. Fehlen sie am uebergebenen runFlags
+      // (frischer Run vor dem ersten Dorfbesuch, Alt-Aufrufer in Tests),
+      // schreibt serialize die DEFAULTS — nie undefined, nie null.
+      quests: quests2Kopie(rf.quests),
+      npcFlags: npcFlags2Kopie(rf.npcFlags),
+      gekauft: Array.isArray(rf.gekauft) ? rf.gekauft.slice() : [],
+      dorfBesuche: isInt(rf.dorfBesuche) && rf.dorfBesuche >= 0 ? rf.dorfBesuche : 0,
     },
   });
+}
+
+// Tiefe Kopien der zwei Objekt-Felder (JSON-rein: keine Referenzen ins Spiel).
+function quests2Kopie(q) {
+  const out = {};
+  if (!isObj(q)) return out;
+  for (const id of Object.keys(q)) {
+    const e = q[id];
+    if (!isObj(e)) continue;
+    // STATUS WIRD BEIM SCHREIBEN GEPRUEFT (Fixer R1, V-SPEC MINOR), genau wie
+    // npcFlags2Kopie seine Werte typprueft. Vorher nahm serialize e.status
+    // ungeprueft, waehrend deserialize->questsOk ihn gegen QUEST_STATUS haelt:
+    // ein Fremd-Status waere geschrieben und beim naechsten Start haette der
+    // GANZE Stand abgelehnt (deserialize -> null, kein FORTSETZEN). Lieber
+    // EINEN Quest-Eintrag verlieren als den kompletten Spielstand.
+    if (!QUEST_STATUS.includes(e.status)) continue;
+    out[id] = { status: e.status, zaehler: isInt(e.zaehler) ? e.zaehler : 0 };
+  }
+  return out;
+}
+
+function npcFlags2Kopie(f) {
+  const out = {};
+  if (!isObj(f)) return out;
+  for (const k of Object.keys(f)) {
+    const v = f[k];
+    if (isBool(v) || isInt(v)) out[k] = v;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,11 +192,76 @@ function progOk(prog) {
     && isInt(prog.hearts) && prog.hearts >= 0;
 }
 
+// §5 v2-FELDER: FEHLEN ist erlaubt (Default), VORHANDEN-und-falsch nicht.
+const KURZ = (s, max) => typeof s === 'string' && s.length > 0 && s.length <= max;
+
+function questsOk(q) {
+  if (q === undefined) return true;              // Default {}
+  if (!isObj(q)) return false;
+  const ids = Object.keys(q);
+  if (ids.length > 32) return false;
+  return ids.every((id) => {
+    if (!KURZ(id, 32)) return false;
+    const e = q[id];
+    return isObj(e)
+      && QUEST_STATUS.includes(e.status)
+      && isInt(e.zaehler) && e.zaehler >= 0 && e.zaehler <= 999;
+  });
+}
+
+function npcFlagsOk(f) {
+  if (f === undefined) return true;              // Default {}
+  if (!isObj(f)) return false;
+  const ks = Object.keys(f);
+  if (ks.length > 64) return false;
+  return ks.every((k) => KURZ(k, 32) && (isBool(f[k]) || (isInt(f[k]) && f[k] >= 0 && f[k] <= 999)));
+}
+
+function gekauftOk(g) {
+  if (g === undefined) return true;              // Default []
+  return Array.isArray(g) && g.length <= 32 && g.every((k) => KURZ(k, 32));
+}
+
+function dorfBesucheOk(n) {
+  if (n === undefined) return true;              // Default 0
+  return isInt(n) && n >= 0 && n <= 99999;
+}
+
 function runFlagsOk(rf) {
   return isObj(rf)
     && isBool(rf.bossDead)
     && Array.isArray(rf.openedChests)
-    && rf.openedChests.every((k) => typeof k === 'string' && k.length > 0 && k.length <= 64);
+    && rf.openedChests.every((k) => typeof k === 'string' && k.length > 0 && k.length <= 64)
+    && questsOk(rf.quests)
+    && npcFlagsOk(rf.npcFlags)
+    && gekauftOk(rf.gekauft)
+    && dorfBesucheOk(rf.dorfBesuche);
+}
+
+/**
+ * §5 MIGRATION v1 -> v2. Bekommt ein GEPRUEFTES v1-Objekt (die Form, die
+ * deserialize ohnehin baut) und liefert ein VOLLSTAENDIGES v2-Objekt.
+ *
+ * ZUSICHERUNG: fuer JEDEN gueltigen v1-Stand kommt ein Objekt zurueck, NIE
+ * null — jedes v1-Feld wandert unveraendert durch, die vier neuen Felder
+ * bekommen ihre Defaults (quest.js/neueRunFelder). Nur echter Muell (kein
+ * Objekt) liefert null.
+ */
+export function migrateV1(v1) {
+  if (!isObj(v1)) return null;
+  if (!isObj(v1.runFlags)) return null;
+  const neu = neueRunFelder();
+  return {
+    ...v1,
+    v: SAVE_VERSION,
+    runFlags: {
+      ...v1.runFlags,
+      quests: neu.quests,
+      npcFlags: neu.npcFlags,
+      gekauft: neu.gekauft,
+      dorfBesuche: neu.dorfBesuche,
+    },
+  };
 }
 
 /**
@@ -148,7 +277,9 @@ export function deserialize(text) {
     return null; // kaputtes JSON: HART ablehnen, nie werfen
   }
   if (!isObj(d)) return null;
-  if (d.v !== SAVE_VERSION) return null;            // fremde/fehlende Version
+  // §5 v2: BEIDE Schema-Versionen sind gueltig; alles andere (auch eine
+  // fehlende Version) fliegt raus wie bisher.
+  if (!SAVE_VERSIONEN.includes(d.v)) return null;
   if (typeof d.mapKey !== 'string' || !Object.hasOwn(MAPS, d.mapKey)) return null;
   if (!isObj(d.spawn) || !isNum(d.spawn.x) || !isNum(d.spawn.y)) return null;
   if (!isNum(d.hp) || d.hp <= 0) return null;       // hp 0 waere Sofort-Tod
@@ -160,8 +291,11 @@ export function deserialize(text) {
   // maxHp darf nicht vorkommen — ein Stand mit maxHp stammt aus einem
   // fremden/aelteren Schema und wird abgelehnt (§3.1 "maxHp nie").
   if (Object.hasOwn(d, 'maxHp')) return null;
-  return {
-    v: d.v,
+  // Die RUECKGABE IST IMMER v2-FOERMIG (Landkarte §5.3): ein v1-Stand laeuft
+  // durch migrateV1, ein v2-Stand bekommt fehlende Felder als Default. Der
+  // Aufrufer (main.js/ladeSpielstand) sieht deshalb nur EINE Form.
+  const v2 = {
+    v: SAVE_VERSION,
     mapKey: d.mapKey,
     spawn: { x: d.spawn.x, y: d.spawn.y },
     hp: d.hp,
@@ -185,6 +319,22 @@ export function deserialize(text) {
       openedChests: d.runFlags.openedChests.slice(),
     },
   };
+  if (d.v === 1) {
+    // v1 kommt NUR ueber die Migration herein (SPEC §5). migrateV1 kann fuer
+    // ein hier gebautes Objekt nicht null liefern (runFlags steht), die
+    // Pruefung bleibt trotzdem stehen: null waere ein stiller Datenverlust.
+    const m = migrateV1(v2);
+    return m || null;
+  }
+  // v2: die vier Felder feldweise uebernehmen, fehlende auf Default. Objekte
+  // und Arrays werden KOPIERT (kein geteilter Zustand mit dem Storage-Text-
+  // Parse; Muster openedChests.slice()).
+  const std = neueRunFelder();
+  v2.runFlags.quests = quests2Kopie(d.runFlags.quests ?? std.quests);
+  v2.runFlags.npcFlags = npcFlags2Kopie(d.runFlags.npcFlags ?? std.npcFlags);
+  v2.runFlags.gekauft = Array.isArray(d.runFlags.gekauft) ? d.runFlags.gekauft.slice() : std.gekauft;
+  v2.runFlags.dorfBesuche = isInt(d.runFlags.dorfBesuche) ? d.runFlags.dorfBesuche : std.dorfBesuche;
+  return v2;
 }
 
 /**
