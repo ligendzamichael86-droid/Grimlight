@@ -1,4 +1,19 @@
-# SPEC Slice 6 — "Welt & Seelen" (Rev 2, 14.08.2026, Fable)
+# SPEC Slice 6 — "Welt & Seelen" (Rev 2.1, 15.08.2026, Fable)
+
+REV 2.1 = Rev 2 + design/SLICE6_PHASE0.md (BESTANDTEIL DER SPEC;
+Phase 0 abgeschlossen, alle Zahlen gebunden). Wo PHASE0 und Rev
+1/2 abweichen, gilt PHASE0. Kurzfassung der gebundenen Werte:
+M1-DORF-Band 56..69, E1 >= 0,64 %, L<16 <= 2,0 %, ambient 0,28 /
+#1a1410 / Radius 40 / fog true; c=#805f3a, G=#8f4c5d
+(Fackelkern-Auflage neu: C*ab < 30,5); Boden-L 75,46 gebunden;
+TRAUFE-Deckungsmodell; ANCHOR_CLAMP W:0 fuer 9 dorf_*-Keys
+(einziger tilemap.js-Eingriff, WORLD); T4-Dachkanten-Gate
+(>=85 %/>=90 % transparent) + >=4 px dy-Reserve + Stroh-Zweit-
+Highlight (G3); Masstabellen-Wortlaut fix (E8); 4 Quests final
+(Docht/Esse/Sarg/Wind, Q4-Truhe = Katakomben-Schatzkammer);
+Segel 5 Grids (Budget ~73); Bau-Ablauf: Builder beruehren KEINE
+Tests, alle 8 §7.B-Sanktionen in EINEM Sanktions-Schritt nach
+dem Bau, EIN Phase-1-Commit nach gruenen Suiten.
 
 Rev 1 + adversarialer Review design/SLICE6_SPEC_REVIEW.md
 (11 BLOCKER / 22 MAJOR / ~14 MINOR — ALLE eingearbeitet; die

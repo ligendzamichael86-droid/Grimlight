@@ -103,7 +103,22 @@ Bestands-Konsistenzloch, als Farm unpraktisch, bleibt liegen.
 
 ## 4. ERGEBNISSE (werden nachgetragen -> Rev 2.1)
 
-- [ ] Eichung: Band = __ .. __, E1-Schwelle = __, L<16-Deckel = __
+- [x] **Eichung EINGEFROREN (P0-EICHUNG, 15.08.):** M1-DORF-Band
+      **56 .. 69** (8-Phasen-Median, Fenster/Maske/Formeln
+      woertlich aus shot_gfx6.py); E1-Highlight-Schwelle
+      **>= 0,64 %** (Anteil L>96, formeltreu 0,6 x Sim ohne
+      IST-Zweig); L<16-Deckel **<= 2,0 %**; ambient **0,28**
+      BESTAETIGT, Tint #1a1410, playerLightRadius 40, fog true.
+      Methode: Software-Render der ECHTEN Module (tilemap/
+      lighting/hud) — die +10-13-L-Systematik der Landkarten-
+      Sonde ist damit beseitigt; Rest-Bias +1,90 L an der
+      GRAVEYARD-Realmessung bestimmt und abgezogen. Kontrollen:
+      Positiv GRAVEYARD ~39 getroffen, Analytik 0,10 L, drei
+      Negativkontrollen, A/A byte-gleich (sha256 8f52e47b...).
+      Prognose korrigiert 59,14..65,87 ueber 5 Szenen. Der
+      Rev-1-Vorschlag 54..66 war 2-3 L zu tief (d2 Marktplatz
+      haette nur 0,13 L Reserve gehabt). Dateien:
+      .tmp/slice6_p0/eichung_sim.mjs + eichung_ergebnis.json.
 - [x] **c = #805f3a** (Holz-Dach-Zwischenstufe, L 100,65 — schliesst
       die Q->J-Luecke: Rampe q 44,7 < j 64,4 < Q 83,8 < c 100,7 <
       J 117,8 streng monoton, Hue+R-B ebenfalls) und
@@ -208,6 +223,51 @@ Die mobile/-Spiegelkopie der Palette entsteht je APK-Build neu —
 kein Nachzug noetig. Die zwei abgeloesten Alt-Waechter
 (check_art_gfx3:57, dev_art_slice2:124) bleiben unangefasst wie
 in Rev 1 deklariert.
+
+## 7. EICHUNG-BEFUNDE — FABLE-ENTSCHEIDE (15.08., bindend, Rev 2.1)
+
+G1 **Band 56..69 ANGENOMMEN** (breite Fassung; die enge 58..68
+liesse nur 1,14 L Reserve nach unten — weniger als die GEMESSENE
+Modell-Reserve 1,91 L allein. Schwellen werden nach Eintrag nie
+angepasst, also muss die Reserve VOR dem Eintrag stimmen. Breite
+13 L gegen GP6-Hausmass 8-11 deklariert.)
+G2 **E1 = 0,64 % formeltreu ANGENOMMEN** (kein verschaerftes
+0,9 % — GP6-Formeln gelten woertlich, karten-individuelle
+Verschaerfung waere genau das Schwellen-Basteln, das die
+Mess-Disziplin verbietet; die Milde ist deklariert, Qualitaet
+traegt das Band + die Goodhart-Gates).
+G3 **Stroh-Auflage an ART (aus Goodhart-K9b ROT in d5):** die
+Strohdaecher der verlassenen Katen brauchen einen ZWEITEN
+Highlight-Traeger (N/b-Halmspitzen oder Moos A/m auf der
+Wetterseite), Ziel: Stroh 'B' < 60 % der Highlight-Texel im
+d5-Fenster. KEINE Schwellen-Aufweichung, KEINE nachtraegliche
+Deklaration — faellt die fertige Art durch, wird die Art
+nachgebessert.
+G4 **Material-Annahmen deklariert:** Palisade = HOLZ (nicht
+Stein), 28 der 56 neuen Grids als Proxy modelliert (Grenze
+gemessen: 1,91 L, im Band). Fasst ART ein Material grundlegend
+anders auf, wird die Eichung NACHGERECHNET (eichung_sim.mjs
+laeuft in ~4 s — billig).
+G5 Deklariert: Simulation lief noch mit ANCHOR_CLAMP-Default
+W=14 (die W:0-Zeilen kommen mit WORLD) — M1/HL/L<16 sind
+positionsinvariant, Wirkung in der 3,04-L-Reserve. E9 (c im
+Dach) ist BELEGT-ERLEDIGT: 0,00 L Medianwirkung.
+G6 Deklariert: der +1,90-L-Bias nimmt an, dass die Sprite-Luecke
+im Dorf wie auf dem Friedhof wirkt; 5 NPC-Sprites vergroessern
+sie eher (drueckt Richtung Bandmitte — unkritisch).
+G7 fog/playerLightRadius sind beziffert KEINE Belichtungshebel
+(0..0,22 L / 0,00 L) — Atmosphaere-Entscheide bleiben frei.
+
+## 8. PHASE 0 ABGESCHLOSSEN -> REV 2.1
+
+Alle vier Pakete geliefert, alle Checklisten-Punkte gebunden.
+SPEC_SLICE_6.md traegt ab jetzt Rev 2.1: dieses Dokument ist
+Bestandteil der Spec (Zahlen hier schlagen Rev-1-Vorschlaege).
+Baufreigabe Phase 1: ART / WORLD / SYSTEME parallel, Sanktionen
+(§7.B, alle 8) durch EINEN eigenen Sanktions-Schritt NACH dem
+Bau (Test-Dateien gehoeren KEINEM Builder), EIN Phase-1-Commit
+nach gruenen Suiten (erfuellt §0.9 song-Stub-im-map_dorf-Commit
+und alle Sanktions-Paarungen trivial).
 - [x] Oekonomie: KORRIGIERT (6 Befunde, siehe §2; Q4-Truhe ->
       Katakomben-Schatzkammer, Farm-Rate 47,8, Herz ~3-4 Runden,
       Q1-Klausel praezisiert, Erstbesuchs-Kaufkraft ueber
