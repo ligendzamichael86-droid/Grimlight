@@ -369,5 +369,130 @@ b5.frames(2);
 ok(b5.hatText('PAUSE'),
   '§4.1 Boot 5: die Pause funktioniert auch ohne Storage (Auto-Save laeuft still ins Leere)');
 
+// ===========================================================================
+// SLICE 6 — ADDITIVE BOOTS S6-§7F(a)/(b) (SPEC_SLICE_6 §7.A, §0.1, §1.A1).
+//
+// REGELN, unter denen dieser Block steht:
+//   * NUR ADDITIV. Kein Zeichen oberhalb dieser Zeile wurde angefasst; die
+//     48 Bestands-Assertions stehen byte-gleich (Additiv-Beweis: die alte
+//     ok-Titel-Menge ist Teilmenge der neuen).
+//   * Neue Module kommen per `await import(...)` IM BLOCK herein — die
+//     Kopf-Importe der Datei bleiben unberuehrt (Muster smoke S4-§7F).
+//
+// WARUM DIESE ZWEI BOOTS (SPEC §0.1): der v1-Lade-Beweis darf NICHT mehr am
+// vom Spiel geschriebenen Stand haengen — der traegt seit §7.B(5) Schema v2.
+// Gebraucht wird ein ROHES, VON HAND GESCHRIEBENES v1-JSON, das nie durch
+// serialize gelaufen ist. Genau das ist Michaels Fall: sein Bestandsstand auf
+// dem Geraet stammt aus Slice 4.
+// ===========================================================================
+
+// --- (a) ROHES v1-FIXTURE (handgeschrieben, NICHT vom Spiel erzeugt) -------
+// Von Hand getippter JSON-TEXT im Slice-4-Schema. Bewusst mit gefuelltem
+// Inventar, angelegter Waffe, Zelda-Schiene, Fortschritt und Run-Flags — ein
+// Feld, das die Migration verliert, faellt hier auf.
+// Der Spawn (72,72) ist der FLUESTERGRUFT-Eintritts-Spawn (maps.js) und damit
+// eine begehbare Kachel; hp 7 liegt unter dem abgeleiteten Maximum 12
+// (Level 3 + 1 Herzcontainer), wird beim Laden also nicht gekappt.
+const V1_ROHTEXT = [
+  '{"v":1,"mapKey":"FLUESTERGRUFT","spawn":{"x":72,"y":72},',
+  '"hp":7,"gold":214,"potions":2,',
+  '"inv":{"items":[{"slot":"ring","name":"REIF AUS ASCHE","rare":false,',
+  '"affixes":[{"stat":"pickupRadius","value":6}]}],',
+  '"equipped":{"weapon":{"slot":"weapon","name":"ALTE SCHNEIDE","rare":true,',
+  '"affixes":[{"stat":"dmg","value":2},{"stat":"reach","value":1}]},',
+  '"armor":null,"ring":null},',
+  '"capacity":7,"zelda":["boomerang"],"pity":2,"newFlag":false},',
+  '"prog":{"xp":42,"level":3,"hearts":1},',
+  '"runFlags":{"bossDead":true,"openedChests":["CATACOMBS:4,16"]}}',
+].join('');
+const V1 = JSON.parse(V1_ROHTEXT);
+
+console.log('--- BOOT 6: ROHES v1-Fixture (handgeschrieben) laedt verlustfrei ---');
+SPEICHER.set(SAVE_KEY, V1_ROHTEXT);
+const b6 = mkStubs({ search: '' });
+await import('../game/js/main.js?boot=6');
+benenne(b6);
+b6.frames(5);
+ok(b6.hatText('FORTSETZEN') && b6.hatText('NEUES SPIEL'),
+  'S6-§7F(a) §0.1 Boot 6: ein ROHER v1-Stand (nie durch serialize gelaufen) wird angenommen — das Menue steht');
+
+b6.key('keydown', 'Enter'); b6.key('keyup', 'Enter');
+b6.frames(3);
+ok(Math.abs(b6.ambient() - 0.52) < 1e-9,
+  `S6-§7F(a) §5 Boot 6: mapKey aus dem v1-Fixture geladen (FLUESTERGRUFT, ambient 0.52, ist ${b6.ambient()})`);
+ok(b6.goldText() === 'GOLD 214', `S6-§7F(a) §5 Boot 6: gold feldgleich uebernommen (${b6.goldText()})`);
+ok(b6.texte().some((t) => t === 'x 2'),
+  `S6-§7F(a) §5 Boot 6: potions feldgleich uebernommen (Traenke-Zaehler ${b6.texte().filter((t) => t.startsWith('x ')).join('/')})`);
+ok(b6.sprite('icon_boomerang') > 0,
+  'S6-§7F(a) §5 Boot 6: die Zelda-Schiene aus dem v1-Fixture steht (Bumerang im HUD)');
+// hp 7 von abgeleitetem maxHp 12 (Level 3 + 1 Herzcontainer) = 6 Herzplaetze:
+// 3 volle, 1 halbes, 2 leere. hud.js:268-280 zeichnet ein HALBES Herz als
+// heart_empty MIT darueber geclipptem heart_full — gezaehlt werden deshalb
+// 4 heart_full-Zuege und 3 heart_empty-Zuege (heart_half ist unbenutzt).
+// Diese Zahl beweist hp UND prog in einem Zug: waere ein Feld der Migration
+// verloren gegangen, stimmte die Herzreihe nicht.
+ok(b6.sprite('heart_full') === 4 && b6.sprite('heart_empty') === 3,
+  `S6-§7F(a) §5 Boot 6: hp 7 / abgeleitetes maxHp 12 aus prog (${b6.sprite('heart_full')} heart_full-Zuege / ${b6.sprite('heart_empty')} heart_empty-Zuege)`);
+
+// FELDWEISER BEWEIS (§0.1/§1.A1): der Stand, den das Spiel nach dem Laden
+// zurueckschreibt, muss JEDES v1-Feld unveraendert tragen.
+b6.doc.hidden = true;
+b6.feuereDoc('visibilitychange', {});
+b6.frames(2);
+const s6 = stand();
+const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const v1FelderGleich = !!s6
+  && s6.mapKey === V1.mapKey
+  && s6.hp === V1.hp && s6.gold === V1.gold && s6.potions === V1.potions
+  && gleich(s6.inv, V1.inv)
+  && gleich(s6.prog, V1.prog)
+  && s6.runFlags.bossDead === V1.runFlags.bossDead
+  && gleich(s6.runFlags.openedChests, V1.runFlags.openedChests);
+ok(v1FelderGleich,
+  `S6-§7F(a) §0.1 Boot 6: JEDES v1-Feld kommt feldweise unveraendert zurueck (mapKey/hp/gold/potions/inv/prog/runFlags) — ${s6 ? JSON.stringify({ hp: s6.hp, gold: s6.gold, potions: s6.potions, inv: gleich(s6.inv, V1.inv), prog: gleich(s6.prog, V1.prog) }) : 'kein Stand'}`);
+ok(!!s6 && s6.v === 2 && gleich(s6.runFlags.quests, {}) && gleich(s6.runFlags.npcFlags, {})
+  && gleich(s6.runFlags.gekauft, []) && s6.runFlags.dorfBesuche === 0,
+  `S6-§7F(a) §5 Boot 6: die Migration hebt auf v2 und setzt die VIER neuen Felder auf ihre Defaults (nichts erfunden) — ${s6 ? JSON.stringify(s6.runFlags) : 'kein Stand'}`);
+ok(!!s6 && !Object.hasOwn(s6, 'maxHp'),
+  'S6-§7F(a) §3.1 Boot 6: auch der migrierte Stand traegt KEIN maxHp');
+
+// --- (b) v2-STAND OHNE DIE NEUEN FELDER (Defaults auf BEIDEN Pfaden) ------
+// SPEC §5/Review M1: ein v2-Stand, dem die vier Felder fehlen, muss laden —
+// sonst waeren alle Boots rot, die einen Stand von Hand zusammensetzen
+// (probe_s4_engine). Geprueft werden BEIDE Pfade: save.js/deserialize (pur)
+// UND main.js/ladeSpielstand (Boot).
+const V2_OHNE_ROHTEXT = V1_ROHTEXT.replace('{"v":1,', '{"v":2,');
+{
+  const { deserialize } = await import('../game/js/items/save.js');
+  const snap = deserialize(V2_OHNE_ROHTEXT);
+  ok(!!snap, 'S6-§7F(b) §5 Pfad save.js: ein v2-Stand OHNE die vier neuen Felder wird angenommen (nicht null)');
+  ok(!!snap && gleich(snap.runFlags.quests, {}) && gleich(snap.runFlags.npcFlags, {})
+    && gleich(snap.runFlags.gekauft, []) && snap.runFlags.dorfBesuche === 0,
+    `S6-§7F(b) §5 Pfad save.js: die vier Felder stehen auf ihren Defaults (${snap ? JSON.stringify(snap.runFlags) : 'null'})`);
+  ok(!!snap && snap.gold === V1.gold && snap.hp === V1.hp && gleich(snap.inv, V1.inv)
+    && gleich(snap.prog, V1.prog),
+    'S6-§7F(b) §5 Pfad save.js: der Rest des Standes bleibt dabei feldgleich');
+}
+
+console.log('--- BOOT 7: v2-Stand OHNE die vier neuen Felder (Default-Pfad) ---');
+SPEICHER.set(SAVE_KEY, V2_OHNE_ROHTEXT);
+const b7 = mkStubs({ search: '' });
+await import('../game/js/main.js?boot=7');
+benenne(b7);
+b7.frames(5);
+ok(b7.hatText('FORTSETZEN'),
+  'S6-§7F(b) §5 Boot 7: Pfad main.js — der v2-Stand ohne die neuen Felder wird angenommen (Menue steht)');
+b7.key('keydown', 'Enter'); b7.key('keyup', 'Enter');
+b7.frames(3);
+ok(Math.abs(b7.ambient() - 0.52) < 1e-9 && b7.goldText() === 'GOLD 214',
+  `S6-§7F(b) §5 Boot 7: der Run laeuft (Karte + Gold stehen; ambient ${b7.ambient()}, ${b7.goldText()})`);
+b7.doc.hidden = true;
+b7.feuereDoc('visibilitychange', {});
+b7.frames(2);
+const s7 = stand();
+ok(!!s7 && s7.v === 2 && gleich(s7.runFlags.quests, {}) && gleich(s7.runFlags.npcFlags, {})
+  && gleich(s7.runFlags.gekauft, []) && s7.runFlags.dorfBesuche === 0,
+  `S6-§7F(b) §5 Boot 7: ladeSpielstand hat die vier fehlenden Felder auf Default gesetzt (${s7 ? JSON.stringify(s7.runFlags) : 'kein Stand'})`);
+
 if (process.exitCode) console.error('CHECK ROT');
 else console.log(`CHECK GRÜN (${checks} Assertions)`);

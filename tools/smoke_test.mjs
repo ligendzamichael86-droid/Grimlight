@@ -5836,6 +5836,858 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
 }
 
 
+// ===========================================================================
+// SLICE 6 — ADDITIVE BLOECKE S6-§7F(c)..(i) (SPEC_SLICE_6 §7.A, Phase 3).
+//
+// REGELN, unter denen diese Bloecke stehen:
+//   * NUR ADDITIV, am ENDE des S-Blocks. Kein Zeichen oberhalb dieser Zeile
+//     wurde angefasst (Additiv-Beweis: die alte ok-Titel-Menge ist Teilmenge
+//     der neuen). Die §7.B-Sanktionen sind VERBRAUCHT — hier wird nichts
+//     umgeschrieben, nur angehaengt.
+//   * Neue Module kommen per `await import(...)` IM BLOCK herein; die
+//     Kopf-Importe der Datei bleiben unberuehrt (Muster S4-§7F/S5-§7A).
+//   * QUELLGEBUNDEN: gemessen wird an den ECHTEN Modulen bzw. am ECHTEN
+//     Boot-Pfad von main.js — kein Nachbau der Logik im Test.
+//
+//   (c) DORF-Zeile der §36-Tabelle (sol/geo/ambient-Haertung)
+//   (d) DORF gegnerfrei (Datenfelder UND gebaute Welt)
+//   (e) Shop-Geometrie >= 6 mm
+//   (f) Dialog/Shop blenden A/B/W + Pause aus (am gebooteten Spiel)
+//   (g) Kill-Zaehler-Semantik (pure quest.js)
+//   (h) ladeSpielstand: alle vier v2-Felder feldweise identisch nach Save->Load
+//   (i) save.js-Schreibhaertung: neun Asymmetrien + Roundtrip-Verlustfreiheit
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// (c) §36-ZEILE FUER DAS DORF — sol/geo/ambient EINGEFROREN
+// ---------------------------------------------------------------------------
+//
+// Formeln WOERTLICH aus dem §36-Block (smoke:2187-2197): eine Aenderung an
+// createTilemap/findTiles oder an den Kartendaten faellt hier genauso auf wie
+// bei den vier Bestandskarten. Die Goldenen sind HIER UND JETZT erzeugt (der
+// Dorf-Bau ist mit f48833e/3253c26 fertig) und ab sofort eingefroren — ein
+// spaeterer sol/geo-Drift im DORF ist damit dasselbe STOPP-Signal wie auf den
+// anderen vier Karten.
+{
+  const DORF_GOLD = {
+    sol: '35cb9c3c0813144f438c5455dedff7ab6f71c8eb40447e6aa7f8ca5a2a0396b2',
+    geo: '014e05d42300b02da1581eca48fc968572520647d6003cbf0c9931de71b0f30e',
+  };
+  const sha = (s) => createHash('sha256').update(s).digest('hex');
+  const solHash = (def) =>
+    sha(def.rows.map((row) => [...row].map((ch) => (def.legend[ch] && def.legend[ch].solid ? '1' : '0')).join('')).join('\n'));
+  const geoHash = (def) => {
+    const tm = createTilemap(def.rows, def.legend, def.overRows || null);
+    const torch = def.torchChars.map((ch) => [ch, tm.findTiles(ch)]);
+    return sha(JSON.stringify({
+      p: def.playerSpawn, sk: def.skeletonSpawns, gh: def.ghoulSpawns,
+      en: def.enemySpawns || [], pr: def.propSpawns, po: def.portals, torch,
+    }));
+  };
+  const dorf = MAPS.DORF;
+  check('S6-§7F(c) §36 DORF: die fuenfte Karte ist registriert (44x28)',
+    !!dorf && dorf.rows.length === 28 && dorf.rows.every((r) => r.length === 44),
+    dorf ? `${dorf.rows[0].length}x${dorf.rows.length}` : 'fehlt');
+  check('S6-§7F(c) §36 DORF: Soliditaets-Raster eingefroren (Golden aus Phase 3)',
+    solHash(dorf) === DORF_GOLD.sol, solHash(dorf));
+  check('S6-§7F(c) §36 DORF: Spawns/Portale/torch-findTiles eingefroren (Golden aus Phase 3)',
+    geoHash(dorf) === DORF_GOLD.geo, geoHash(dorf));
+  // Die vier Belichtungszahlen sind von der Phase-0-Eichung GEBUNDEN
+  // (SLICE6_PHASE0 §4/§7 G1/G7: Band 56..69, E1 >= 0,64 %, L<16 <= 2,0 %).
+  // Wer sie dreht, macht die Eichung ungueltig — deshalb stehen sie hier.
+  check('S6-§7F(c) §36 DORF: Ambient == 0.28 (Dauerzwielicht, Eichung eingefroren)',
+    Math.abs(dorf.ambient - 0.28) < 1e-9, `ist ${dorf.ambient}`);
+  check('S6-§7F(c) §36 DORF: ambientTint #1a1410 / playerLightRadius 40 / fog an (Eichung eingefroren)',
+    dorf.ambientTint === '#1a1410' && dorf.playerLightRadius === 40 && dorf.fog === true,
+    `${dorf.ambientTint} / ${dorf.playerLightRadius} / ${dorf.fog}`);
+  check('S6-§7F(c) §36 DORF: torchChars F+E (Herdfeuer ist Pflicht-Warmlicht, A3/E5)',
+    Array.isArray(dorf.torchChars) && dorf.torchChars.join('') === 'FE'
+    && createTilemap(dorf.rows, dorf.legend).findTiles('F').length > 0,
+    JSON.stringify(dorf.torchChars));
+  // Gegenprobe zur §36-Zusage der anderen vier Karten: das DORF darf deren
+  // Hashes nicht beruehren (es taucht in keiner ihrer Zeilen auf).
+  check('S6-§7F(c) §36 DORF: die vier Bestandskarten bleiben eine getrennte Menge (5 Karten in MAPS)',
+    Object.keys(MAPS).length === 5 && Object.hasOwn(MAPS, 'DORF'),
+    Object.keys(MAPS).join(','));
+}
+
+// ---------------------------------------------------------------------------
+// (e) SHOP-GEOMETRIE: JEDES Tap-Rechteck >= 6 mm
+// ---------------------------------------------------------------------------
+//
+// UMRECHNUNG ZITIERT (bindend, S4-§7F smoke:4069-4081 — inventory_ui.js:32-34
+// verweist woertlich auf denselben Wert "smoke:4047 MM_PRO_PX 0,3764"):
+//   Referenzgeraet 2400x1080 Geraetepixel, 6,5 Zoll, dpr 3, QUERformat
+//   PPI            = hypot(1080, 2400) / 6,5            = 404,93
+//   MM_PRO_GERAETPX= 25,4 / PPI                          = 0,06273
+//   SKALIERUNG     = min(floor(2400/320), floor(1080/180)) = 6
+//   MM_PRO_PX      = SKALIERUNG * MM_PRO_GERAETPX        = 0,3764
+// 6 mm sind damit 6 / 0,3764 = 15,94 interne px.
+{
+  const shop = await import('../game/js/ui/shop_ui.js');
+  const PPI = Math.hypot(1080, 2400) / 6.5;
+  const MM_PRO_GERAETPX = 25.4 / PPI;
+  const SKALIERUNG = Math.min(Math.floor(2400 / 320), Math.floor(1080 / 180));
+  const MM_PRO_PX = SKALIERUNG * MM_PRO_GERAETPX;
+  const MM6_PX = 6 / MM_PRO_PX;
+  check('S6-§7F(e) A1 Umrechnung wie S4-§7F/inventory_ui: MM_PRO_PX 0,3764 -> 6 mm = 15,94 px',
+    SKALIERUNG === 6 && Math.abs(MM_PRO_PX - 0.3764) < 0.0005 && Math.abs(MM6_PX - 15.94) < 0.02,
+    `${MM_PRO_PX.toFixed(4)} mm/px, 6 mm = ${MM6_PX.toFixed(2)} px`);
+
+  // ALLE Tap-Rechtecke des Laden-Panels: die drei Knopf-Zonen (shop_ui liest
+  // sie in update() per inRect) UND die fuenf Listenzeilen (derselbe
+  // Tap-Zweig, shop_ui.js:343-349 rechnet die Zeile aus SHOP_LIST_Y/ROW_H).
+  const zeilenZonen = [];
+  for (let i = 0; i < shop.SHOP_ROWS; i++) {
+    zeilenZonen.push({
+      name: `Listenzeile ${i}`,
+      x: shop.SHOP_LIST_X0, y: shop.SHOP_LIST_Y + i * shop.SHOP_ROW_H,
+      w: shop.SHOP_LIST_X1 - shop.SHOP_LIST_X0, h: shop.SHOP_ROW_H,
+    });
+  }
+  const alleZonen = [
+    { name: 'SHOP_BTN_CLOSE', ...shop.SHOP_BTN_CLOSE },
+    { name: 'SHOP_BTN_SEITE', ...shop.SHOP_BTN_SEITE },
+    { name: 'SHOP_BTN_HANDEL', ...shop.SHOP_BTN_HANDEL },
+    ...zeilenZonen,
+  ];
+  check('S6-§7F(e) A1 Vorbedingung: SHOP_ZONEN fuehrt genau die drei Knopf-Rechtecke, die update() abfragt',
+    shop.SHOP_ZONEN.length === 3 && shop.SHOP_ZONEN[0] === shop.SHOP_BTN_CLOSE
+    && shop.SHOP_ZONEN[1] === shop.SHOP_BTN_SEITE && shop.SHOP_ZONEN[2] === shop.SHOP_BTN_HANDEL,
+    `${shop.SHOP_ZONEN.length} Zonen`);
+  const zuKlein = alleZonen.filter((z) => z.w < MM6_PX || z.h < MM6_PX);
+  check('S6-§7F(e) A1 JEDES Tap-Rechteck des Laden-Panels ist in BEIDEN Massen >= 6 mm (3 Knoepfe + 5 Listenzeilen)',
+    zuKlein.length === 0,
+    zuKlein.map((z) => `${z.name} ${z.w}x${z.h}`).join(', ')
+    || alleZonen.map((z) => `${z.name} ${(z.w * MM_PRO_PX).toFixed(1)}x${(z.h * MM_PRO_PX).toFixed(1)}mm`).join(' | '));
+  const raus = alleZonen.filter((z) => z.x < shop.SHOP_PANEL.x || z.y < shop.SHOP_PANEL.y
+    || z.x + z.w > shop.SHOP_PANEL.x + shop.SHOP_PANEL.w
+    || z.y + z.h > shop.SHOP_PANEL.y + shop.SHOP_PANEL.h);
+  check('S6-§7F(e) A1 kein Tap-Rechteck ragt aus dem Laden-Panel (8,8,304,164) heraus',
+    raus.length === 0, raus.map((z) => z.name).join(', '));
+  // GEGENPROBE: das Gate beisst wirklich — 15 px (5,65 mm) faellt durch.
+  check('S6-§7F(e) A1 Gegenprobe: eine 15-px-Zone (5,65 mm) wuerde das Gate REISSEN',
+    15 < MM6_PX && 16 >= MM6_PX, `15 px = ${(15 * MM_PRO_PX).toFixed(2)} mm`);
+}
+
+// ---------------------------------------------------------------------------
+// (g) KILL-ZAEHLER-SEMANTIK (pure quest.js-Aufrufe)
+// ---------------------------------------------------------------------------
+//
+// Die Zaehl-REGEL steht in quest.js (questKillEvent); die AUSLOESER stehen in
+// main.js (§0.2: Beobachter je Karte + Sorte). Geprueft wird hier die Regel:
+// gezaehlt wird NUR nach der Annahme, NUR auf der richtigen Karte und NUR fuer
+// die richtige Gegner-Sorte — und nie ueber das Ziel hinaus.
+{
+  const q = await import('../game/js/items/quest.js');
+  const quests = q.createQuests();
+
+  q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  check('S6-§7F(g) §4 vor jedem Gespraech zaehlt kein Kill (Quest ist unbekannt)',
+    q.questStatus(quests, 'q1') === 'unbekannt' && q.questZaehler(quests, 'q1') === 0,
+    `${q.questStatus(quests, 'q1')}/${q.questZaehler(quests, 'q1')}`);
+
+  q.questAnbieten(quests, 'q1');
+  q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  check('S6-§7F(g) §4 NUR NACH ANNAHME: im Zustand "angeboten" zaehlt kein Kill',
+    q.questStatus(quests, 'q1') === 'angeboten' && q.questZaehler(quests, 'q1') === 0,
+    `${q.questStatus(quests, 'q1')}/${q.questZaehler(quests, 'q1')}`);
+
+  q.questAnnehmen(quests, 'q1');
+  q.questKillEvent(quests, 'CATACOMBS', 'skeleton');
+  check('S6-§7F(g) §4 FALSCHE KARTE: ein Skelett in den Katakomben zaehlt nicht fuer die Friedhofs-Quest',
+    q.questZaehler(quests, 'q1') === 0, `zaehler ${q.questZaehler(quests, 'q1')}`);
+  q.questKillEvent(quests, 'GRAVEYARD', 'ghoul');
+  q.questKillEvent(quests, 'GRAVEYARD', 'rust');
+  check('S6-§7F(g) §4 FALSCHE SORTE: Ghul/Rostpanzer auf dem Friedhof zaehlen nicht fuer die Skelett-Quest',
+    q.questZaehler(quests, 'q1') === 0, `zaehler ${q.questZaehler(quests, 'q1')}`);
+
+  const e1 = q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  check('S6-§7F(g) §4 RICHTIGE KARTE + SORTE: der Zaehler steigt und meldet die geaenderte Quest',
+    q.questZaehler(quests, 'q1') === 1 && e1.geaendert === true && e1.ids.join(',') === 'q1'
+    && e1.erfuellt.length === 0,
+    `${q.questZaehler(quests, 'q1')} / ${JSON.stringify(e1)}`);
+
+  for (let i = 0; i < 4; i++) q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  check('S6-§7F(g) §4 beim Ziel (5) springt die Quest auf "erfuellt"',
+    q.questStatus(quests, 'q1') === 'erfuellt' && q.questZaehler(quests, 'q1') === 5,
+    `${q.questStatus(quests, 'q1')}/${q.questZaehler(quests, 'q1')}`);
+  const e2 = q.questKillEvent(quests, 'GRAVEYARD', 'skeleton');
+  check('S6-§7F(g) §4 nach "erfuellt" zaehlt kein weiterer Kill (kein Ueberlauf ueber das Ziel)',
+    q.questZaehler(quests, 'q1') === 5 && e2.geaendert === false,
+    `${q.questZaehler(quests, 'q1')} / ${JSON.stringify(e2)}`);
+
+  // Zweite Zaehl-Quest: dieselbe Regel auf einer anderen Karte + Sorte, und
+  // die beiden Quests duerfen sich nicht gegenseitig hochzaehlen.
+  const quests2 = q.createQuests();
+  q.questAnnehmen(quests2, 'q1');
+  q.questAnnehmen(quests2, 'q2');
+  q.questKillEvent(quests2, 'GRAVEYARD', 'skeleton');
+  q.questKillEvent(quests2, 'CATACOMBS', 'rust');
+  check('S6-§7F(g) §4 zwei aktive Zaehl-Quests bleiben getrennt (Friedhof/Skelett vs. Katakomben/Rostpanzer)',
+    q.questZaehler(quests2, 'q1') === 1 && q.questZaehler(quests2, 'q2') === 1,
+    `q1 ${q.questZaehler(quests2, 'q1')} / q2 ${q.questZaehler(quests2, 'q2')}`);
+  q.questKillEvent(quests2, 'CATACOMBS', 'rust');
+  q.questKillEvent(quests2, 'CATACOMBS', 'rust');
+  q.questAbgeben(quests2, 'q2');
+  const e3 = q.questKillEvent(quests2, 'CATACOMBS', 'rust');
+  check('S6-§7F(g) §4 nach der Abgabe ("belohnt") zaehlt gar nichts mehr',
+    q.questStatus(quests2, 'q2') === 'belohnt' && q.questZaehler(quests2, 'q2') === 3
+    && e3.geaendert === false,
+    `${q.questStatus(quests2, 'q2')}/${q.questZaehler(quests2, 'q2')}`);
+  check('S6-§7F(g) §4 die Zaehl-Ziele stehen in quest.js als Daten (q1: 5 Skelette GRAVEYARD, q2: 3 rust CATACOMBS)',
+    q.QUESTS.q1.karte === 'GRAVEYARD' && q.QUESTS.q1.kind === 'skeleton' && q.QUESTS.q1.ziel === 5
+    && q.QUESTS.q2.karte === 'CATACOMBS' && q.QUESTS.q2.kind === 'rust' && q.QUESTS.q2.ziel === 3,
+    JSON.stringify([q.QUESTS.q1.ziel, q.QUESTS.q2.ziel]));
+}
+
+// ---------------------------------------------------------------------------
+// (i) SAVE-SCHREIBHAERTUNG: neun Asymmetrien + Verlustfreiheit
+// ---------------------------------------------------------------------------
+//
+// LEITSATZ (save.js): was deserialize ABLEHNT, darf serialize gar nicht erst
+// schreiben — sonst kostet EIN korrupter Auswuchs den GANZEN Spielstand.
+// Jede der neun Zeilen wird DOPPELT geprueft:
+//   (1) SCHREIBSEITE: der Auswuchs wird beim Serialisieren bereinigt, der
+//       geschriebene Text laedt wieder (deserialize != null) und die gueltigen
+//       Nachbarwerte desselben Feldes ueberleben.
+//   (2) LESESEITE UNVERAENDERT HART: derselbe Auswuchs, von aussen in den
+//       JSON-Text gesetzt, wird weiterhin mit null abgelehnt. Das ist der
+//       Beweis, dass die Haertung die Validierung NICHT aufgeweicht hat.
+{
+  const { serialize, deserialize } = await import('../game/js/items/save.js');
+  const sp = createPlayer(GRAVEYARD.playerSpawn);
+  sp.hp = 5;
+  sp.gold = 137;
+  sp.potions = 2;
+  const GUELTIG_RF = {
+    bossDead: false,
+    openedChests: ['CATACOMBS:4,16'],
+    quests: { q1: { status: 'aktiv', zaehler: 3 }, q2: { status: 'belohnt', zaehler: 3 } },
+    npcFlags: { q4_bran: true, q4_hedda: true, gesehen_mile: 2 },
+    gekauft: ['herz'],
+    dorfBesuche: 4,
+  };
+  const baue = (rfExtra = {}) => ({
+    mapKey: 'DORF', spawn: { x: 632, y: 248 }, player: sp,
+    runFlags: { ...GUELTIG_RF, ...rfExtra },
+  });
+
+  // --- VERLUSTFREIHEIT: ein GUELTIGER Laufzeitzustand geht unveraendert durch
+  const gTxt = serialize(baue());
+  const gSnap = deserialize(gTxt);
+  const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check('S6-§7F(i) Roundtrip: ein gueltiger Laufzeitzustand serialisiert VERLUSTFREI (alle vier v2-Felder feldgleich)',
+    !!gSnap && gleich(gSnap.runFlags.quests, GUELTIG_RF.quests)
+    && gleich(gSnap.runFlags.npcFlags, GUELTIG_RF.npcFlags)
+    && gleich(gSnap.runFlags.gekauft, GUELTIG_RF.gekauft)
+    && gSnap.runFlags.dorfBesuche === GUELTIG_RF.dorfBesuche,
+    gSnap ? JSON.stringify(gSnap.runFlags) : 'null');
+  check('S6-§7F(i) Roundtrip: die Filter fassen die v1-Felder nicht an (hp/gold/potions/inv/prog/bossDead/openedChests)',
+    !!gSnap && gSnap.hp === 5 && gSnap.gold === 137 && gSnap.potions === 2
+    && gSnap.runFlags.bossDead === false
+    && gleich(gSnap.runFlags.openedChests, GUELTIG_RF.openedChests)
+    && gSnap.prog.level === sp.prog.level,
+    gSnap ? `${gSnap.hp}/${gSnap.gold}/${gSnap.potions}` : 'null');
+  check('S6-§7F(i) Roundtrip: maxHp steht weiterhin NICHT im Text (Haertung hat daran nichts geaendert)',
+    !gTxt.includes('maxHp'), gTxt.slice(0, 60));
+
+  const LANG = 'x'.repeat(33);
+  const vieleQuests = {};
+  for (let i = 0; i < 40; i++) vieleQuests[`q_${i}`] = { status: 'aktiv', zaehler: 1 };
+  const vieleFlags = {};
+  for (let i = 0; i < 80; i++) vieleFlags[`m_${i}`] = true;
+  const vieleWaren = [];
+  for (let i = 0; i < 40; i++) vieleWaren.push(`w_${i}`);
+
+  // Neun Faelle. `roh` setzt denselben Auswuchs von aussen in den JSON-Text
+  // (Leseseiten-Gegenprobe), `pruef` liest das GESCHRIEBENE runFlags-Objekt.
+  const FAELLE = [
+    {
+      nr: 'H1', was: 'quests: Schluessel laenger als 32 Zeichen',
+      rf: { quests: { [LANG]: { status: 'aktiv', zaehler: 1 }, q1: { status: 'aktiv', zaehler: 3 } } },
+      pruef: (w) => !Object.keys(w.quests).some((k) => k.length > 32) && w.quests.q1.zaehler === 3,
+      roh: (d) => { d.runFlags.quests[LANG] = { status: 'aktiv', zaehler: 1 }; },
+    },
+    {
+      nr: 'H2', was: 'quests: mehr als 32 Eintraege',
+      rf: { quests: vieleQuests },
+      pruef: (w) => Object.keys(w.quests).length === 32,
+      roh: (d) => { d.runFlags.quests = vieleQuests; },
+    },
+    {
+      nr: 'H3', was: 'quests: zaehler ausserhalb 0..999',
+      rf: { quests: { q1: { status: 'aktiv', zaehler: 5000 }, q2: { status: 'belohnt', zaehler: -7 } } },
+      pruef: (w) => w.quests.q1.zaehler === 999 && w.quests.q2.zaehler === 0,
+      roh: (d) => { d.runFlags.quests.q1.zaehler = 5000; },
+    },
+    {
+      nr: 'H4', was: 'npcFlags: Marke laenger als 32 Zeichen',
+      rf: { npcFlags: { [LANG]: true, q4_bran: true } },
+      pruef: (w) => !Object.keys(w.npcFlags).some((k) => k.length > 32) && w.npcFlags.q4_bran === true,
+      roh: (d) => { d.runFlags.npcFlags[LANG] = true; },
+    },
+    {
+      nr: 'H5', was: 'npcFlags: mehr als 64 Marken',
+      rf: { npcFlags: vieleFlags },
+      pruef: (w) => Object.keys(w.npcFlags).length === 64,
+      roh: (d) => { d.runFlags.npcFlags = vieleFlags; },
+    },
+    {
+      nr: 'H6', was: 'npcFlags: Zahl-Wert ausserhalb 0..999',
+      rf: { npcFlags: { zaehlmarke: 4711, minusmarke: -3, q4_bran: true } },
+      pruef: (w) => w.npcFlags.zaehlmarke === 999 && w.npcFlags.minusmarke === 0
+        && w.npcFlags.q4_bran === true,
+      roh: (d) => { d.runFlags.npcFlags.zaehlmarke = 4711; },
+    },
+    {
+      nr: 'H7', was: 'gekauft: Eintrag ist kein kurzer Text',
+      rf: { gekauft: ['herz', 7, '', LANG, 'trank'] },
+      pruef: (w) => gleich(w.gekauft, ['herz', 'trank']),
+      roh: (d) => { d.runFlags.gekauft = ['herz', 7]; },
+    },
+    {
+      nr: 'H8', was: 'gekauft: mehr als 32 Eintraege',
+      rf: { gekauft: vieleWaren },
+      pruef: (w) => w.gekauft.length === 32,
+      roh: (d) => { d.runFlags.gekauft = vieleWaren; },
+    },
+    {
+      nr: 'H9', was: 'dorfBesuche: ueber der Obergrenze 99999',
+      rf: { dorfBesuche: 123456 },
+      pruef: (w) => w.dorfBesuche === 99999,
+      roh: (d) => { d.runFlags.dorfBesuche = 123456; },
+    },
+  ];
+
+  for (const f of FAELLE) {
+    const txt = serialize(baue(f.rf));
+    const snap = deserialize(txt);
+    const geschrieben = JSON.parse(txt).runFlags;
+    check(`S6-§7F(i) ${f.nr} SCHREIBSEITE bereinigt und der Stand bleibt ladbar — ${f.was}`,
+      snap !== null && f.pruef(geschrieben),
+      `${snap === null ? 'deserialize -> null' : 'geladen'}; geschrieben ${JSON.stringify(geschrieben).slice(0, 160)}`);
+    const d = JSON.parse(gTxt);
+    f.roh(d);
+    check(`S6-§7F(i) ${f.nr} LESESEITE unveraendert hart: derselbe Auswuchs von aussen -> null — ${f.was}`,
+      deserialize(JSON.stringify(d)) === null,
+      'wurde angenommen (Validierung waere aufgeweicht)');
+  }
+
+  // Der Filter darf keine gueltigen Grenzwerte fressen (Nachbarschaftsprobe).
+  const grenz = serialize(baue({
+    quests: { q1: { status: 'aktiv', zaehler: 999 } },
+    npcFlags: { m: 999, [('y').repeat(32)]: true },
+    gekauft: ['a'],
+    dorfBesuche: 99999,
+  }));
+  const gs = deserialize(grenz);
+  check('S6-§7F(i) die Grenzwerte SELBST (999 / 32 Zeichen / 99999) ueberleben unveraendert',
+    !!gs && gs.runFlags.quests.q1.zaehler === 999 && gs.runFlags.npcFlags.m === 999
+    && gs.runFlags.npcFlags[('y').repeat(32)] === true && gs.runFlags.dorfBesuche === 99999,
+    gs ? JSON.stringify(gs.runFlags) : 'null');
+}
+
+// ---------------------------------------------------------------------------
+// (j) SAVE-SCHREIBHAERTUNG DER v1-KERNFELDER (Fix-Runde 1)
+// ---------------------------------------------------------------------------
+//
+// Derselbe Leitsatz wie in (i), eine Etage tiefer: (i) haertet die VIER NEUEN
+// v2-Felder, hier stehen die v1-KERNFELDER (spawn / hp / gold / potions /
+// inv.items). Sie liefen bis zur Fix-Runde 1 ungefiltert durch serialize:
+//   * ein NaN oder Infinity in player.gold wird von JSON.stringify zu `null`
+//     geschrieben, isNum(null) faellt, und deserialize verwarf deshalb den
+//     GANZEN Stand — kein FORTSETZEN, der komplette Fortschritt weg;
+//   * dasselbe fuer hp, potions und eine Spawn-Koordinate;
+//   * ein inv.items ueber inv.capacity kippte den Stand an invOk (das war der
+//     einzige Grund fuer den roten Sammelfall "riesige Arrays" — gekauft,
+//     openedChests, quests, npcFlags und zelda sind auch mit tausenden
+//     Eintraegen ladbar, die Tasche nicht).
+//
+// Jede Zeile wird wie in (i) DOPPELT geprueft:
+//   (1) SCHREIBSEITE: der Auswuchs wird beim Serialisieren durch den
+//       naechstgelegenen GUELTIGEN Wert ersetzt, der Text laedt wieder, und
+//       die Nachbarfelder desselben Standes ueberleben unveraendert.
+//   (2) LESESEITE UNVERAENDERT HART: derselbe Auswuchs, von aussen in den
+//       JSON-Text gesetzt, wird weiterhin mit null abgelehnt — der Beweis,
+//       dass die Haertung die Validierung NICHT aufgeweicht hat.
+{
+  const { serialize, deserialize } = await import('../game/js/items/save.js');
+  const gleichJ = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ringJ = (i) => ({ slot: 'ring', name: `RING ${i}`, rare: false, affixes: [{ stat: 'pickupRadius', value: 1 }] });
+  const HEIM_DORF = MAPS.DORF.playerSpawn;
+  const RF_J = { bossDead: false, openedChests: ['CATACOMBS:4,16'] };
+  // FRISCHER Spieler je Fall: ein verbogener Wert darf nicht in den naechsten
+  // Fall lecken (die Faelle unten verbiegen absichtlich Kernfelder).
+  const spielerJ = (patch) => {
+    const p = createPlayer(HEIM_DORF);
+    p.hp = 5; p.gold = 137; p.potions = 2;
+    p.prog = { xp: 42, level: 3, hearts: 1 };
+    p.inv = {
+      items: [], equipped: { weapon: null, armor: null, ring: null },
+      capacity: 7, zelda: ['boomerang'], pity: 2, newFlag: false,
+    };
+    if (patch) patch(p);
+    return p;
+  };
+  const zustandJ = (patch, spawn = { x: 632, y: 248 }) => ({
+    mapKey: 'DORF', spawn, player: spielerJ(patch), runFlags: { ...RF_J },
+  });
+
+  const basisTxtJ = serialize(zustandJ(null));
+  check('S6-§7F(j) Basis: der ungestoerte Zustand laedt (Bezugstext fuer die Leseseiten-Gegenproben)',
+    deserialize(basisTxtJ) !== null, basisTxtJ.slice(0, 90));
+
+  // `roh` setzt denselben Auswuchs von aussen in den Bezugstext. Infinity ist
+  // in JSON nicht darstellbar (JSON.stringify schreibt `null`) — die ehrliche
+  // Leseseiten-Entsprechung ist deshalb ebenfalls `null`.
+  const FAELLE_J = [
+    {
+      nr: 'K1', was: 'gold = NaN (JSON.stringify schreibt sonst null)',
+      z: () => zustandJ((p) => { p.gold = NaN; }),
+      pruef: (w) => w.gold === 0 && w.hp === 5 && w.potions === 2,
+      roh: (d) => { d.gold = null; },
+    },
+    {
+      nr: 'K2', was: 'gold = Infinity',
+      z: () => zustandJ((p) => { p.gold = Infinity; }),
+      pruef: (w) => w.gold === 0 && w.hp === 5,
+      roh: (d) => { d.gold = null; },
+    },
+    {
+      nr: 'K3', was: 'gold = -5 (unter der Leser-Untergrenze 0)',
+      z: () => zustandJ((p) => { p.gold = -5; }),
+      pruef: (w) => w.gold === 0 && w.potions === 2,
+      roh: (d) => { d.gold = -5; },
+    },
+    {
+      nr: 'K4', was: 'hp = NaN',
+      z: () => zustandJ((p) => { p.hp = NaN; }),
+      pruef: (w) => w.hp === 1 && w.gold === 137,
+      roh: (d) => { d.hp = null; },
+    },
+    {
+      nr: 'K5', was: 'hp = 0 (der Leser fordert hp > 0)',
+      z: () => zustandJ((p) => { p.hp = 0; }),
+      pruef: (w) => w.hp === 1 && w.gold === 137,
+      roh: (d) => { d.hp = 0; },
+    },
+    {
+      nr: 'K6', was: 'potions = NaN',
+      z: () => zustandJ((p) => { p.potions = NaN; }),
+      pruef: (w) => w.potions === 0 && w.gold === 137,
+      roh: (d) => { d.potions = null; },
+    },
+    {
+      nr: 'K7', was: 'spawn.x = NaN (Ersatz: playerSpawn DERSELBEN Karte)',
+      z: () => zustandJ(null, { x: NaN, y: 248 }),
+      pruef: (w) => w.spawn.x === HEIM_DORF.x && w.spawn.y === 248,
+      roh: (d) => { d.spawn.x = null; },
+    },
+    {
+      nr: 'K8', was: 'inv.items: ein Eintrag ueber capacity (8 bei 7)',
+      z: () => zustandJ((p) => { p.inv.items = Array.from({ length: 8 }, (_, i) => ringJ(i)); }),
+      pruef: (w) => w.inv.items.length === 7 && w.inv.items[0].name === 'RING 0'
+        && w.inv.items[6].name === 'RING 6',
+      roh: (d) => { d.inv.items = Array.from({ length: 8 }, (_, i) => ringJ(i)); },
+    },
+    {
+      nr: 'K9', was: 'inv.items: 400 Eintraege bei capacity 7 (Sammelfall "riesige Arrays")',
+      z: () => zustandJ((p) => { p.inv.items = Array.from({ length: 400 }, (_, i) => ringJ(i)); }),
+      pruef: (w) => w.inv.items.length === 7 && w.inv.capacity === 7,
+      roh: (d) => { d.inv.items = Array.from({ length: 400 }, (_, i) => ringJ(i)); },
+    },
+  ];
+
+  for (const f of FAELLE_J) {
+    const txt = serialize(f.z());
+    const snap = deserialize(txt);
+    const w = JSON.parse(txt);
+    check(`S6-§7F(j) ${f.nr} SCHREIBSEITE bereinigt und der Stand bleibt ladbar — ${f.was}`,
+      snap !== null && f.pruef(w),
+      `${snap === null ? 'deserialize -> null' : 'geladen'}; geschrieben ${JSON.stringify({ spawn: w.spawn, hp: w.hp, gold: w.gold, potions: w.potions, items: w.inv.items.length })}`);
+    const d = JSON.parse(basisTxtJ);
+    f.roh(d);
+    check(`S6-§7F(j) ${f.nr} LESESEITE unveraendert hart: derselbe Auswuchs von aussen -> null — ${f.was}`,
+      deserialize(JSON.stringify(d)) === null,
+      'wurde angenommen (Validierung waere aufgeweicht)');
+  }
+
+  // VERLUSTFREIHEIT: was der Leser annimmt, geht UNVERAENDERT durch. Bewusst
+  // mit GEBROCHENEM hp (ein maxHp-Affix mit Nachkommastelle erzeugt so etwas
+  // ueber recalcStats) und den Grenzwerten gold 0 / potions 0 / items GENAU
+  // capacity — ein Filter, der klemmt statt die Leser-Bedingung zu pruefen,
+  // wuerde hier sofort auffallen.
+  {
+    const voll = zustandJ((p) => {
+      p.hp = 0.5; p.gold = 0; p.potions = 0;
+      p.inv.items = Array.from({ length: 7 }, (_, i) => ringJ(i));
+    });
+    const txt = serialize(voll);
+    const w = JSON.parse(txt);
+    const snap = deserialize(txt);
+    check('S6-§7F(j) Verlustfreiheit: gueltige Kernfelder gehen unveraendert durch (hp 0,5 wird NICHT auf 1 geklemmt; gold/potions 0 bleiben 0)',
+      snap !== null && w.hp === 0.5 && w.gold === 0 && w.potions === 0
+      && w.spawn.x === 632 && w.spawn.y === 248,
+      JSON.stringify({ hp: w.hp, gold: w.gold, potions: w.potions, spawn: w.spawn }));
+    check('S6-§7F(j) Verlustfreiheit: eine VOLLE Tasche (items GENAU capacity) bleibt vollstaendig und in Reihenfolge',
+      snap !== null && w.inv.items.length === 7 && gleichJ(w.inv.items, voll.player.inv.items),
+      `${w.inv.items.length}/${w.inv.capacity}`);
+    const negTxt = serialize(zustandJ(null, { x: -8, y: 0 }));
+    const negW = JSON.parse(negTxt);
+    check('S6-§7F(j) Verlustfreiheit: negative und 0-Koordinaten sind fuer den Leser gueltig und bleiben stehen',
+      deserialize(negTxt) !== null && negW.spawn.x === -8 && negW.spawn.y === 0,
+      JSON.stringify(negW.spawn));
+  }
+
+  // Der Spawn-Ersatz darf NICHTS beschoenigen, was der Leser aus einem anderen
+  // Grund ablehnt: eine fremde Karte bleibt eine fremde Karte.
+  const fremdTxtJ = serialize({
+    mapKey: 'NIRGENDWO', spawn: { x: NaN, y: NaN }, player: spielerJ(null), runFlags: { ...RF_J },
+  });
+  check('S6-§7F(j) der Spawn-Ersatz beschoenigt KEINE fremde Karte (unbekannter mapKey bleibt abgelehnt)',
+    deserialize(fremdTxtJ) === null, fremdTxtJ.slice(0, 90));
+}
+
+// ---------------------------------------------------------------------------
+// (d)/(f)/(h) AM GEBOOTETEN SPIEL
+// ---------------------------------------------------------------------------
+//
+// main.js hat keine Exporte; gefahren wird es wie in S5-§7A(h) und in
+// tools/check_save_slice4.mjs ueber einen vollstaendigen Stub-Satz
+// (window/document/Canvas/rAF) und beobachtet ueber das Zeichenprotokoll.
+// NEU hier: der Canvas-Stub REICHT DIE TOUCH-LISTENER DURCH. Erst damit ist
+// die Sichtbarkeit der Touch-Zonen headless messbar — hud.js:506-555 zeichnet
+// A/B/W und den Pause-Knopf NUR, wenn input.touch.active steht, und genau
+// dieses Zeichenprotokoll ist der HUD-Spiegel der main.js-Zusage
+// "im Dialog und im Laden sind A/B/W + Pause unsichtbar" (main.js:1898-1926).
+{
+  const zufallVorher = Math.random;
+  const perfVorher = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const winVorher = globalThis.window;
+  const docVorher = globalThis.document;
+  Math.random = () => 0.5;          // wie check_main_slice1: voller Determinismus
+  const s6ops = [];
+  let s6uhr = 0;
+  try { globalThis.performance = { now: () => s6uhr }; }
+  catch { Object.defineProperty(globalThis, 'performance', { value: { now: () => s6uhr } }); }
+
+  function s6ctx(canvas) {
+    return {
+      canvas, imageSmoothingEnabled: false, globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
+      _stack: [],
+      fillRect(...a) { s6ops.push({ canvas, op: 'fillRect', alpha: this.globalAlpha, fill: this.fillStyle, args: a }); },
+      clearRect() {}, strokeRect() {},
+      drawImage(img, ...a) { s6ops.push({ canvas, op: 'drawImage', img, args: a }); },
+      fillText(t, x, y) { s6ops.push({ canvas, op: 'fillText', text: String(t), x, y }); },
+      beginPath() {}, arc() {}, fill() {}, stroke() {}, closePath() {}, moveTo() {}, lineTo() {}, rect() {},
+      save() { this._stack.push({ a: this.globalAlpha, f: this.fillStyle }); },
+      restore() { const s = this._stack.pop(); if (s) { this.globalAlpha = s.a; this.fillStyle = s.f; } },
+      createRadialGradient: () => ({ addColorStop() {} }),
+    };
+  }
+
+  // Flip-Liste WOERTLICH aus main.js:106-127 — die Canvas->Sprite-Zuordnung
+  // entsteht aus der Erzeugungsreihenfolge (Muster check_main_slice1), ein
+  // Abweichen verschoebe alle Namen hinter dem SPRITES-Block.
+  const S6_FLIP = [
+    'player_side_0', 'player_side_1', 'player_side_2', 'player_side_3',
+    'player_attack_side', 'sword_slash_side',
+    'skeleton_0', 'skeleton_1', 'skeleton_die',
+    'ghoul_0', 'ghoul_1', 'ghoul_die',
+    'hound_0', 'hound_1', 'hound_telegraph', 'hound_leap', 'hound_down', 'hound_die',
+    'rust_0', 'rust_1', 'rust_die', 'shield_side',
+    'warden_idle', 'warden_walk_0', 'warden_walk_1', 'warden_windup_a',
+    'warden_windup_b', 'warden_dash', 'warden_stuck', 'warden_summon', 'warden_die',
+    'npc_mile_0', 'npc_mile_1', 'npc_mile_talk',
+    'npc_torwaechter_0', 'npc_torwaechter_1', 'npc_torwaechter_talk',
+  ];
+  const S6_NAMEN = [...Object.keys(SPRITES), ...S6_FLIP.map((k) => `${k}_flip`), ...Object.keys(TILE_ART)];
+
+  function s6boot({ search = '', speicher = null } = {}) {
+    const canvases = [];
+    const mkCanvas = () => {
+      const c = { width: 0, height: 0, style: {}, ownerDocument: null };
+      c.getContext = () => (c._ctx || (c._ctx = s6ctx(c)));
+      c.addEventListener = () => {};
+      c.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+      canvases.push(c);
+      return c;
+    };
+    const winL = {};
+    const docL = {};
+    const cvL = {};                 // NEU: die Touch-Listener des Canvas
+    const rafQ = [];
+    const win = {
+      addEventListener: (t, f) => (winL[t] = winL[t] || []).push(f),
+      devicePixelRatio: 1, innerWidth: 960, innerHeight: 540,
+      location: { search },
+      requestAnimationFrame: (cb) => rafQ.push(cb),
+    };
+    if (speicher) {
+      win.localStorage = {
+        getItem: (k) => (speicher.has(String(k)) ? speicher.get(String(k)) : null),
+        setItem: (k, v) => { speicher.set(String(k), String(v)); },
+        removeItem: (k) => { speicher.delete(String(k)); },
+      };
+    }
+    const haupt = { width: 320, height: 180, style: {} };
+    const doc = {
+      getElementById: () => haupt,
+      createElement: () => mkCanvas(),
+      addEventListener: (t, f) => (docL[t] = docL[t] || []).push(f),
+      defaultView: win, hidden: false,
+    };
+    haupt.getContext = () => (haupt._ctx || (haupt._ctx = s6ctx(haupt)));
+    haupt.addEventListener = (t, f) => (cvL[t] = cvL[t] || []).push(f);
+    haupt.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+    haupt.ownerDocument = doc;
+    globalThis.window = win;
+    globalThis.document = doc;
+    const b = {
+      win, doc, haupt, rafQ, canvases, nameOf: new Map(),
+      gesehen: new Set(),           // JEDER je gezeichnete Sprite-Name (Gate d)
+      benenne() { canvases.forEach((c, i) => b.nameOf.set(c, S6_NAMEN[i] || `extra_${i}`)); },
+      frame() {
+        s6ops.length = 0;
+        const cb = rafQ.shift();
+        if (!cb) throw new Error('kein rAF-Callback (Boot tot?)');
+        s6uhr += 1000 / 60 + 0.001;
+        cb();
+        for (const n of b.namen()) b.gesehen.add(n);
+      },
+      frames(n) { for (let i = 0; i < n; i++) b.frame(); },
+      key(typ, code) { for (const f of winL[typ] || []) f({ code, repeat: false, preventDefault() {} }); },
+      halte(code, n) { b.key('keydown', code); b.frames(n); b.key('keyup', code); },
+      feuereDoc(typ, ev = {}) { for (const f of docL[typ] || []) f(ev); },
+      touch(typ, x, y) {
+        const t = { identifier: 1, clientX: x, clientY: y };
+        for (const f of cvL[typ] || []) f({ changedTouches: [t], touches: [t], preventDefault() {} });
+      },
+      // Ein vollstaendiger Tipp: touchstart -> Frame -> touchend -> Frame.
+      tipp(x, y) { b.touch('touchstart', x, y); b.frame(); b.touch('touchend', x, y); b.frame(); },
+      textOps: () => s6ops.filter((o) => o.op === 'fillText'),
+      texte: () => s6ops.filter((o) => o.op === 'fillText').map((o) => o.text),
+      hatText: (t) => s6ops.filter((o) => o.op === 'fillText').some((o) => o.text.includes(t)),
+      genauText: (t) => s6ops.filter((o) => o.op === 'fillText').some((o) => o.text === t),
+      hatRect: (x, y, w, h) => s6ops.some((o) => o.op === 'fillRect' && o.canvas === haupt
+        && o.args[0] === x && o.args[1] === y && o.args[2] === w && o.args[3] === h),
+      ambient: () => {
+        const f = s6ops.find((o) => o.op === 'fillRect' && o.canvas !== haupt && o.alpha > 0 && o.alpha < 1);
+        return f ? f.alpha : null;
+      },
+      namen: () => s6ops.filter((o) => o.op === 'drawImage' && o.canvas === haupt)
+        .map((o) => String(b.nameOf.get(o.img) || '')),
+      goldText: () => b.texte().find((s) => s.startsWith('GOLD')),
+    };
+    return b;
+  }
+
+  // Die drei Touch-Zonen des HUD und der Pause-Knopf, gelesen aus dem
+  // Zeichenprotokoll: hud.js zeichnet je Button seinen LABEL-Text (exakt 'A',
+  // 'B', 'W') und fuer die Pause ZWEI Balken 2x8 bei (228,10)/(234,10)
+  // (input.js:119 pause {x:232,y:14,r:12}).
+  const sichtbar = (b) => ({
+    a: b.genauText('A'), bb: b.genauText('B'), w: b.genauText('W'),
+    pause: b.hatRect(228, 10, 2, 8) && b.hatRect(234, 10, 2, 8),
+  });
+  const alleAn = (s) => s.a && s.bb && s.w && s.pause;
+  const alleAus = (s) => !s.a && !s.bb && !s.w && !s.pause;
+
+  // =========================================================================
+  // BOOT A — ?god=1&map=DORF: Gegnerfreiheit (d) + Touch-Ausblendung (f)
+  // =========================================================================
+  const d = s6boot({ search: '?god=1&map=DORF' });
+  await import('../game/js/main.js?s6f=1');
+  d.benenne();
+  d.frames(3);
+  d.key('keydown', 'Enter'); d.key('keyup', 'Enter');
+  d.frames(3);
+  check('S6-§7F(d) §6.1 der Boot betritt wirklich das DORF (ambient 0.28 steht im Lichtpass)',
+    Math.abs(d.ambient() - 0.28) < 1e-9, `ambient ${d.ambient()}`);
+
+  // --- (d) GEGNERFREI: Datenfelder UND gebaute Welt -----------------------
+  const dorfDef = MAPS.DORF;
+  check('S6-§7F(d) §6.1 DORF fuehrt skeletonSpawns/ghoulSpawns/enemySpawns/propSpawns als LEERE Arrays (main.js mappt ungeguardet)',
+    Array.isArray(dorfDef.skeletonSpawns) && dorfDef.skeletonSpawns.length === 0
+    && Array.isArray(dorfDef.ghoulSpawns) && dorfDef.ghoulSpawns.length === 0
+    && Array.isArray(dorfDef.enemySpawns) && dorfDef.enemySpawns.length === 0
+    && Array.isArray(dorfDef.propSpawns) && dorfDef.propSpawns.length === 0,
+    `${dorfDef.skeletonSpawns.length}/${dorfDef.ghoulSpawns.length}/${dorfDef.enemySpawns.length}/${dorfDef.propSpawns.length}`);
+
+  // --- (f) STATE 'playing': A/B/W + Pause sind DA -------------------------
+  // Erst ein Tipp, sonst zeichnet hud.js das Touch-Overlay gar nicht
+  // (input.touch.active; jede Taste schaltet es wieder ab, input.js:181).
+  // Der Tipp liegt links UNTERHALB des Joystick-Feldes (JOY_FIELD_Y1 156) und
+  // faellt damit in KEINE Zone (input.js:238-247).
+  d.touch('touchstart', 40, 170);
+  d.frame();
+  const sPlaying = sichtbar(d);
+  check('S6-§7F(f) §2.2 Vorbedingung: im State "playing" zeichnet das HUD A, B, W UND den Pause-Knopf',
+    alleAn(sPlaying), JSON.stringify(sPlaying));
+  d.touch('touchend', 40, 170);
+  d.frame();
+
+  // --- (f) STATE 'dialog': Angriffs-Pegel auf den Torwaechter -------------
+  // Der Torwaechter steht 16 px unter dem Eintritts-Spawn (npcSpawns tc(39,16)
+  // gegen playerSpawn tc(39,15)) — in Reichweite (<= 22 px) und in
+  // Blickrichtung (facing 'down'). Der Tipp liegt in der Angriffs-Haelfte.
+  d.touch('touchstart', 200, 60);
+  d.frame();                        // in diesem Frame OEFFNET der Dialog
+  d.frame();                        // ab hier steht der HUD-Spiegel auf 'dialog'
+  const sDialog = sichtbar(d);
+  const dialogSteht = d.hatText('DER TORWAECHTER');
+  d.touch('touchend', 200, 60);
+  check('S6-§7F(f) §2.3 der Angriffs-Pegel oeffnet am NPC den Dialog (kein neuer Knopf)',
+    dialogSteht, d.texte().join(' | ').slice(0, 160));
+  check('S6-§7F(f) §2.2 im State "dialog" sind A, B, W UND der Pause-Knopf unsichtbar',
+    alleAus(sDialog), JSON.stringify(sDialog));
+
+  // Dialog zu Ende blaettern (Tap-Flanken), bis wieder 'playing' steht.
+  for (let i = 0; i < 8 && !d.genauText('A'); i++) d.tipp(40, 170);
+  const sZurueck = sichtbar(d);
+  check('S6-§7F(f) §2.2 nach dem Dialog sind A, B, W und der Pause-Knopf WIEDER da',
+    alleAn(sZurueck), JSON.stringify(sZurueck));
+
+  // --- (f) STATE 'shop': zu Hedda laufen und den Laden oeffnen ------------
+  // Weg vom Osttor (tc 39,15) nach Westen auf der freien Zeile 15, dann nach
+  // Norden zum Herdfeuer (Hedda-Anker tc 30,10). Getastet, nicht getippt:
+  // die Blickrichtung soll am Ende nach oben zeigen.
+  d.halte('ArrowLeft', 70);
+  d.frames(2);
+  d.halte('ArrowUp', 40);
+  d.frames(2);
+  d.touch('touchstart', 200, 60);
+  d.frame();
+  d.frame();
+  const heddaSteht = d.hatText('ALTE HEDDA');
+  d.touch('touchend', 200, 60);
+  check('S6-§7F(f) §2.1 der Weg fuehrt zur zweiten Gespraechspartnerin (Hedda am Herdfeuer)',
+    heddaSteht, d.texte().join(' | ').slice(0, 160));
+  // Bis zur Optionsseite blaettern und die Laden-Option antippen.
+  let vorrat = null;
+  for (let i = 0; i < 8 && !vorrat; i++) {
+    d.touch('touchstart', 40, 170);
+    d.frame();
+    vorrat = d.textOps().find((o) => o.text === 'DEIN VORRAT') || null;
+    d.touch('touchend', 40, 170);
+    d.frame();
+    if (!vorrat) vorrat = d.textOps().find((o) => o.text === 'DEIN VORRAT') || null;
+  }
+  const OPT_X0 = [20, 116, 212];    // dialog.js DIALOG_OPTION_ZONEN
+  const zi = vorrat
+    ? OPT_X0.map((x0, i) => ({ i, ab: Math.abs(vorrat.x - (x0 + 44)) })).sort((a, b) => a.ab - b.ab)[0].i
+    : 1;
+  check('S6-§7F(f) §3 die Laden-Option steht in einer der drei Dialog-Options-Zonen (dialog.js)',
+    !!vorrat && Math.abs(vorrat.x - (OPT_X0[zi] + 44)) <= 44,
+    vorrat ? `x ${vorrat.x} -> Zone ${zi}` : 'Option nicht gefunden');
+  d.tipp(OPT_X0[zi] + 44, 85);      // Option waehlen -> Knoten 'laden'
+  d.tipp(40, 170);                  // Knoten bestaetigen -> Effekt 'shop'
+  d.touch('touchstart', 40, 170);
+  d.frame();
+  const sShop = sichtbar(d);
+  const shopSteht = d.hatRect(8, 8, 304, 164) && d.genauText('HANDELN');
+  d.touch('touchend', 40, 170);
+  d.frame();
+  check('S6-§7F(f) §3.2 der Laden steht (eigenes Panel 8,8,304,164 mit HANDELN-Knopf)',
+    shopSteht, d.texte().join(' | ').slice(0, 160));
+  check('S6-§7F(f) §2.2 im State "shop" sind A, B, W UND der Pause-Knopf unsichtbar',
+    alleAus(sShop), JSON.stringify(sShop));
+  // Schliessen ueber SHOP_BTN_CLOSE (288,10,24,24) -> Mitte (300,22).
+  d.tipp(300, 22);
+  d.touch('touchstart', 40, 170);
+  d.frame();
+  const sNachShop = sichtbar(d);
+  d.touch('touchend', 40, 170);
+  d.frame();
+  check('S6-§7F(f) §2.2 nach dem Laden sind A, B, W und der Pause-Knopf WIEDER da',
+    alleAn(sNachShop), JSON.stringify(sNachShop));
+
+  // --- (d) GEGNERFREI, gemessen an der GEBAUTEN Welt ----------------------
+  // ueber den kompletten Boot (Eintritt, Dorfquerung, zwei Gespraeche, Laden)
+  // wurde KEIN einziger Gegner-Sprite gezeichnet.
+  const GEGNER = /^(skeleton|ghoul|hound|rust|warden|shield)/;
+  const gegnerGesehen = [...d.gesehen].filter((n) => GEGNER.test(n));
+  check('S6-§7F(d) §6.1 nach buildWorld(DORF) zeichnet das Spiel NULL Gegner (ganzer Boot: Eintritt, Querung, Dialoge, Laden)',
+    gegnerGesehen.length === 0, gegnerGesehen.join(','));
+  // Positivkontrolle fuer den Zaehler: die NPCs und der Spieler WURDEN
+  // gezeichnet — die Canvas->Namen-Zuordnung greift also wirklich.
+  const npcGesehen = [...d.gesehen].filter((n) => n.startsWith('npc_'));
+  check('S6-§7F(d) Positivkontrolle des Zaehlers: NPC- und Spieler-Sprites wurden sehr wohl gezeichnet',
+    npcGesehen.length >= 3 && [...d.gesehen].some((n) => n.startsWith('player')),
+    `${npcGesehen.length} npc-Schluessel: ${npcGesehen.slice(0, 6).join(',')}`);
+
+  // =========================================================================
+  // BOOT B — (h) ladeSpielstand: alle vier v2-Felder feldweise identisch
+  // =========================================================================
+  //
+  // MESSWEG: ein von Hand gesetzter v2-Stand geht in den Storage, das Spiel
+  // laedt ihn ueber FORTSETZEN (main.js/ladeSpielstand) und schreibt ihn beim
+  // visibilitychange aus dem LAUFZEIT-runFlags zurueck. Was zurueckkommt, ist
+  // damit das Ergebnis von ladeSpielstand — feldweise vergleichbar. Ein
+  // vergessenes Feld, eine geteilte Referenz oder ein Default-Ueberschreiben
+  // faellt hier auf.
+  const RF_FIX = {
+    bossDead: false,
+    openedChests: ['CATACOMBS:4,16'],
+    quests: { q1: { status: 'aktiv', zaehler: 2 }, q2: { status: 'erfuellt', zaehler: 3 } },
+    npcFlags: { q4_bran: true, q4_hedda: true },
+    gekauft: ['herz'],
+    dorfBesuche: 7,
+  };
+  const STAND_FIX = {
+    v: 2, mapKey: 'CATACOMBS',
+    spawn: { x: MAPS.CATACOMBS.playerSpawn.x, y: MAPS.CATACOMBS.playerSpawn.y },
+    hp: 5, gold: 321, potions: 1,
+    inv: {
+      items: [], equipped: { weapon: null, armor: null, ring: null },
+      capacity: 7, zelda: [], pity: 0, newFlag: false,
+    },
+    prog: { xp: 0, level: 1, hearts: 0 },
+    runFlags: RF_FIX,
+  };
+  const { SAVE_KEY: S6_KEY } = await import('../game/js/items/save.js');
+  const speicher = new Map();
+  speicher.set(S6_KEY, JSON.stringify(STAND_FIX));
+  const h = s6boot({ search: '', speicher });
+  await import('../game/js/main.js?s6h=1');
+  h.benenne();
+  h.frames(5);
+  check('S6-§7F(h) §5 Vorbedingung: der von Hand gesetzte v2-Stand wird angenommen (Titel-Menue steht)',
+    h.hatText('FORTSETZEN'), h.texte().join(' | ').slice(0, 120));
+  h.key('keydown', 'Enter'); h.key('keyup', 'Enter');
+  h.frames(3);
+  check('S6-§7F(h) §5 FORTSETZEN laedt Karte und Beutel aus dem Stand (CATACOMBS, GOLD 321)',
+    Math.abs(h.ambient() - 0.55) < 1e-9 && h.goldText() === 'GOLD 321',
+    `${h.ambient()} / ${h.goldText()}`);
+  h.doc.hidden = true;
+  h.feuereDoc('visibilitychange', {});
+  h.frames(2);
+  const zurueck = JSON.parse(speicher.get(S6_KEY));
+  const gl = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check('S6-§7F(h) §5 runFlags.quests kommt feldweise identisch zurueck (Status UND Zaehler je Quest)',
+    gl(zurueck.runFlags.quests, RF_FIX.quests), JSON.stringify(zurueck.runFlags.quests));
+  check('S6-§7F(h) §5 runFlags.npcFlags kommt feldweise identisch zurueck (alle Gespraechsmarken)',
+    gl(zurueck.runFlags.npcFlags, RF_FIX.npcFlags), JSON.stringify(zurueck.runFlags.npcFlags));
+  check('S6-§7F(h) §5 runFlags.gekauft kommt feldweise identisch zurueck (Einmalwaren)',
+    gl(zurueck.runFlags.gekauft, RF_FIX.gekauft), JSON.stringify(zurueck.runFlags.gekauft));
+  check('S6-§7F(h) §5 runFlags.dorfBesuche kommt identisch zurueck (Angebots-Saat)',
+    zurueck.runFlags.dorfBesuche === RF_FIX.dorfBesuche, String(zurueck.runFlags.dorfBesuche));
+  check('S6-§7F(h) §5 auch die zwei Bestands-runFlags ueberleben unveraendert (bossDead, openedChests)',
+    zurueck.runFlags.bossDead === RF_FIX.bossDead
+    && gl(zurueck.runFlags.openedChests, RF_FIX.openedChests),
+    JSON.stringify({ b: zurueck.runFlags.bossDead, o: zurueck.runFlags.openedChests }));
+
+  // Globale wieder herstellen: nachfolgende Bloecke sehen den Bestand.
+  Math.random = zufallVorher;
+  if (perfVorher) Object.defineProperty(globalThis, 'performance', perfVorher);
+  globalThis.window = winVorher;
+  globalThis.document = docVorher;
+}
+
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);
 if (totalTicks < 600) failures.push(`Zu wenige Ticks simuliert: ${totalTicks} < 600`);
 

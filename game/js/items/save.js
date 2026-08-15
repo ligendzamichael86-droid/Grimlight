@@ -73,6 +73,91 @@ const isBool = (v) => typeof v === 'boolean';
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 // ---------------------------------------------------------------------------
+// GRENZEN DER VIER v2-FELDER — EINE QUELLE FUER BEIDE SEITEN (S6-Phase 3)
+// ---------------------------------------------------------------------------
+//
+// WOZU: die Lese-Validierung (questsOk/npcFlagsOk/gekauftOk/dorfBesucheOk)
+// und die Schreib-Filter (quests2Kopie/npcFlags2Kopie/gekauft2Kopie) muessen
+// dieselben Zahlen benutzen. Standen sie zweimal als Literal da, driftete das
+// Paar beim naechsten Balancing auseinander — und genau diese Drift ist die
+// Asymmetrie, die hier gerade geschlossen wird. Die WERTE sind unveraendert
+// die des bisherigen Lesers (32/32/64/32/999/99999): die Validierung wird
+// NICHT aufgeweicht, sie bekommt nur einen Namen.
+const MAX_ID_LAENGE = 32;       // KURZ(...) fuer Quest-IDs, npcFlags-Marken, gekauft
+const MAX_QUESTS = 32;          // questsOk: hoechstens so viele Quest-Eintraege
+const MAX_NPCFLAGS = 64;        // npcFlagsOk: hoechstens so viele Gespraechsmarken
+const MAX_GEKAUFT = 32;         // gekauftOk: hoechstens so viele Einmalwaren
+const MAX_ZAEHLER = 999;        // questsOk (zaehler) / npcFlagsOk (int-Wert)
+const MAX_DORFBESUCHE = 99999;  // dorfBesucheOk
+
+// ---------------------------------------------------------------------------
+// SCHREIB-FILTER DER v1-KERNFELDER (S6-Phase 3, Fix-Runde 1)
+// ---------------------------------------------------------------------------
+//
+// DERSELBE LEITSATZ wie bei den vier v2-Feldern weiter unten: was deserialize
+// ABLEHNT, darf serialize gar nicht erst schreiben. Bis hierher galt er NUR
+// fuer die vier neuen v2-Felder; die v1-Kernfelder gingen ungefiltert durch —
+// und genau daran blieb der Adversarial-Lauf haengen:
+//   * gold = NaN: JSON.stringify(NaN) schreibt `null`, isNum(null) faellt,
+//     deserialize verwirft den GANZEN Stand (Faelle B2/C1; Infinity C2 wird
+//     ebenfalls zu `null`, gold = -5 faellt an `gold < 0`, C3),
+//   * hp = NaN (C4), potions = NaN (C5), spawn.x = NaN (C10) genauso,
+//   * inv.items ueber inv.capacity (C6): invOk faellt an
+//     `items.length > capacity` -> ebenfalls Totalverlust. Das war der
+//     EINZIGE Grund fuer den roten Sammelfall B3 ("riesige Arrays"): 8 von 8
+//     Eintraegen bei capacity 7 kippen den Stand, 7 laden; gekauft/
+//     openedChests/quests/npcFlags/zelda mit tausenden Eintraegen laden alle.
+//
+// IDENTITAET AUF DEM GUELTIGEN BEREICH (Verlustfreiheit): jeder Wert, den
+// deserialize annehmen wuerde, geht BYTE-GLEICH durch. Die Filter pruefen
+// EXAKT die Bedingung des Lesers und ersetzen nur, was er ohnehin verwerfen
+// wuerde. Ein gebrochenes hp aus einer Affix-Rechnung (maxHp-Affix mit
+// Nachkommastelle) bleibt deshalb gebrochen; geklemmt wird nichts Gueltiges.
+//
+// ERSATZWERTE, und warum sie ehrlich sind:
+//   hp      -> 1   (der Leser fordert hp > 0; 1 erfindet keine Gesundheit,
+//                   und applyToPlayer kappt ohnehin gegen das abgeleitete
+//                   maxHp)
+//   gold    -> 0   (Untergrenze des Lesers; aus einem NaN laesst sich kein
+//   potions -> 0    ehrlicher Betrag rekonstruieren)
+//   spawn   -> playerSpawn DERSELBEN Karte (maps.js) statt (0,0): eine
+//                   begehbare Kachel ist der einzige sinnvolle Nachbar
+//   items   -> auf capacity GEKUERZT (der Ueberlauf faellt, die Tasche
+//                   bleibt samt Reihenfolge erhalten)
+// Lieber EIN Feld verlieren als den KOMPLETTEN Spielstand.
+//
+// REICHWEITE (deklariert): ueber die bekannten Laufzeitpfade ist keiner der
+// Faelle erreichbar — alle gold-Mutationen (main.js:1147/1155/1437/1767/2402,
+// shop_ui.js:195-231) rechnen mit endlichen Zahlen, items.js:88 blockt addItem
+// bei voller Tasche, und die vier §3.2-Save-Hooks sitzen bewusst so, dass sie
+// nie ein hp = 0 sehen (main.js:881-890). Der Filter ist die Versicherung fuer
+// den Fall, dass doch einmal ein NaN durchrutscht: dann kostet er ein Feld
+// statt den Stand.
+const hpGefiltert = (v) => (isNum(v) && v > 0 ? v : 1);
+const abNullGefiltert = (v) => (isNum(v) && v >= 0 ? v : 0);
+const koordGefiltert = (v, heim) => (isNum(v) ? v : (isNum(heim) ? heim : 0));
+
+/**
+ * items auf capacity KUERZEN (invOk: `items.length > capacity` = Ablehnung).
+ * NUR diese eine Grenze (Auftrag Fix-Runde 1): ein items, das gar kein Array
+ * ist, und eine capacity ausserhalb 1..64 gehen UNVERAENDERT durch — das sind
+ * andere Faelle, die der Leser weiterhin genauso hart ablehnt wie bisher.
+ * Passt die Tasche, wird DASSELBE Array durchgereicht (kein neues Objekt,
+ * kein veraenderter Text).
+ */
+function itemsGefiltert(items, capacity) {
+  if (!Array.isArray(items)) return items;
+  if (!isInt(capacity) || capacity < 1 || capacity > 64) return items;
+  return items.length > capacity ? items.slice(0, capacity) : items;
+}
+
+const klemme = (n, min, max) => (n < min ? min : (n > max ? max : n));
+// Kurzer, nicht leerer Text (Quest-ID, Gespraechsmarke, Warenschluessel).
+// Stand bis zur Haertung erst weiter unten bei den Lese-Pruefern; er wird jetzt
+// von BEIDEN Seiten gebraucht und ist deshalb hierher gewandert.
+const KURZ = (s, max) => typeof s === 'string' && s.length > 0 && s.length <= max;
+
+// ---------------------------------------------------------------------------
 // SERIALISIEREN
 // ---------------------------------------------------------------------------
 
@@ -85,16 +170,23 @@ export function serialize(zustand) {
   const inv = player.inv;
   const prog = player.prog;
   const rf = runFlags || {};
+  // Heim-Koordinate der Karte als Ersatz fuer eine kaputte Spawn-Zahl (C10).
+  // Unbekannte mapKey -> {}: der Leser lehnt so einen Stand ohnehin ab, der
+  // Filter darf daran nichts beschoenigen.
+  const heim = (MAPS[mapKey] && MAPS[mapKey].playerSpawn) || {};
   return JSON.stringify({
     v: SAVE_VERSION,
     mapKey,
-    spawn: { x: spawn.x, y: spawn.y },
+    // GEHAERTET (Fix-Runde 1): jedes v1-Kernfeld laeuft durch den Filter mit
+    // der Bedingung DES LESERS — gueltige Werte unveraendert, ein Auswuchs
+    // kostet genau dieses eine Feld statt den ganzen Stand.
+    spawn: { x: koordGefiltert(spawn.x, heim.x), y: koordGefiltert(spawn.y, heim.y) },
     // maxHp fehlt hier ABSICHTLICH (§3.1) — es wird beim Laden abgeleitet.
-    hp: player.hp,
-    gold: player.gold,
-    potions: player.potions,
+    hp: hpGefiltert(player.hp),
+    gold: abNullGefiltert(player.gold),
+    potions: abNullGefiltert(player.potions),
     inv: {
-      items: inv.items,
+      items: itemsGefiltert(inv.items, inv.capacity),
       equipped: {
         weapon: inv.equipped.weapon,
         armor: inv.equipped.armor,
@@ -112,19 +204,54 @@ export function serialize(zustand) {
       // §5 v2: die vier neuen Felder. Fehlen sie am uebergebenen runFlags
       // (frischer Run vor dem ersten Dorfbesuch, Alt-Aufrufer in Tests),
       // schreibt serialize die DEFAULTS — nie undefined, nie null.
+      // GEHAERTET (S6-Phase 3): jedes der vier Felder laeuft durch einen
+      // Filter mit den GRENZEN DES LESERS (MAX_*), damit kein Auswuchs einen
+      // Stand erzeugt, den deserialize spaeter komplett verwirft. (H9) ist die
+      // fehlende OBERGRENZE von dorfBesuche: `>= 0` stand da, `<= 99999`
+      // (dorfBesucheOk) fehlte.
       quests: quests2Kopie(rf.quests),
       npcFlags: npcFlags2Kopie(rf.npcFlags),
-      gekauft: Array.isArray(rf.gekauft) ? rf.gekauft.slice() : [],
-      dorfBesuche: isInt(rf.dorfBesuche) && rf.dorfBesuche >= 0 ? rf.dorfBesuche : 0,
+      gekauft: gekauft2Kopie(rf.gekauft),
+      dorfBesuche: isInt(rf.dorfBesuche) ? klemme(rf.dorfBesuche, 0, MAX_DORFBESUCHE) : 0,
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// SCHREIB-FILTER DER VIER v2-FELDER (S6-Phase 3, Haertung)
+// ---------------------------------------------------------------------------
+//
+// LEITSATZ: **Was deserialize ablehnt, darf serialize gar nicht erst
+// schreiben.** Die umgekehrte Reihenfolge ist die teuerste Variante: ein
+// einzelner korrupter Laufzeit-Auswuchs (eine ueberlange Marke, ein
+// durchgelaufener Zaehler) landet ungefiltert im Storage, und beim naechsten
+// Start faellt deshalb der GANZE Stand durch runFlagsOk — kein FORTSETZEN,
+// alles weg. Gehaertet wird darum IMMER die SCHREIBSEITE; die
+// Lese-Validierung bleibt Zeichen fuer Zeichen so hart wie bisher.
+//
+// VERLUSTFREIHEIT (Roundtrip-Beweis smoke S6-§7F(i)): die Filtergrenzen sind
+// EXAKT die des Lesers, und ein gueltiger Laufzeitzustand liegt in jeder
+// Dimension weit darunter — 4 Quests mit zweizeichigen IDs, Zaehler <= 5,
+// Marken der Form 'q4_torwaechter', gekauft ['herz'], dorfBesuche einstellig.
+// Ein solcher Zustand wandert byte-gleich durch die Filter wie vor der
+// Haertung. Bereinigt wird ausschliesslich, was der Leser ohnehin verwerfen
+// wuerde — und zwar feldgenau statt als Totalverlust.
+//
+// KLEMMEN STATT WERFEN, wo es einen sinnvollen Nachbarwert gibt (Zaehler,
+// dorfBesuche); WEGLASSEN nur, wo kein ehrlicher Ersatz existiert (fremder
+// Status, fremde ID, Ueberlauf ueber den Deckel).
 
 // Tiefe Kopien der zwei Objekt-Felder (JSON-rein: keine Referenzen ins Spiel).
 function quests2Kopie(q) {
   const out = {};
   if (!isObj(q)) return out;
+  let n = 0;
   for (const id of Object.keys(q)) {
+    // (H2) DECKEL wie questsOk (> MAX_QUESTS => Ablehnung des ganzen Standes).
+    if (n >= MAX_QUESTS) break;
+    // (H1) ID-LAENGE wie questsOk (KURZ): leere oder ueberlange Schluessel
+    // haetten den Stand beim Laden gekippt.
+    if (!KURZ(id, MAX_ID_LAENGE)) continue;
     const e = q[id];
     if (!isObj(e)) continue;
     // STATUS WIRD BEIM SCHREIBEN GEPRUEFT (Fixer R1, V-SPEC MINOR), genau wie
@@ -134,7 +261,13 @@ function quests2Kopie(q) {
     // GANZE Stand abgelehnt (deserialize -> null, kein FORTSETZEN). Lieber
     // EINEN Quest-Eintrag verlieren als den kompletten Spielstand.
     if (!QUEST_STATUS.includes(e.status)) continue;
-    out[id] = { status: e.status, zaehler: isInt(e.zaehler) ? e.zaehler : 0 };
+    // (H3) ZAEHLER-BEREICH wie questsOk (0..MAX_ZAEHLER). Geklemmt statt
+    // verworfen: der Quest-Eintrag bleibt erhalten, nur der Auswuchs faellt.
+    out[id] = {
+      status: e.status,
+      zaehler: isInt(e.zaehler) ? klemme(e.zaehler, 0, MAX_ZAEHLER) : 0,
+    };
+    n += 1;
   }
   return out;
 }
@@ -142,9 +275,32 @@ function quests2Kopie(q) {
 function npcFlags2Kopie(f) {
   const out = {};
   if (!isObj(f)) return out;
+  let n = 0;
   for (const k of Object.keys(f)) {
+    // (H5) DECKEL wie npcFlagsOk.
+    if (n >= MAX_NPCFLAGS) break;
+    // (H4) MARKEN-LAENGE wie npcFlagsOk (KURZ).
+    if (!KURZ(k, MAX_ID_LAENGE)) continue;
     const v = f[k];
-    if (isBool(v) || isInt(v)) out[k] = v;
+    // (H6) ZAHL-BEREICH wie npcFlagsOk: bool bleibt bool, int wird geklemmt.
+    if (isBool(v)) out[k] = v;
+    else if (isInt(v)) out[k] = klemme(v, 0, MAX_ZAEHLER);
+    else continue;
+    n += 1;
+  }
+  return out;
+}
+
+// (H7) EINTRAGS-PRUEFUNG + (H8) DECKEL wie gekauftOk. Vorher stand hier ein
+// blankes `.slice()` in serialize: eine Zahl, ein leerer Text oder ein
+// 33. Eintrag in runFlags.gekauft haette den Stand unladbar gemacht.
+function gekauft2Kopie(g) {
+  if (!Array.isArray(g)) return [];
+  const out = [];
+  for (const k of g) {
+    if (out.length >= MAX_GEKAUFT) break;
+    if (!KURZ(k, MAX_ID_LAENGE)) continue;
+    out.push(k);
   }
   return out;
 }
@@ -193,19 +349,20 @@ function progOk(prog) {
 }
 
 // §5 v2-FELDER: FEHLEN ist erlaubt (Default), VORHANDEN-und-falsch nicht.
-const KURZ = (s, max) => typeof s === 'string' && s.length > 0 && s.length <= max;
+// Die Zahlen stehen als MAX_*-Konstanten oben (eine Quelle fuer Leser und
+// Schreiber) — die Bedingungen selbst sind unveraendert.
 
 function questsOk(q) {
   if (q === undefined) return true;              // Default {}
   if (!isObj(q)) return false;
   const ids = Object.keys(q);
-  if (ids.length > 32) return false;
+  if (ids.length > MAX_QUESTS) return false;
   return ids.every((id) => {
-    if (!KURZ(id, 32)) return false;
+    if (!KURZ(id, MAX_ID_LAENGE)) return false;
     const e = q[id];
     return isObj(e)
       && QUEST_STATUS.includes(e.status)
-      && isInt(e.zaehler) && e.zaehler >= 0 && e.zaehler <= 999;
+      && isInt(e.zaehler) && e.zaehler >= 0 && e.zaehler <= MAX_ZAEHLER;
   });
 }
 
@@ -213,18 +370,19 @@ function npcFlagsOk(f) {
   if (f === undefined) return true;              // Default {}
   if (!isObj(f)) return false;
   const ks = Object.keys(f);
-  if (ks.length > 64) return false;
-  return ks.every((k) => KURZ(k, 32) && (isBool(f[k]) || (isInt(f[k]) && f[k] >= 0 && f[k] <= 999)));
+  if (ks.length > MAX_NPCFLAGS) return false;
+  return ks.every((k) => KURZ(k, MAX_ID_LAENGE)
+    && (isBool(f[k]) || (isInt(f[k]) && f[k] >= 0 && f[k] <= MAX_ZAEHLER)));
 }
 
 function gekauftOk(g) {
   if (g === undefined) return true;              // Default []
-  return Array.isArray(g) && g.length <= 32 && g.every((k) => KURZ(k, 32));
+  return Array.isArray(g) && g.length <= MAX_GEKAUFT && g.every((k) => KURZ(k, MAX_ID_LAENGE));
 }
 
 function dorfBesucheOk(n) {
   if (n === undefined) return true;              // Default 0
-  return isInt(n) && n >= 0 && n <= 99999;
+  return isInt(n) && n >= 0 && n <= MAX_DORFBESUCHE;
 }
 
 function runFlagsOk(rf) {
