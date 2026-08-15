@@ -105,7 +105,63 @@ Bestands-Konsistenzloch, als Farm unpraktisch, bleibt liegen.
 
 - [ ] Eichung: Band = __ .. __, E1-Schwelle = __, L<16-Deckel = __
 - [ ] c = #______, G = #______ (Auflagen nachgerechnet)
-- [ ] Boden-Mischung: __ (gebunden)
+- [x] Boden-Mischung GEBUNDEN (P0-GEN, .tmp/slice6_p0/
+      dorf_boden_pool.json): Palette-L-Mittel der Bodenflaeche
+      **75,46** ueber 260 608 Texel; Flaechen-Mix der 1022
+      Bodenkacheln: 78,18 % Lehm-Pool n=9 (L-Mittel 73,46) /
+      14,78 % Weg ausgetreten n=5 (91,16) / 4,01 % Lehm-Detail
+      n=5 (61,22) / 2,64 % Weg ueberwuchert n=7 (68,51 — traegt
+      die EINZIGEN Gruentoene des Dorfs). Layout: 44x28, Spawn
+      tc(39,15) am Osttor, Portal tileRect(42,14,1,2) ->
+      GRAVEYARD tc(3,12); Erreichbarkeit 1022/1022, 0 Inseln;
+      56 neue Tile-Grids (25 Blaupausen liegen bei), 15 Bestand.
+
+## 5. GEN-BEFUNDE — FABLE-ENTSCHEIDE (15.08., bindend fuer Rev 2.1)
+
+E1 **Anker-Versatz (Blocker-Kandidat):** tilemap.js:487-528 gibt
+jedem Over-Span hash-Versatz dx (Clamp ANCHOR_CLAMP, Default 14)
+und dy ±4 ohne Clamp — gemessen bis dx +14 (Kate I) / -13
+(Osttor). ENTSCHEID: die 9 dorf_*-Over-Keys kommen MIT W:0 in
+ANCHOR_CLAMP (rein additive Tabellenzeilen, kein Bestands-Key,
+kein Logik-Edit; Bestandskarten rendern byte-gleich, da dorf_*
+dort nie vorkommt — Op-Stream-Hashes unberuehrt). Besitz: WORLD-
+Agent (einziger tilemap.js-Eingriff, exakt diese Tabellenzeilen).
+dy bleibt: ART-Auflage ≥4 px senkrechte Transparenz-Reserve am
+Dachgrid-Rand.
+E2 **Deckungsmodell TRAUFE ist bindend** (Wandblock span_w x
+(span_h-1), oberste Span-Zeile = begehbare Traufe; kanonische
+Beweiszelle (12,7) hinter der Schmiede). Die Rev-2-Formulierung
+"vollstaendig ueber Wandkacheln" war unpraezise — das
+--vollwand-Gegenmodell liefert 0 Beweiszellen und widersPRICHT
+§6.1; verworfen.
+E3 **ART-Auflage Dach-Unterkante** (aus TRAUFE): unteres Grid-Ende
+ueberwiegend transparent, Gate T4: ≥85 % bei 48x32, ≥90 % bei
+64x48 (Blaupausen erfuellen es) — sonst verdeckt das Dach die
+Wandfront samt Tuer.
+E4 **Segel = 5 Grids** (swayPoses-Folge [0,+1,+2,+1,0,-1,-2,-1]
+hat 8 Eintraege ueber 5 distinkte Posen) — Budget sinkt ~76 -> ~73.
+E5 **torchChars = ['F','E'] BLEIBT** (Herdfeuer Pflicht per A3,
+Esse als zweites Warmlicht wie Landkarte B §5.3 — Tristram hatte
+Schmiede UND Herd; der "ein einziger Lichtpunkt"-Satz in §5.1 ist
+Referenz-Analyse, keine Regel). Die Eichung rechnet MIT beiden.
+E6 Landkarte-Saetze "Kapelle zeigt zum Friedhofstor"/"Speicher,
+dahinter der Weg zum Tor" sind durch Rev 2 §6.2 (OSTTOR)
+ueberholt — Kapelle bleibt Nord-Landmarke, Weg laeuft oestlich.
+Kein Handlungsbedarf, deklariert.
+E7 **Legenden-Mnemonik hat Vorrang vor GY-Konvention:** T/t =
+Tuer zu/offen, Y = toter Stamm (Legenden sind je Karte eigene
+Namespaces; GY-Belegung ist nicht bindend). Deklariert; ebenso
+Karten-Legende 'G' (Glocken-Joch) vs. Paletten-Ton 'G'
+(NPC-Stoff) — getrennte Namespaces, kein Konflikt.
+E8 **Masstabellen-Patch fix:** die 6 Musterzeilen aus dem
+GEN-Report (dorf_dach_(a|b), dorf_dach_(c|d|tor), dorf_bake_gross
+64x32, dorf_bake_klein, dorf_segel(_[rl][12])?, dorf_glocke)
+gehen WOERTLICH an beide sanktionierte Orte (§7.B(8)); Gegen-Gate
+T2b nachgerechnet gruen (kein Bestands-Key umgeleitet, KEINE
+fuenfte Musterzeile — der Torbogen laeuft als dorf_dach_tor).
+E9 Der Dach-Zensus verschiebt sich, sobald P0-FARBE 'c' setzt
+(Blaupausen nutzen bewusst kein c/G) — die EICHUNG wartet deshalb
+auf P0-FARBE und rechnet mit dem finalen c-Wert.
 - [x] Oekonomie: KORRIGIERT (6 Befunde, siehe §2; Q4-Truhe ->
       Katakomben-Schatzkammer, Farm-Rate 47,8, Herz ~3-4 Runden,
       Q1-Klausel praezisiert, Erstbesuchs-Kaufkraft ueber
