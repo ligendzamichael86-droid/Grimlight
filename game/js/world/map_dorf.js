@@ -126,6 +126,12 @@ const DORF_LEGEND = {
       'dorf_lehm_04', 'dorf_lehm_05', 'dorf_lehm_06', 'dorf_lehm_07', 'dorf_lehm_08'],
   },
   // Lehm-Detail (Kiesel/Scherben) — BESTANDS-Arts plus zwei Pool-Kacheln.
+  // PHASE 4a NICHT GEAENDERT (gemeldet statt eigenmaechtig): die Streuung 23,9 L
+  // dieser Liste haengt am DUNKELSTEN Eintrag 'dirt_patch' (Palette-L-Mittel
+  // 51,3) — und der steht auf Index 0. Die Waechter smoke §6#4e und
+  // check_gfx6_art [8] verlangen variants[0] === art; ihn zu tauschen hiesse
+  // also, auch das art-Feld zu drehen. Eine REINE Listen-Aenderung kann die
+  // Streuung nicht senken (dirt_patch bleibt Untergrenze).
   ',': {
     art: 'dirt_patch',
     solid: false,
@@ -137,13 +143,18 @@ const DORF_LEGEND = {
     solid: false,
     variants: ['path', 'path_v1', 'path_v2', 'path_v3', 'path_v6'],
   },
-  // Weg UEBERWUCHERT: die Pfade zu den drei verlassenen Katen. Traegt die
-  // EINZIGEN Gruentoene des Dorfs (2,64 % der Bodenflaeche) — bewusst nur hier.
+  // Weg UEBERWUCHERT: die Pfade zu den drei verlassenen Katen.
+  // SLICE 6 PHASE 4a (Juroren-Befund): die drei REINEN Gras-Kacheln
+  // grass_g5_20/_34/_09 lasen als harte gruene Rechtecke im Lehmfeld (interne
+  // Streuung der Liste 42,4 L). Sie sind durch dorf_lehm_08 / path_v5 ersetzt;
+  // n bleibt UNGERADE (7, Wiederholung erlaubt — §2.A2/§0.6), variants[0]
+  // bleibt gleich 'art'. Der Ueberwuchs wird jetzt allein von dirt_patch
+  // getragen (die einzige verbliebene Gras-Kachel des Dorfs).
   '-': {
     art: 'path_v6',
     solid: false,
-    variants: ['path_v6', 'grass_g5_20', 'path_v5', 'dirt_patch', 'grass_g5_34',
-      'path_v6', 'grass_g5_09'],
+    variants: ['path_v6', 'dorf_lehm_08', 'path_v5', 'dirt_patch', 'path_v5',
+      'path_v6', 'dorf_lehm_08'],
   },
   'S': { art: 'dorf_stufe', solid: false },      // Kapellenstufe (Corm steht darauf)
   // Osttor-Schwelle = die zwei Portal-Kacheln nach GRAVEYARD (GY-Konvention 'D').
