@@ -111,7 +111,11 @@ def startseite():
         mb = os.path.getsize(APK) / (1024 * 1024)
         stand = time.strftime('%d.%m.%Y %H:%M', time.localtime(os.path.getmtime(APK)))
         zeile = '<p>app-debug.apk &middot; %.1f MB &middot; gebaut %s</p>' % (mb, stand)
-        knopf = '<p><a href="%s">Grimlight herunterladen</a></p>' % NAME
+        # Der Link wird per Skript auf den vollen Pfad umgeschrieben: hinter
+        # dem code-server-Proxy loest ein relativer href sonst falsch auf,
+        # wenn die Seite OHNE Schlussstrich geoeffnet wurde (/proxy/8125 ->
+        # Browser-Basis /proxy/ -> "invalid port"). Beleg: Michael 15.08.2026.
+        knopf = '<p><a id="dl" href="%s">Grimlight herunterladen</a></p>' % NAME
     else:
         zeile = '<p>Noch kein APK gebaut.</p>'
         knopf = '<p>Auf dem Server zuerst <code>bash tools/build_apk.sh</code> laufen lassen.</p>'
@@ -124,7 +128,10 @@ def startseite():
         'code{background:#0f1a12;padding:.1rem .3rem}</style></head><body>'
         '<h1>Grimlight</h1>' + zeile + knopf +
         '<p>Danach die Datei antippen. Android fragt einmalig nach der Freigabe '
-        'fuer unbekannte Quellen.</p></body></html>')
+        'fuer unbekannte Quellen.</p>'
+        '<script>var a=document.getElementById("dl");if(a){var p=location.pathname;'
+        'if(p.charAt(p.length-1)!=="/"){p+="/";}a.href=p+a.getAttribute("href");}'
+        '</script></body></html>')
 
 
 def port_frei(port):
