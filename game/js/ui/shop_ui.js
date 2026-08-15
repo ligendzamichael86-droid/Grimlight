@@ -29,16 +29,20 @@ export const SHOP_ROWS = 5;            // sichtbare Zeilen (laengere Listen scro
 export const SHOP_HINWEIS_Y = 133;
 export const SHOP_BTN_CLOSE = { x: 288, y: 10, w: 24, h: 24 };
 export const SHOP_BTN_SEITE = { x: 16, y: 144, w: 88, h: 24 };
-// KEINE UEBERDECKUNG DER SPIEL-TOUCHZONEN (Fixer R1, V-SPEC MINOR; derselbe
-// Fehlertyp, den Review M2 fuer die Dialogbox fand). input.js:108-112 setzt
-// A = Kreis (288,148) r16 -> Huelle x 272..304, B = (252,144) r12 -> x 240..264
-// (beide y 132..164). Jeder touchstart dort landet ZUSAETZLICH in
-// attackIds/potionIds, ganz gleich was die Shop-Logik damit macht.
-// HANDELN stand vorher bei x 208..304 und lag damit deckungsgleich auf BEIDEN.
-// Es wandert nach LINKS (x 112..208, y unveraendert) statt nach oben: die
-// Liste braucht y 38..128 in voller Hoehe, und x < 240 ist der einzige Streifen
-// unterhalb von y 132, der A und B nicht beruehrt. Masse unveraendert
-// (96 x 24 px = 36,1 x 9,03 mm, weit ueber dem 6-mm-Gate).
+// LAGE DES HANDELN-KNOPFS — KORRIGIERTE BEGRUENDUNG (Phase 2, ENGINE).
+// Der frueher hier stehende Satz "KEINE UEBERDECKUNG DER SPIEL-TOUCHZONEN"
+// war IRREFUEHREND: er las sich, als schuetze die Knopf-Lage vor den A/B-
+// Zonen. Das tut sie nicht und muss sie nicht. Den Schutz leistet
+// AUSSCHLIESSLICH main.js, das im State 'shop' (wie im State 'dialog') A, B
+// und W auf visible:false setzt (SPEC_SLICE_6 §2.2, Muster pause.visible) —
+// waehrend eines Ladenbesuchs laeuft ausserdem KEIN Welt-Update, ein Tap in
+// die A/B-Kreise kann also gar keinen Hieb und keinen Trank ausloesen
+// (main.js haelt dafuer zusaetzlich attackSwallow und trankSwallow).
+// Zur Einordnung: input.js:108-112 setzt A = Kreis (288,148) r16 -> Huelle
+// x 272..304, B = (252,144) r12 -> x 240..264 (beide y 132..164). Die Lage
+// x 112..208 bleibt trotzdem so stehen — sie ist die aufgeraeumtere (die
+// Liste braucht y 38..128 in voller Hoehe) und kostet nichts. Masse
+// unveraendert (96 x 24 px = 36,1 x 9,03 mm, weit ueber dem 6-mm-Gate).
 export const SHOP_BTN_HANDEL = { x: 112, y: 144, w: 96, h: 24 };
 // Alle Tap-Rechtecke der UI in EINER Liste (Gate liest daraus).
 export const SHOP_ZONEN = [SHOP_BTN_CLOSE, SHOP_BTN_SEITE, SHOP_BTN_HANDEL];
@@ -375,6 +379,40 @@ export function createShopUI() {
     if (ui.cursor < ui.oben) ui.oben = ui.cursor;
   }
 
+  return ui;
+}
+
+// ---------------------------------------------------------------------------
+// LAUFZEIT-ZUSTAND ZURUECKSETZEN (ADDITIV, Phase-2-Nachfix)
+// ---------------------------------------------------------------------------
+//
+// WOZU: main.js haelt EIN shopUI fuer die ganze Sitzung (`const shopUI =
+// createShopUI()`), waehrend resetRun einen frischen RUN aufsetzt und dabei
+// runFlags.dorfBesuche auf 0 zuruecksetzt. Ohne diese Funktion ueberlebten
+// ui.besuch und ui.verkauft den Neustart: der neue Run betritt das Dorf als
+// Besuch 1, trifft in `open` auf denselben Zaehlerstand wie im alten Run
+// (`besuch !== ui.besuch` ist dann FALSCH) und laesst die im ALTEN Run
+// gekauften Einzelstuecke aus der Auslage verschwinden.
+//
+// PUR bis auf das uebergebene Objekt: nur die Felder aus dem ui-Literal in
+// createShopUI, exakt auf deren Startwerte. Der Wuerfel bleibt unberuehrt —
+// die Auslage haengt allein an der Saat (dorfBesuche, slotIndex), NICHT an
+// diesem Objekt (saatRng oben).
+//
+// DIE HELD-FLAGGEN (heldConfirm/heldUp/heldDown/heldInv) sind Closure-Zustand
+// und werden hier bewusst NICHT angefasst: sie sind reine Eingabe-Flanken und
+// werden von `open` bei JEDEM Ladenbesuch neu auf true geprimt.
+export function resetShopUI(ui) {
+  if (!ui) return ui;
+  ui.haendler = 'bran';
+  ui.seite = 'kauf';
+  ui.cursor = 0;
+  ui.oben = 0;
+  ui.hinweis = '';
+  ui.zeilen = [];
+  ui.besuch = -1;
+  ui.verkauft = [];
+  ui.ankaufMoeglich = false;
   return ui;
 }
 

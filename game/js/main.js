@@ -40,6 +40,19 @@ import {
   defaultSettings, parseSettings, serializeSettings, toggle as mixerToggle,
   BUS, sfxBusGain, leereStimmen, allocVoice, freeVoice, aktiveStimmen,
 } from './audio/mixer.js';
+// SLICE 6 §2/§3/§4 — GRAMFELD. Alle fuenf Module sind REIN (Node-importierbar,
+// kein window/document, npcs.js pusht KEINE Events — Waechter smoke:5189).
+// Die VERDRAHTUNG liegt ausschliesslich hier: quest.js hat per §0.2/§4 keine
+// eigenen Trigger, alle Ausloeser sind main.js-Beobachter (main.js kennt
+// currentMapKey und sieht den die-Uebergang inklusive e.kind).
+import { createNpcs, updateNpcs, drawNpc } from './entities/npcs.js';
+import { dialogFuer, questGeber } from './entities/npc_dialoge.js';
+import { dialogStart, dialogSchritt, dialogAnsicht } from './ui/dialog.js';
+import {
+  questAnbieten, questAnnehmen, questAbgeben, questKillEvent, questRunFlagEvent,
+  questDialogEvent, seltenFrei, neueRunFelder, sichereRunFelder, leereRunFelder,
+} from './items/quest.js';
+import { createShopUI, drawShopUI, resetShopUI } from './ui/shop_ui.js';
 
 const VIEW_W = 320;
 const VIEW_H = 180;
@@ -103,6 +116,15 @@ for (const key of [
   // Erzeugungsreihenfolge; ein Einschub davor macht beide Alt-Tests rot.
   'warden_idle', 'warden_walk_0', 'warden_walk_1', 'warden_windup_a',
   'warden_windup_b', 'warden_dash', 'warden_stuck', 'warden_summon', 'warden_die',
+  // Slice 6 (SLICE6_PHASE2_NOTIZEN 5): die NPC-Flips ebenfalls NUR ans ENDE.
+  // ANGEHAENGT WERDEN NUR DIE ZWEI WANDERER. npcs.js setzt facingLeft
+  // AUSSCHLIESSLICH im Wander-Zweig (npcs.js:152 `if (n.dirX !== 0)`), und
+  // NPC_WANDERER ist ['mile','torwaechter'] (npcs.js:51). Bran/Hedda/Corm
+  // stehen ortsfest: ihr facingLeft bleibt fuer immer false, ein Flip-Canvas
+  // fuer sie waere toter Speicher (6 statt 15 Extra-Canvases beim Boot).
+  // npc_blase traegt keine Blickrichtung und bekommt ebenfalls keinen Flip.
+  'npc_mile_0', 'npc_mile_1', 'npc_mile_talk',
+  'npc_torwaechter_0', 'npc_torwaechter_1', 'npc_torwaechter_talk',
 ]) {
   gfx[`${key}_flip`] = buildSprite(SPRITES[key], PALETTE, { flipX: true });
 }
@@ -899,6 +921,25 @@ let projectiles = null;
 const inventoryUI = createInventoryUI();
 let inventoryHeld = false; // Flanke fürs Öffnen (Muster potionHeld)
 let attackSwallow = false; // schluckt den Angriffs-Pegel nach dem Inventar-Schliessen
+// SLICE 6 §0.3 — TRANK-SCHLUCKER. Zwillingsbruder von attackSwallow: der
+// B-Knopf liegt bei (252,144) r12 und wird von input.js OHNE visible-Pruefung
+// ausgewertet (input.js:236-238 — nur W fragt `w.visible`). Ein Tap dorthin
+// waehrend des Dialogs landet also trotz visible:false in potionIds; ohne den
+// Schlucker leerte der noch gehaltene Pegel im ersten freien Frame ein Glas
+// (player.js:116 erkennt die Flanke selbst). Gleiche Heilung wie oben: der
+// Pegel wird geschluckt, bis er einmal losgelassen wurde.
+let trankSwallow = false;
+// SLICE 6 §2/§3 — Dorf-Zustand. npcs lebt wie enemies/props je Karte (buildWorld
+// baut es neu); npcNahe ist die Rueckgabe des letzten updateNpcs (§2.3).
+let npcs = [];
+let npcNahe = null;
+let dialogZustand = null;   // dialog.js-Reducerzustand (null = kein Dialog)
+let dialogNpc = null;       // der NPC, der gerade redet (Sprech-Frame)
+let dialogHeldConfirm = true;
+let dialogHeldX = false;
+let dialogHeldY = false;
+const shopUI = createShopUI();
+let shopHeldCursor = 0;     // Menue-Flanke fuer menu_move (Muster audioInvCursor)
 // Slice 3: Toast traegt jetzt eine Prioritaet (level_up > key/heart/weapon_found
 // > item_pickup > Rest). Ein Slot; ein neuer ersetzt den alten NUR bei >=
 // Prioritaet (dokumentierte Abweichung von Slice 2 "ein neuer ersetzt den
@@ -909,7 +950,11 @@ let zeldaBlink = 0;
 // Slice 3: Progression/Boss-Run-Zustand.
 // Slice 4 §3.4: openedChests kommt dazu — Schluessel `MAP:tx,ty` je bereits
 // geoeffneter Truhe. Beides wird in resetRun zurueckgesetzt.
-let runFlags = { bossDead: false, openedChests: [] };   // Reset in resetRun
+// Slice 6 §5: die VIER neuen v2-Felder haengen am selben Traeger (quests,
+// npcFlags, gekauft, dorfBesuche). neueRunFelder() liefert die Defaults —
+// derselbe Satz, den save.js beim Laden eines v2-Standes OHNE die Felder
+// einsetzt. resetRun leert alle vier (leereRunFelder, SPEC §5 deklariert).
+let runFlags = { bossDead: false, openedChests: [], ...neueRunFelder() };   // Reset in resetRun
 let lastSpawn = null;                 // fuer den Respawn (§2.6): letzter Eintritts-Spawn
 let currentMapKey = null;             // aktuelle Map (Respawn zielt hierauf)
 let levelupTimer = 0;                 // Ring-Effekt levelup_0/1, 0,5 s ueber dem Spieler
@@ -1140,6 +1185,14 @@ function buildWorld(mapKey, spawn, carry) {
   if (mapKey === 'BOSS_KAMMER' && runFlags.bossDead) {
     props.push(...markSiegtruhe(createProps([{ ...tc(10, 4), kind: 'chest', content: 'treasure' }])));
   }
+  // SLICE 6 §2.1: NPCs aus mapDef.npcSpawns (Weltpixel = AABB-ZENTRUM, wie
+  // enemies). Das Feld ist OPTIONAL — Muster mapDef.extraLights: fehlt es
+  // (alle vier Bestandskarten und die injizierte TESTMAP der Flusstests),
+  // bleibt die Liste leer und jede NPC-Schleife ist ein No-Op.
+  npcs = createNpcs(mapDef.npcSpawns || []);
+  npcNahe = null;
+  dialogZustand = null;
+  dialogNpc = null;
   projectiles = createProjectiles();
   // §2.4: Funken der alten Map verwerfen (kein Ember-Bleed über den Map-Wechsel).
   particles.list.length = 0;
@@ -1209,6 +1262,20 @@ function resetRun() {
   // (Review P1-B5; kein Bestandstest faengt das, check_boss injiziert den
   // Schluessel von Hand).
   runFlags.openedChests = [];
+  // SLICE 6 §5 (deklariert): ALLE VIER neuen Felder sind RUN-gebunden und
+  // werden geleert — Quests, Gespraechsmarken, Einmalwaren, Besuchszaehler.
+  // leereRunFelder fasst bossDead/openedChests NICHT an (quest.js:251-258).
+  leereRunFelder(runFlags);
+  // SLICE 6 §3 (Phase-2-Nachfix): der LADEN haelt eigenen Laufzeitzustand, der
+  // NICHT in runFlags liegt und die Sitzung ueberlebt — `const shopUI` wird
+  // genau einmal beim Boot gebaut. Run-gebunden sind darin ui.besuch (der
+  // Dorfbesuch, dessen Auslage gerade steht) und ui.verkauft (die in DIESEM
+  // Besuch geleerten Einzelstuecke). leereRunFelder setzt dorfBesuche auf 0;
+  // ohne den Reset traefe der erste Dorfbesuch des NEUEN Runs auf ui.besuch
+  // aus dem ALTEN Run und die dort gekauften Stuecke fehlten in der Auslage.
+  // Die Auslage selbst bleibt deterministisch: sie wird aus (dorfBesuche,
+  // slotIndex) gewuerfelt (shop_ui.saatRng), nicht aus diesem Objekt.
+  resetShopUI(shopUI);
   buildWorld(startMapKey, MAPS[startMapKey].playerSpawn, false);
 }
 
@@ -1219,6 +1286,25 @@ function resetRun() {
 function ladeSpielstand(snap) {
   runFlags.bossDead = snap.runFlags.bossDead;
   runFlags.openedChests = snap.runFlags.openedChests.slice();
+  // SLICE 6 §5 (A1-Gate "geladene Quest-Felder feldweise identisch"): die vier
+  // v2-Felder werden FELDWEISE kopiert, nie als Referenz uebernommen — sonst
+  // teilten Laufzeit und Snapshot denselben Zustand. deserialize liefert
+  // IMMER die v2-Form (v1 laeuft durch migrateV1), die Felder stehen also.
+  const rf = snap.runFlags;
+  runFlags.quests = {};
+  for (const id of Object.keys(rf.quests || {})) {
+    const q = rf.quests[id];
+    runFlags.quests[id] = { status: q.status, zaehler: q.zaehler };
+  }
+  runFlags.npcFlags = {};
+  for (const marke of Object.keys(rf.npcFlags || {})) runFlags.npcFlags[marke] = rf.npcFlags[marke];
+  runFlags.gekauft = Array.isArray(rf.gekauft) ? rf.gekauft.slice() : [];
+  runFlags.dorfBesuche = Number.isFinite(rf.dorfBesuche) ? rf.dorfBesuche : 0;
+  // Netz fuer den v2-Stand OHNE die Felder (Review M1, idempotent) …
+  sichereRunFelder(runFlags);
+  // … und EIN Nachlauf der Flaggen-Beobachter: ein geladenes Q3 bei bereits
+  // totem Boss haenge sonst fuer immer auf 'aktiv' (quest.js §4b-Loch).
+  questRunFlagEvent(runFlags.quests, runFlags);
   player = null;
   victoryTimer = 0;
   fadePhase = 'none';
@@ -1535,6 +1621,12 @@ function audioBeobachter(dt) {
       } else if (e.kind === 'hound' && st === 'leap') {
         spieleSfx('hound_jump');
       }
+      // SLICE 6 §4 TRIGGER (a) — KILL-ZAEHLER JE KARTE UND SORTE. Genau diese
+      // Flanke ist die in SLICE6_PHASE0 §1 benannte Quelle: der Uebergang nach
+      // 'die' faellt je Gegner GENAU EINMAL (WeakMap), traegt e.kind, und
+      // main.js kennt currentMapKey. enemies.js bleibt unberuehrt (§0.2), der
+      // Gegner lebt danach noch dieTimer lang weiter (enemies.js:441-450).
+      if (st === 'die') questKillBeobachter(e.kind);
       AUDIO_STATE.set(e, st);
     }
 
@@ -1645,6 +1737,149 @@ function audioBeobachter(dt) {
   if (neuerHitstop > hitstop) hitstop = neuerHitstop;
 }
 
+// ===========================================================================
+// SLICE 6 §2/§3/§4 — DIE VERDRAHTUNG. quest.js/dialog.js/shop_ui.js sind pure
+// Rechner; ALLES, was den Spieler, den Zustandsautomaten oder die Karte
+// anfasst, steht hier (SPEC §4 "alle Trigger als main.js-Beobachter").
+// ===========================================================================
+
+// §4 TRIGGER (a): ein Gegner der Sorte `kind` ist auf currentMapKey gestorben.
+function questKillBeobachter(kind) {
+  const erg = questKillEvent(runFlags.quests, currentMapKey, kind);
+  if (erg.erfuellt.length > 0) pushToast('AUFTRAG ERFUELLT', '#f0bf4e', 3);
+}
+
+// §4 TRIGGER (b): runFlags-Beobachter (heute nur Q3 ueber bossDead). Wird an
+// ZWEI Stellen gerufen: nach dem Setzen der Flagge und einmal nach dem Laden.
+function questFlaggenBeobachter() {
+  const erg = questRunFlagEvent(runFlags.quests, runFlags);
+  if (erg.erfuellt.length > 0) pushToast('AUFTRAG ERFUELLT', '#f0bf4e', 3);
+}
+
+// Auszahlung der Abgabe. quest.js RECHNET nur (questAbgeben zahlt bewusst
+// nicht selbst) — der Spieler gehoert main.js. Q1-Klausel: 1 Trank + 15
+// Muenzen, bei vollem Guertel stattdessen 25 Muenzen (quest.js questBelohnung).
+function questAuszahlen(id) {
+  const maxTraenke = Number.isFinite(player.maxPotions) ? player.maxPotions : 3;
+  const trankVoll = (player.potions || 0) >= maxTraenke;
+  const erg = questAbgeben(runFlags.quests, id, { trankVoll });
+  if (!erg.ok) return;
+  player.gold += erg.gold;
+  if (erg.trank > 0) player.potions = Math.min(maxTraenke, player.potions + erg.trank);
+  pushToast('BELOHNUNG', '#f0bf4e', 3);
+  spieleSfx('gold');
+}
+
+// §4 TRIGGER (c): die Effekt-Datensaetze aus dialog.js in ARRAY-REIHENFOLGE
+// ausfuehren (npc_dialoge.js definiert das Vokabular; dialog.js reicht es nur
+// durch und interpretiert nie).
+function dialogEffekte(effekte) {
+  for (const eff of effekte) {
+    if (!eff || typeof eff !== 'object') continue;
+    if (eff.typ === 'npc_gesprochen') {
+      questDialogEvent(runFlags.quests, runFlags.npcFlags, eff.npc);
+    } else if (eff.typ === 'quest_anbieten') {
+      questAnbieten(runFlags.quests, eff.id);
+    } else if (eff.typ === 'quest_annehmen') {
+      // DRITTES ARGUMENT PFLICHT (quest.js §4b): wer den Grabwaechter VOR dem
+      // Gespraech mit Corm erschlaegt, bekaeme sonst nie wieder ein
+      // bossDead-Ereignis — Q3 haenge fuer immer auf 'aktiv'.
+      questAnnehmen(runFlags.quests, eff.id, runFlags);
+    } else if (eff.typ === 'quest_abgeben') {
+      questAuszahlen(eff.id);
+    } else if (eff.typ === 'shop') {
+      shopOeffnen(eff.haendler);
+    }
+  }
+}
+
+function dialogOeffnen(npc) {
+  const baum = dialogFuer(npc.id, runFlags);
+  if (!baum) return false;
+  dialogNpc = npc;
+  npc.redet = true;                 // Sprech-Frame (npcs.js npcSpriteKey)
+  dialogZustand = dialogStart(baum);
+  // Held-Flags primen (Muster shop_ui.open/inventory_ui): der Pegel, der das
+  // Gespraech eroeffnet hat, darf die erste Seite nicht sofort wegblaettern.
+  dialogHeldConfirm = true;
+  dialogHeldX = true;
+  dialogHeldY = true;
+  enterState('dialog');
+  return true;
+}
+
+function dialogSchliessen() {
+  if (dialogNpc) dialogNpc.redet = false;
+  dialogNpc = null;
+  dialogZustand = null;
+  enterState('playing');            // consumeConfirm haengt an enterState
+}
+
+// GENAU DIESES Objekt geht an open() UND an update() — sonst laufen Auslage
+// und Herz-Marke auseinander. `gekauft` ist bewusst die LEBENDE Referenz auf
+// runFlags.gekauft: shop_ui legt die Einmal-Marke selbst dort ab.
+function shopKontext() {
+  return {
+    dorfBesuche: runFlags.dorfBesuche,
+    gekauft: runFlags.gekauft,
+    seltenFrei: seltenFrei(runFlags.quests),
+  };
+}
+
+function shopOeffnen(haendler) {
+  enterState('shop');
+  shopUI.open(haendler, shopKontext());
+  shopHeldCursor = shopUI.cursor;
+}
+
+// DIALOGBOX. Gezeichnet wird NUR auf den HAUPT-ctx, mit fillRect-Rahmen (§0.4:
+// kein strokeRect, kein measureText, kein ctx.translate). Die Geometrie kommt
+// vollstaendig aus dialog.js (Box y 76..128, Options-Zonen im oberen Drittel,
+// Zeilen-Grundlinien, Weiter-Marke als RECHTECK statt Wort).
+function dialogRahmen(x, y, w, h, farbe) {
+  ctx.fillStyle = farbe;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h);
+}
+
+function zeichneDialog() {
+  const a = dialogAnsicht(dialogZustand);
+  const b = a.box;
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = '#14101a';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.globalAlpha = 1;
+  dialogRahmen(b.x, b.y, b.w, b.h, '#575061');
+  dialogRahmen(b.x + 2, b.y + 2, b.w - 4, b.h - 4, '#3a3542');
+  ctx.font = '8px monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  if (a.name) {
+    ctx.fillStyle = '#f0bf4e';
+    ctx.fillText(a.name, b.x + 6, a.nameY);
+  }
+  ctx.fillStyle = '#d6cbb1';
+  for (const z of a.zeilen) ctx.fillText(z.text, b.x + 6, z.y);
+  for (const o of a.optionen) {
+    const zn = o.zone;
+    if (o.gewaehlt) {
+      ctx.fillStyle = '#3a3542';
+      ctx.fillRect(zn.x, zn.y, zn.w, zn.h);
+    }
+    dialogRahmen(zn.x, zn.y, zn.w, zn.h, o.gewaehlt ? '#f0bf4e' : '#3a3542');
+    ctx.textAlign = 'center';
+    ctx.fillStyle = o.gewaehlt ? '#f0bf4e' : '#d6cbb1';
+    ctx.fillText(o.text, zn.x + zn.w / 2, zn.y + 4);
+    ctx.textAlign = 'left';
+  }
+  if (a.weiter) {
+    ctx.fillStyle = '#f0bf4e';
+    ctx.fillRect(a.weiter.x, a.weiter.y, a.weiter.w, a.weiter.h);
+  }
+}
+
 function update(dt) {
   timeSec += dt;
   stateTime += dt;
@@ -1662,10 +1897,25 @@ function update(dt) {
   // Zone Taps im Titel, im Game-Over und im Sieg (Muster hudBoxVisible).
   input.touch.pause.visible = state === 'playing';
 
+  // SLICE 6 §2.2 (PFLICHT, nicht Kosmetik): im Dialog UND im Laden bekommen
+  // A/B/W `visible:false` (Muster pause.visible, EINE Stelle). Die W-Zone
+  // liegt bei (284,102) r14 -> x 270..298 / y 88..116 und ueberlappt sowohl
+  // die Dialogbox (y 76..128) als auch Options-Zone 3 (x 212..300, y 77..93)
+  // im Bereich x 270..298 / y 88..93; input.js:234 prueft `w.visible` und
+  // laesst den Tap damit zur Option durch. Fuer A und B (beide ab y 132) ist
+  // die Ausblendung die HUD-Seite derselben Zusage — ihre Touch-Zonen fragt
+  // input.js NICHT ab, deshalb haengt an ihnen zusaetzlich attackSwallow und
+  // der neue trankSwallow.
+  const weltZonen = state !== 'dialog' && state !== 'shop';
+  input.touch.buttons[0].visible = weltZonen;
+  input.touch.buttons[1].visible = weltZonen;
+
   // HUD-Spiegel + Touch-Sichtbarkeiten NUR in playing/inventory
   // aktualisieren (im Titel ist player null). drawHUD behält seine
   // Signatur und kennt weder Projektile noch den Zustandsautomaten.
-  if (state === 'playing' || state === 'inventory') {
+  // SLICE 6 §2.2: 'dialog' und 'shop' kommen dazu — ohne sie friert der
+  // HUD-Spiegel (Bumerang-Zustand, Blink) beim Reden ein.
+  if (state === 'playing' || state === 'inventory' || state === 'dialog' || state === 'shop') {
     const inv = player.inv;
     const air = projectiles.list.length > 0;
     if (zeldaWasAir && !air) zeldaBlink = 3 / 60; // Fang: 3-Frame-Weissblink
@@ -1673,7 +1923,7 @@ function update(dt) {
     zeldaWasAir = air;
     player.zeldaState = inv.zelda.length === 0 ? 'none' : (air ? 'air' : 'ready');
     player.zeldaBlink = zeldaBlink;
-    input.touch.buttons[2].visible = inv.zelda.includes('boomerang');
+    input.touch.buttons[2].visible = weltZonen && inv.zelda.includes('boomerang');
     // HUD-Box-Zone nur im Spielzustand scharf; im Panel übernimmt der
     // Tap-Hittest des Inventar-UI (X-Button liegt in derselben Ecke).
     input.hudBoxVisible = state === 'playing'
@@ -1688,6 +1938,11 @@ function update(dt) {
   if (attackSwallow) {
     if (input.attack) input.attack = false;
     else attackSwallow = false;
+  }
+  // SLICE 6 §0.3: dasselbe fuer den TRANK-Pegel nach Dialog/Laden.
+  if (trankSwallow) {
+    if (input.potion) input.potion = false;
+    else trankSwallow = false;
   }
 
   // §4.2/§4.5 PAUSE-FLANKE (Knopf ❚❚, Escape/P). Sie steht VOR der
@@ -1706,6 +1961,21 @@ function update(dt) {
       audioResume();         // §0.3: resume() haengt an JEDEM Pause-WEITER
       enterState('playing');
     }
+  } else if (state === 'playing' && fadePhase === 'none' && input.attack
+    && npcNahe && dialogFuer(npcNahe.id, runFlags)) {
+    // SLICE 6 §0.3/§2.3 REDEN. Kein neuer Knopf: der ANGRIFFS-PEGEL oeffnet
+    // den Dialog, wenn ein NPC in Reichweite (<= 22 px Mittenabstand) UND in
+    // Blickrichtung (Skalarprodukt > 0) steht — beides rechnet npcs.js, die
+    // Antwort steht in npcNahe.
+    //
+    // WARUM HIER, VOR DER ZUSTANDSKETTE (Muster pauseEdge darueber): dieser
+    // Zweig VERBRAUCHT den Frame. Liefe die Pruefung im playing-Zweig, haette
+    // player.update den Pegel laengst zu einem Schwerthieb gemacht. So kommt
+    // er dort gar nicht erst an — und attackSwallow haelt den weiter
+    // gehaltenen Pegel, bis er einmal losgelassen wurde (main.js-Praezedenz).
+    dialogOeffnen(npcNahe);
+    input.attack = false;
+    attackSwallow = true;
   } else if (state === 'title') {
     // §3.3: OHNE Spielstand ist dieser Zweig byte-gleich zum Bestand — jeder
     // Confirm startet sofort einen frischen Run. Erst mit gueltigem Stand
@@ -1764,6 +2034,12 @@ function update(dt) {
       if (input.attack) attackPuffer = true;
       fadeT += dt;
       if (fadePhase === 'out' && fadeT >= FADE_TIME) {
+        // SLICE 6 §3.1 — "DORFBESUCH" IST DEFINIERT: buildWorld(DORF) VIA
+        // PORTAL (carry). Der Zaehler ist die SAAT des Haendler-Wuerfels
+        // (shop_ui.saatRng) — deshalb steht er genau hier und NICHT in
+        // buildWorld: Respawn (gameover) und Laden rufen buildWorld ebenfalls,
+        // duerfen die Auslage aber nicht grundlos durchwechseln.
+        if (pendingPortal.target === 'DORF') runFlags.dorfBesuche += 1;
         buildWorld(pendingPortal.target, pendingPortal.spawn, true);
         pendingPortal = null;
         fadePhase = 'in';
@@ -1813,6 +2089,14 @@ function update(dt) {
       }
       updateDrops(dt, drops, player, events);
       audioBeobachter(dt);
+      // SLICE 6 §2.1/§2.3: die Wanderer gehen an ihrer Leine (<= 24 px um den
+      // Anker, npcs.js), und die Rueckgabe meldet den ansprechbaren NPC. Der
+      // Aufruf steht NACH dem Beobachter — die Reihenfolge
+      // updateDrops -> audioBeobachter ist von smoke:5323 festgenagelt.
+      // npcNahe traegt BEIDES: den Dialog-Oeffner (§0.3, oben vor der
+      // Zustandskette) und den Naehe-Hinweis (§2.3). Die Blasen-FLAGGE wird
+      // in drawWorld gesetzt — sie ist zustandsabhaengig und rein visuell.
+      npcNahe = updateNpcs(dt, npcs, player, map, false).nahe;
       syncPlayerLight();
       followPlayer();
 
@@ -1866,6 +2150,9 @@ function update(dt) {
         for (let k = 0; k < coins; k++) scatterDrop(drops, map, anchor.x, anchor.y, 'coin');
         props.push(...markSiegtruhe(createProps([{ ...anchor, kind: 'chest', content: 'treasure' }])));
         runFlags.bossDead = true;
+        // SLICE 6 §4 TRIGGER (b): unmittelbar nach dem Setzen der Flagge. Q3
+        // springt damit von 'aktiv' auf 'erfuellt' (quest.js questRunFlagEvent).
+        questFlaggenBeobachter();
       }
 
       // Boss-HP-Balken pro Frame spiegeln (Muster zeldaState): lebt ein
@@ -1974,6 +2261,68 @@ function update(dt) {
       uiTon('pause_toggle');
       attackSwallow = true; // Schliess-Tap nicht als Hieb werten
       enterState('playing'); // consumeConfirm an beiden Übergängen (enterState)
+    }
+  } else if (state === 'dialog') {
+    // SLICE 6 §2.2 — HARTE PAUSE wie 'inventory': keine Welt-Updates, keine
+    // Timer, victoryTimer pausiert mit; timeSec laeuft oben weiter (Fackel-
+    // Flackern im stehenden Bild). MUSIK LAEUFT, und audioGeduckt bleibt
+    // FALSE — der Dialog ist Teil der Welt, kein Menue (§2.2 deklariert,
+    // enterState bleibt dafuer byte-gleich).
+    //
+    // NPCs werden EINGEFROREN weitergereicht (npcs.js-Argument): nur
+    // Animation, kein Gehen — der Gespraechspartner bleibt stehen.
+    updateNpcs(dt, npcs, player, map, true);
+    // Flanken fuer den PUREN Reducer. confirm ist bei input.js ohnehin eine
+    // Ein-Frame-Flanke (postUpdate loescht sie); der ANGRIFFS-Pegel zaehlt
+    // zusaetzlich als Bestaetigung (derselbe Knopf, der das Gespraech
+    // eroeffnet hat — Muster shop_ui.js:311), deshalb ein eigener Held-Merker.
+    const confirmLevel = !!input.confirm || !!input.attack;
+    const confirmEdge = confirmLevel && !dialogHeldConfirm;
+    dialogHeldConfirm = confirmLevel;
+    const xLevel = input.dirX < -0.5 || input.dirX > 0.5;
+    const yLevel = input.dirY < -0.5 || input.dirY > 0.5;
+    const links = input.dirX < -0.5 && !dialogHeldX;
+    const rechts = input.dirX > 0.5 && !dialogHeldX;
+    const hoch = input.dirY < -0.5 && !dialogHeldY;
+    const runter = input.dirY > 0.5 && !dialogHeldY;
+    dialogHeldX = xLevel;
+    dialogHeldY = yLevel;
+    const cursorVor = dialogZustand ? dialogZustand.cursor : 0;
+    const schritt = dialogSchritt(dialogZustand, {
+      confirm: confirmEdge, tap: input.tap, links, rechts, hoch, runter,
+    });
+    dialogZustand = schritt.zustand;
+    if (schritt.schluckAngriff) attackSwallow = true;
+    if (schritt.schluckTrank) trankSwallow = true;
+    if (dialogZustand && dialogZustand.cursor !== cursorVor) uiTon('menu_move');
+    if (schritt.aktion === 'wahl' || schritt.aktion === 'ende') uiTon('menu_confirm');
+    // §4 TRIGGER (c): die Effekte in ARRAY-REIHENFOLGE abarbeiten. Beim
+    // Q4-Dritten steht 'npc_gesprochen' VOR 'quest_abgeben' — erst setzt
+    // questDialogEvent die Kette auf 'erfuellt', dann zahlt questAbgeben.
+    if (schritt.effekte && schritt.effekte.length > 0) dialogEffekte(schritt.effekte);
+    // Der Dialog kann sich selbst schliessen (fertig) ODER in den Laden
+    // wechseln (dann hat dialogEffekte den State schon auf 'shop' gestellt).
+    if (state === 'dialog' && (!dialogZustand || dialogZustand.fertig)) dialogSchliessen();
+  } else if (state === 'shop') {
+    // SLICE 6 §3.2 — HARTE PAUSE wie 'dialog'. Der Laden ist der zweite Teil
+    // desselben Gespraechs, deshalb duckt er ebenfalls NICHT.
+    updateNpcs(dt, npcs, player, map, true);
+    const kontext = shopKontext();
+    const goldVor = player.gold;
+    const erg = shopUI.update(input, player, kontext);
+    if (shopUI.cursor !== shopHeldCursor) {
+      shopHeldCursor = shopUI.cursor;
+      uiTon('menu_move');
+    }
+    // Jede vollzogene Transaktion bewegt den Beutel (Kauf ODER Ankauf); eine
+    // VERWEIGERUNG laesst ihn per shop_ui-Zusage unangetastet und bleibt
+    // deshalb still — ihr Hinweis steht in der Panelzeile.
+    if (player.gold !== goldVor) spieleSfx('gold');
+    if (erg === 'close') {
+      uiTon('pause_toggle');
+      attackSwallow = true; // Schliess-Tap nicht als Hieb werten
+      trankSwallow = true;  // und nicht als Trank (B-Zone liegt im Panel)
+      dialogSchliessen();
     }
   } else if (state === 'paused') {
     // §4.1 HARTE PAUSE wie 'inventory': keine Welt-Updates, keine Timer.
@@ -2369,6 +2718,33 @@ function drawWorld() {
     draw: () => drawDrop(tintCtx, camera, d, i, gfx, timeSec),
   }));
   for (const p of props) pushTinted(p, () => drawProp(tintCtx, camera, p, gfx, timeSec));
+  // SLICE 6 §2.1: NPCs laufen durch DIESELBE Fassade wie Gegner und Spieler —
+  // Y-Sortierung, Kontaktschatten und Warm/Kalt-Toenung kommen dadurch gratis.
+  // Auf den vier Bestandskarten ist die Liste leer, die Schleife also ein No-Op.
+  //
+  // SLICE 6 §2.3 (Rev 1: "updateNpcs liefert {nahe}; main.js zeigt Hinweis-
+  // Blase") — DIE BLASEN-FLAGGE STEHT HIER, nicht mehr im Update. Sie ist eine
+  // reine ZEICHEN-Eigenschaft (npcs.js drawNpc ist ihr einziger Leser) und
+  // muss den ZUSTAND kennen. ZWEI Quellen, EINE Grafik, EIN Zeichenpfad
+  // (gfx.npc_blase in drawNpc — kein zweites Canvas, kein Text, kein
+  // measureText/strokeRect/translate):
+  //   (1) DAUERND: Quest-Geber mit offener oder abgebbarer Quest (questGeber).
+  //   (2) NAEHE-HINWEIS: der von updateNpcs gemeldete ansprechbare NPC
+  //       (npcNahe, <= 22 px Mittenabstand UND in Blickrichtung) — die
+  //       sichtbare Affordanz zum Reden, die vorher fehlte. Sie trifft auch
+  //       NPCs OHNE Quest (Mile, Torwaechter) und liegt bei einem Quest-Geber
+  //       deckungsgleich auf der Dauer-Blase (die ODER-Verknuepfung zeichnet
+  //       sie nie doppelt).
+  // NUR IM STATE 'playing': npcNahe wird ausschliesslich im playing-Zweig
+  // gesetzt und bleibt beim Verlassen stehen; ohne die Zustandsfrage stuende
+  // die Einladung "hier kannst du reden" waehrend des Gespraechs, im Laden,
+  // im Inventar, in der Pause und im Game-Over ueber demselben NPC. Die
+  // Dauer-Blase der Quest-Geber ist davon UNBERUEHRT — sie haengt allein an
+  // runFlags und bleibt in jedem Zustand stehen.
+  for (const n of npcs) {
+    n.blase = questGeber(n.id, runFlags) || (state === 'playing' && n === npcNahe);
+    pushTinted(n, () => drawNpc(tintCtx, camera, n, gfx, timeSec));
+  }
   for (const e of enemies) pushTinted(e, () => drawEnemy(tintCtx, camera, e, gfx, timeSec));
   for (const p of projectiles.list) renderables.push({
     fy: p.y + p.h, ax: p.x + p.w / 2, ay: p.y + p.h - 1, tint: false, warmA: 0, kaltA: 0, seite: 'WL',
@@ -2458,6 +2834,17 @@ function render() {
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.globalAlpha = 1;
     drawInventoryUI(ctx, inventoryUI, player, gfx);
+  }
+  // SLICE 6 §2.2: die Dialogbox liegt UEBER dem HUD (drawWorld hat es schon
+  // gezeichnet) und wird NICHT abgedunkelt — der Dialog ist Teil der Welt.
+  if (state === 'dialog') zeichneDialog();
+  // §3.2: der Laden ist ein Panel wie das Inventar und dunkelt genauso ab.
+  if (state === 'shop') {
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.globalAlpha = 1;
+    drawShopUI(ctx, shopUI, player, gfx);
   }
   if (state === 'gameover') drawGameOver(ctx, player, timeSec);
   else if (state === 'victory') drawVictory(ctx, player, timeSec);
