@@ -5,8 +5,12 @@ Rev 1 + adversarialer Review design/SLICE6_SPEC_REVIEW.md
 Fix-Formulierungen der Pruefer sind bindend). Grundlagen unveraendert
 (SLICE6_LANDKARTE, GDD.md:38-40 Gramfeld, MASTERPLAN).
 
-BUILD-SPERRE unveraendert: Bau erst nach (a) Michaels Slice-5-
-Hoertest und (b) den zwei MICHAEL-ENTSCHEIDEN §9.M.
+BUILD-SPERRE AUFGEHOBEN (15.08.2026, Michael): Hoertest-Stand
+"noch nicht — trotzdem weiter" (der Slice-5-Hoertest bleibt als
+finale S5-Geraeteabnahme OFFEN); §9.M1 JA, §9.M2 JA. Deklariert:
+Musik-Iterationen nach dem Hoertest beruehren NUR audio/songs/*
+und Mixer-Konstanten, NIE main.js — der urspruengliche
+Kollisionsgrund der Sperre entfaellt damit.
 
 ## §0 Eiserne Regeln
 
@@ -172,8 +176,12 @@ Boden-Mischungs-Bindung. song_dorf-Stub im WORLD-Commit (§0.9).
 
 §9.M1 [MICHAEL] Art-Direction-Aufweichung — unveraendert (mit dem
 korrigierten S<=0,55-Deckel nur fuer Neu-Toene).
+**ENTSCHIEDEN 15.08.2026: JA** (warm ist im Dorf das MATERIAL,
+warm-leuchtend bleibt nur Feuer).
 §9.M2 [MICHAEL] geo-Sanktion — Umfang praezisiert: die ZWEI
 Hash-Orte fuer das EINE neue Westtor-Portal (1,12).
+**ENTSCHIEDEN 15.08.2026: JA** (Freigabe fuer GENAU diese zwei
+Stellen smoke:2150 + smoke:3571-3572, nichts weiter).
 
 Deklariert (Fable, neu): Tasche gestrichen (spaetere Etappe);
 Hedda 10 Gold; Dorfbesuch-Definition + Pendel-Akzeptanz; Haeuser
