@@ -1,0 +1,70 @@
+FIGUREN-BOGEN VORHER — Legende (erzeugt von tools/figuren_bogen.mjs)
+Spec: design/SPEC_GP7CH1.md E10 P0.c/P0.e, Review M15/M16/m8.
+
+RASTER  Zelle 32x48 px (2x3 Kacheln), Markenband 8 px unter jeder Zeile,
+        Bogen 480x168 px bei 1x, 2880x1008 px bei 6x und squint.
+        Figur horizontal in der Zelle zentriert, Fusskante gemeinsam auf
+        Zellunterkante minus 8 px. Freie Zellen rechts = Boden pur (Referenzflaeche).
+        squint = 1x, per Nearest Neighbour 50 % runter (Quelltexel 2x/2y), dann
+        wieder hoch — deckungsgleich mit dem 6x-Bogen. Das Markenband wird nach
+        dem Halbieren NEU gestempelt (Chrom, nicht Kunst): kollabieren sollen die
+        Figuren, nicht die Beschriftung.
+
+BOEDEN (echte Kacheln, gekachelt — keine Flachfarbe)
+  gras  grass_g5_00   16x16  L(Rec601) 49.9  GRAVEYARD-Gras
+  lehm  dorf_lehm_00  16x16  L(Rec601) 72.8  DORF-Lehm
+  weg   path          16x16  L(Rec601) 90.9  DORF-Weg
+
+SPALTENLEGENDE (Marke im Band -> Grid-Key -> Grid-Mass)
+  Zeile H = HELD
+    H01  player_down_0          16x24  Zelle x=0..31
+    H02  player_down_1          16x24  Zelle x=32..63
+    H03  player_down_2          16x24  Zelle x=64..95
+    H04  player_down_3          16x24  Zelle x=96..127
+    H05  player_up_0            16x24  Zelle x=128..159
+    H06  player_up_1            16x24  Zelle x=160..191
+    H07  player_up_2            16x24  Zelle x=192..223
+    H08  player_up_3            16x24  Zelle x=224..255
+    H09  player_side_0          16x24  Zelle x=256..287
+    H10  player_side_1          16x24  Zelle x=288..319
+    H11  player_side_2          16x24  Zelle x=320..351
+    H12  player_side_3          16x24  Zelle x=352..383
+  Zeile N = NPC
+    N01  npc_bran_0             16x24  Zelle x=0..31
+    N02  npc_bran_1             16x24  Zelle x=32..63
+    N03  npc_bran_talk          16x24  Zelle x=64..95
+    N04  npc_hedda_0            16x24  Zelle x=96..127
+    N05  npc_hedda_1            16x24  Zelle x=128..159
+    N06  npc_hedda_talk         16x24  Zelle x=160..191
+    N07  npc_corm_0             16x24  Zelle x=192..223
+    N08  npc_corm_1             16x24  Zelle x=224..255
+    N09  npc_corm_talk          16x24  Zelle x=256..287
+    N10  npc_mile_0             16x24  Zelle x=288..319
+    N11  npc_mile_1             16x24  Zelle x=320..351
+    N12  npc_mile_talk          16x24  Zelle x=352..383
+    N13  npc_torwaechter_0      16x24  Zelle x=384..415
+    N14  npc_torwaechter_1      16x24  Zelle x=416..447
+    N15  npc_torwaechter_talk   16x24  Zelle x=448..479
+  Zeile K = KONTEXT (Gegner)
+    K01  skeleton_0             16x16  Zelle x=0..31
+    K02  ghoul_0                16x20  Zelle x=32..63
+    K03  hound_0                16x12  Zelle x=64..95
+    K04  rust_0                 16x18  Zelle x=96..127
+    K05  warden_idle            24x32  Zelle x=128..159
+
+DATEIEN (Mass, Bytes, sha256)
+  figuren_bogen_vorher_gras_1x.png           480x 168      5683 B  db365c4ff59d9a0e25c8a65d51582862e4457e03be86300d7bf0ac0680b2a9af
+  figuren_bogen_vorher_gras_6x.png          2880x1008     52363 B  979853e34868bf4be0ed4dbcb30e78aae2199f124049945d49a39e46a39b3883
+  figuren_bogen_vorher_gras_squint.png      2880x1008     44931 B  1061e37009793a12147a0bd5f9b41d512274760f07dc61e6f1ba4cc46a53ab62
+  figuren_bogen_vorher_lehm_1x.png           480x 168      5948 B  03ea500ea0fea8e976343d1ac189a4e4a46a7fc5878eb69a00b6b4c6c8094aad
+  figuren_bogen_vorher_lehm_6x.png          2880x1008     58711 B  1900071e528cf4a00fd45187a924ecf4237923c8224002d18da5d95eade6c512
+  figuren_bogen_vorher_lehm_squint.png      2880x1008     50891 B  0cdf42557cd5a41f74c418a8968d645e0f6da5fcabf39d98da50cb570f8608e2
+  figuren_bogen_vorher_weg_1x.png            480x 168      5538 B  533396f2c533cd63033983d5fe6d8290dfe0f24c7d40ee5bbe004e8e6b17d41e
+  figuren_bogen_vorher_weg_6x.png           2880x1008     47335 B  d318db4ef6c8193b9d7e2cf85aba7c326e1c07f02112d468a6354dd0541cc70b
+  figuren_bogen_vorher_weg_squint.png       2880x1008     45930 B  402037536137c95a65738ca8ab46102dbfccd4ec4e3250a07f8cb6cb5b29b355
+
+PROVENIENZ (sha256 der Art-Quellen, aus denen dieser Bogen gerendert wurde)
+  game/js/art/sprites_figuren.js     4a3b3f0c313274dd115453c9c408eb6dab2eeb75f21eb8702eb8abe7e560360b
+  game/js/art/sprites_tiles.js       a2d84e8962bfad966e41d2832a9e50c1ca6297a2fdad7bebaccab0c680245686
+  game/js/art/sprites.js             41d6b7a90c9bdd057e10c4924a460ef8fdd5a665a8b36237642928d4fe81284d
+  game/js/art/palette.js             1e5a5845eef8ffbcafc268118a91482d912a26dea325b105931a96309253fe8e
