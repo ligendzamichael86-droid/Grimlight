@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // =============================================================================
 // tools/figuren_bogen.mjs — GP7-CH-1 PHASE 0, Schritt P0.c (Werkzeug)
-//                           und P0.e (Referenz-Lauf).
+//                           und P0.e (Referenz-Lauf).   WERKZEUG-REV 2
 // =============================================================================
-// Spec: design/SPEC_GP7CH1.md E10 (P0.c/P0.e), Review-Fixes M15/M16/m8 (BINDEND).
+// Spec: design/SPEC_GP7CH1.md E9 (Umfang) + E10 (P0.c/P0.e),
+//       Review-Fixes M15/M16/m8 und Nachfix-Befund R5 (BINDEND).
+//
+// REV 2 (Nachfix R5): die Held-Zeile fuehrt jetzt zusaetzlich die drei
+// Attack-Frames (je Richtung direkt hinter deren Lauf-Frames) und die zwei
+// Die-Frames; sword_slash_down/up/side stehen in einer eigenen Mini-Zeile
+// darunter. Damit deckt der Bogen alle 35 Grids ab, die Spec E9 fuer
+// Phase 1a/1b in den Umfang nimmt (20 Held+Klinge, 15 NPC) — Rev 1 hatte
+// nur 27. Der Referenz-Lauf in design/referenz/ wurde mit Rev 2 neu erzeugt.
 //
 // WAS DAS IST: ein REINER Node-PNG-Dump der Figuren-Grids auf ECHTEM,
 // gekacheltem Boden. KEIN Server, KEIN Browser, KEIN Canvas, KEIN Playwright
@@ -50,16 +58,39 @@ const REPO = resolve(HIER, '..');
 // ---------------------------------------------------------------------------
 // Reihenfolge woertlich nach Spec E10 P0.c:
 //   "Held down/up/side dann Bran/Hedda/Corm/Mile/Torwaechter je 0/1/talk"
+// ERWEITERT in Werkzeug-Rev 2 (Befund R5, BINDEND): Rev 1 fuehrte nur die
+// 12 Lauf-Frames des Helden und deckte damit bloss 27 der 35 Grids ab, die
+// Spec E9 fuer Phase 1a/1b in den Umfang nimmt ("1a HELD (17 player_-Grids
+// + 3 sword_slash_-Grids — die Klinge gehoert zum Helden; m6)"). Es fehlten
+// player_attack_down/up/side, player_die_0/1 und sword_slash_down/up/side.
+// Sie stehen jetzt drin:
+//   - Attack JE RICHTUNG unmittelbar NACH den vier Lauf-Frames derselben
+//     Richtung (down, up, side) — der Hieb liest sich als Fortsetzung des
+//     Laufzyklus, nicht als Fremdkoerper am Zeilenende.
+//   - Die beiden richtungslosen Sterbe-Frames am Ende der Held-Zeile.
+//   - sword_slash als EIGENE MINI-ZEILE (Tag S, 3 Zellen) direkt unter dem
+//     Helden: die Klinge gehoert zu ihm (E9/m6), ist aber ein Effekt-Overlay
+//     und keine Figur — eigene Zeile haelt beides sichtbar getrennt.
 // Die Kontext-Zeile traegt die Gegner (Landkarte C:134 stellt klar: es gibt
 // FUENF Gegnertypen, und der Warden/Graveward ist einer davon).
 const ZEILEN = [
   {
     tag: 'H', name: 'HELD',
+    hinweis: 'je Richtung 4 Lauf-Frames + 1 Attack-Frame (down, up, side), danach die 2 Sterbe-Frames',
     keys: [
       'player_down_0', 'player_down_1', 'player_down_2', 'player_down_3',
+      'player_attack_down',
       'player_up_0', 'player_up_1', 'player_up_2', 'player_up_3',
+      'player_attack_up',
       'player_side_0', 'player_side_1', 'player_side_2', 'player_side_3',
+      'player_attack_side',
+      'player_die_0', 'player_die_1',
     ],
+  },
+  {
+    tag: 'S', name: 'SCHWERTHIEB (Mini-Zeile, Effekt-Overlay)',
+    hinweis: 'gehoert dem Helden (E9/m6), ist aber Overlay: im Spiel auf der Schwert-Hitbox gezeichnet, nicht fussgebunden — hier liegt es wie alles andere auf der gemeinsamen Fusskante (Chrom)',
+    keys: ['sword_slash_down', 'sword_slash_up', 'sword_slash_side'],
   },
   {
     tag: 'N', name: 'NPC',
@@ -179,7 +210,7 @@ function zeichneGrid(cv, ox, oy, grid) {
   }
 }
 
-// 3x5-Pixelschrift, nur die im Bogen benutzten Zeichen (H N K 0-9).
+// 3x5-Pixelschrift, nur die im Bogen benutzten Zeichen (H S N K 0-9).
 const FONT = {
   '0': ['111', '101', '101', '101', '111'],
   '1': ['010', '110', '010', '010', '111'],
@@ -192,6 +223,7 @@ const FONT = {
   '8': ['111', '101', '111', '101', '111'],
   '9': ['111', '101', '111', '001', '111'],
   H: ['101', '101', '111', '101', '101'],
+  S: ['011', '100', '010', '001', '110'],
   N: ['101', '111', '111', '101', '101'],
   K: ['101', '110', '100', '110', '101'],
 };
@@ -342,7 +374,15 @@ function main() {
     .map((p) => ({ p, sha: sha(readFileSync(resolve(REPO, p))) }));
   const zeilen = [];
   zeilen.push(`FIGUREN-BOGEN ${modus.toUpperCase()} — Legende (erzeugt von tools/figuren_bogen.mjs)`);
-  zeilen.push(`Spec: design/SPEC_GP7CH1.md E10 P0.c/P0.e, Review M15/M16/m8.`);
+  zeilen.push(`Spec: design/SPEC_GP7CH1.md E9 (Umfang) + E10 P0.c/P0.e, Review M15/M16/m8,`);
+  zeilen.push(`Nachfix-Befund R5. WERKZEUG-REV 2.`);
+  zeilen.push('');
+  zeilen.push('UMFANG  Rev 2 fuehrt alle Grids, die Spec E9 fuer Phase 1a/1b in den Umfang');
+  zeilen.push('        nimmt: 17 player_-Grids + 3 sword_slash_-Grids (1a) und 15 npc_-Grids');
+  zeilen.push('        (1b). Rev 1 hatte nur 12 Lauf-Frames des Helden und deckte damit bloss');
+  zeilen.push('        27 der 35 Grids ab (Befund R5). NEU in Rev 2: player_attack_down/up/side,');
+  zeilen.push('        player_die_0/1, sword_slash_down/up/side.');
+  zeilen.push('        Die Gegner-Zeile K ist KONTEXT, nicht Umfang (shield_* ist CH-2).');
   zeilen.push('');
   zeilen.push(`RASTER  Zelle ${ZELL_W}x${ZELL_H} px (2x3 Kacheln), Markenband ${BAND_H} px unter jeder Zeile,`);
   zeilen.push(`        Bogen ${BREITE}x${HOEHE} px bei 1x, ${BREITE * ZOOM}x${HOEHE * ZOOM} px bei 6x und squint.`);
@@ -358,7 +398,8 @@ function main() {
   zeilen.push('');
   zeilen.push('SPALTENLEGENDE (Marke im Band -> Grid-Key -> Grid-Mass)');
   for (const z of ZEILEN) {
-    zeilen.push(`  Zeile ${z.tag} = ${z.name}`);
+    zeilen.push(`  Zeile ${z.tag} = ${z.name} (${z.keys.length} Zellen)`);
+    if (z.hinweis) zeilen.push(`    Hinweis: ${z.hinweis}`);
     z.keys.forEach((k, i) => {
       const g = SPRITES[k];
       const gw = Math.max(...g.map((r) => r.length));
