@@ -1,140 +1,157 @@
-# SPEC GP7-CH-1 — "Die Menschen bekommen Kleider und Gesichter" (Rev 1, 16.08.2026, Fable)
+# SPEC GP7-CH-1 — "Die Menschen bekommen Kleider und Gesichter" (Rev 2, 16.08.2026, Fable)
 
-Grundlage: GP7CH_LANDKARTE.md (V1-V6 bindend) + Teile A/B/C
-(Datei:Zeile-Belege bindend). Deliverable: Held + 5 NPCs als
-komplett ueberarbeitete Standbild-Familie (alle 32 bestehenden
-Menschen-Grids: 17 player_* + 15 npc_*; MASSE UNVERAENDERT 16x24,
-KEINE neuen SPRITES-Keys, KEINE neuen Animationszustaende) + die
-2 Tuer-Span-Grids (V4) + Paletten-Namespace (V1) — sichtbar auf
-Michaels Geraet als "man erkennt aus der Entfernung, wer wer ist".
-Spieldynamik: NULL Beruehrung (Michael 16.08.).
+REV 2 = Rev 1 (69f4948) + design/GP7CH1_SPEC_REVIEW.md (BEIDE
+Linsen; 7 BLOCKER / 25 MAJOR / ~18 MINOR — ALLE eingearbeitet,
+die Fix-Formulierungen der Pruefer sind BINDEND und gelten
+woertlich, wo dieser Text nur den Entscheid nennt). Grundlagen:
+GP7CH_LANDKARTE.md (V1-V6, V3/V5/V6 unveraendert) + Teile A/B/C.
 
-## §0 Eiserne Regeln
+## DIE REV-2-ENTSCHEIDE (ersetzen Rev-1-Text)
 
-0.1 KEIN Code-Edit in player/npcs/enemies/boss/main/hud (reiner
-Art-Pass; einzige Nicht-Art-Edits: map_dorf.js-Legende T/t fuer
-V4 + die 2 Sanktionsstellen §6). Flip-Liste UNANGETASTET (keine
-neuen Keys noetig — Teil B: Anhaengen waere safe, aber CH-1
-braucht keins). 0.2 Suiten-Kanon wie Slice 6 (gruen = 825er-Smoke
-x3, Flusstests 25/25/33, check_gfx6_art, check_save 63, probe_god,
-probe_s4_engine, builderA 106; deklariert-tot/abgeloest-Liste
-unveraendert inkl. check_gp6_art_self 5 Rot). 0.3 M5-Vorsicht:
-Fussbreiten-Aenderungen gegen smoke:3336-3392 (Margen 3-10 Texel,
-Negativkontrolle braucht >=1 Durchfaller ohne dy=-1). 0.4 M3/M4-
-NACHZUG PFLICHT: shot_gfx6.py M3 (dWarm>=18, Halb>=6,
-ausgebrannt==0) + M4 messen die HEUTIGEN player_down_0-Pixel —
-nach dem Umbau Realmessung wiederholen, Schwellen FEST. skeleton_0
-wird in CH-1 NICHT angefasst (Gegner = CH-2). 0.5 Kein
-measureText/strokeRect/translate; Palettenzeichen nur aus PALETTE
-(smoke:81-93 + Laufzeit-Wurf sprite_factory:17-19).
+E1 **dL-KONTRAST (Blocker beider Linsen):** dL 25..90 gilt gegen
+die Leitkacheln der BODEN-KLASSE des Wirkorts (nicht jede Kachel
+des Spiels); Umriss- und Rim-Texel sind aus der Koerpermittelung
+ausgenommen; ERSATZKLAUSEL: dL<25 gilt als bestanden, wenn
+dE00(Koerper,Kachel)>=25 (der Held liest heute schon ueber
+Farbton — die Metrik muss das sehen koennen). Je Figur wird das
+zulaessige Koerper-L-Fenster in PHASE 0 AUSGERECHNET und als
+Zahlen eingefroren (Baender aus Review: GY-Gras 88..137,
+DORF-Lehm 100..159, Weg 117..181, Gruft-Stein 85..127 — je Figur
+geschnitten nach ihrem Wirkort). WEG-PFLICHTPRUEFUNG fuer ALLE
+(M17: der HELD hat auf dem Weg dL -12 — schlechter als der
+"Grufthund-Skandal" — und wird in CH-1 MITBEHANDELT; Standkacheln
+aus map_dorf.js:266-270 sind der Beleg). REIHENFOLGE ZWINGEND
+(M14): dL-Ziele festlegen -> M3-Realmessung -> Art; faellt
+ausgebrannt>0, gibt das HELD-dL-Ziel nach, nie die M3-Schwelle.
 
-## §1 PHASE 0 — WERKZEUGE + VORBAU (je eigener Commit)
+E2 **TUEREN (Blocker beider Linsen — der Rev-1-Weg wirft in
+tilemap.js:752/900 und ueber KEINER der 7 Tueren steht freie
+Wand):** Tueren werden ZWEI KACHELN BREIT statt doppelt hoch
+(Referenz-Zitat Teil C 4.1). Umsetzung: 4 neue 16x16-Keys
+dorf_tuer_zu_l/_r + dorf_tuer_offen_l/_r (TILE_ART ans ENDE),
+2 neue Legendenzeichen solid:true, 7 Ein-Zeichen-Aenderungen in
+DORF_ROWS bei denen AUSSCHLIESSLICH solide Wandzeichen durch
+solide Tuerhaelften ersetzt werden -> Soliditaets-RASTER
+byte-gleich (S6-§7F(c)-Golden bleibt gruen — Beweis Pflicht),
+geo unberuehrt. Beide Haelften zeichnen Sturzbogen+Schwelle so,
+dass die sichtbaren ~11 px (Traufe verdeckt den Rest — gemessen)
+als Torbogen lesen. Die 16x32-Masstabellen-Sanktion ENTFAELLT
+ersatzlos. Ein echter Hoch-Span ist als eigener Welt-Pass
+deklariert, kein Nebenauftrag.
 
-P0.a V2-SPLIT: art/sprites_figuren.js (SPRITES) +
-art/sprites_tiles.js (TILE_ART), sprites.js wird FASSADE
-(Re-Export, Schluessel-Reihenfolge BYTE-STABIL — die 6 Canvas-Rigs
-aus Teil B haengen daran). Beweis: alle Suiten gruen, git diff
-zeigt reine Verschiebung.
-P0.b V1-PALETTE: +8 Symbol-Toene fuer Charakter-Stoffe. Ein
-RECHNER (Muster umwidmung_rechner.mjs) bestimmt die Hex-Werte:
-(1) G-Stofframpe komplett: G_dunkel ~L65 / G #8f4c5d / G_hell
-~L130, Hue-Shift >=20 Grad ueber die Rampe (Schatten kuehler,
-Licht waermer-entsaettigt); (2) WOLLE-dunkel-Rampe (Corm) 3
-Stufen; (3) 2 Reserve-Toene fuer Leinen-warm/Akzent. Auflagen:
-C*ab < 30,5 (Fackelkern-Regel), dE00 >= 10 zu Helden-Violett
-u/U/X/Z UND zu allen Gebaeude-Leitrampen (Holz q/j/Q/c/J, Stein
-g/s/S, Rost 4/5/6, Erde z/p/v/M/P/V), kein L-Konflikt mit dem
-M1-Boden-Band. Zeichen-Satz: 8 Symbole, die in keinem Grid/keiner
-Legende vorkommen (Rechner beweist Kollisionfreiheit gegen ALLE
-rows/Grids). Sanktion §6.1.
-P0.c FIGUREN-BOGEN (tools/figuren_bogen.py o. .mjs): rendert ALLE
-Figuren x alle Frames auf 3 Boeden (GRAVEYARD-Gras, DORF-Lehm,
-DORF-Weg) bei 1x und 6x nebeneinander + Squint-Spalte (50 %
-runterskaliert). Ausgabe .tmp/screenshots/figuren_bogen_*.png.
-Das ist das Jury- und Michael-Instrument aller CH-Runden.
-P0.d MESSWERKZEUG (.tmp/gp7ch/figuren_messung.mjs, deterministisch):
-misst je Figur T1-T8 automatisch: paarweise Profilaehnlichkeit,
-Umriss-Anteil + Umrisstoene, Spiegelgleichheit, Hue-Spanne je
-Rampe, Stufen/Schrittverhaeltnis/Dominanzanteil je Materialflaeche
->=40 Texel, dL gegen die Leitkacheln ALLER begehbaren Boeden,
-Solitaer-Texel, Rim-Anteil der Kontur. Ausgabe JSON. Die
-CH-1-Gates (§3) laufen NUR ueber dieses Werkzeug (eine Quelle).
+E3 **PALETTE +14 (Blocker: 8 deckte die Steckbriefe nicht):**
+feste Zuteilung G-Rampe 2 (Schatten dreht WARM Richtung Braunrot
+15..30 Grad — der kuehle Sektor gehoert dem Helden; M12-Beweis:
+kuehl laesst nur 4,7 % Kandidaten, alle hart an U) / Corm-Wolle 3
+/ Bran-Leder 3 (Bran verlaesst Rost — Rost bleibt EXKLUSIV beim
+Torwaechter, M9) / Mile-Kittel 3 (eigene Familie; nicht Krapp
+[Heddas Alleinstellung], nicht Gruen [Gras-Sperrliste]) /
+Held-Zwischenstufe X..Z 1 (Schrittverhaeltnis 1,75 -> <=1,6) /
+Rim-Toene 2 (deklarierte Ausnahme von Stilregel 10). Auflagen
+(M11): dE00>=10 zu ALLEN 64 Bestandstoenen, >=8 innerhalb einer
+neuen Rampe, >=12 zwischen neuen Rampen, >=12 zu u/U/X/Z;
+C*ab<30,5. Zeichen: 14 aus dem bewiesen kollisionsfreien Satz
+! % & ( ) : ; ? @ [ ] ^ _ | (m3). KEINE Paletten-L-Regel gegen
+das M1-Band (M13 Kategorienfehler) — stattdessen Realmessungs-
+Pflicht nach dem Umbau (M1 56..69, E1>=0,64, L<16<=2,0).
 
-## §2 PHASE 1 — ART (ein Opus-Agent, exklusiv sprites_figuren.js
-+ palette.js-Werte aus P0.b + die 2 Tuer-Grids in sprites_tiles.js
-+ map_dorf.js-Legende T/t)
+E4 **STILBIBEL-SANKTION (Blocker B4):** design/ART_DIRECTION.md
+wird im GP7CH-Rahmen an DREI Stellen neu gefasst (Marker GP7CH,
+Wortlaut = Pruefer-Fix): Regel 2 "LUECKENLOSE Silhouettenkante
+mit selektivem Kantenton (k Schattenseite, dunkelster Materialton
+Lichtseite, Rim obere Lichtkante; Aussetzen zu transparent NICHT
+erlaubt)"; Regel 4 "warm als MATERIAL erlaubt, warmes LEUCHTEN
+(o/y/1) bleibt Feuer/Gold/Klingenreflex" (deckt sich mit §9.M1);
+Regel 10 + Rim-Ausnahme.
 
-Steckbriefe aus Teil C §2 sind BINDEND (Held: Kapuze aussermittig,
-Umhangsaum, Klinge bricht Silhouette, Gesicht 3 Merkmale; Bran:
-breiteste schiefste Schulterlinie, verlaesst Holz -> versengtes
-Leder auf Rost-Basis + eigener Stoff; Hedda: Kegel uebertreiben,
-Stock diagonal, G-Rampe; Corm: schmal+hoch, Buch bricht Brustlinie,
-Wolle-dunkel + Krapp-Stola; Mile: Kopf gross, Tasche auf EINER
-Huefte, raus aus Leinen-Knochen-Naehe; Torwaechter: Speer geneigt,
-Haube mit Stahl-Stufe C/i). Talk-Frames werden ECHT (>=6 %
-Texel-Diff MIT Silhouettenaenderung: Mund, Kopfneigung, Hand).
-Tueren: dorf_tuer_zu/offen als 16x32-Span-Paar neu (V4),
-Unterkante = heutige Tuerzeile, obere Haelfte in die Wandflaeche;
-map_dorf-Legende T/t bekommt span [1,2] + neue Art-Keys
-(TILE_ART-Anhang ANS ENDE).
+E5 **MESSZIEL-DEFINITIONEN (M5-M8, m21 — alle Formeln fix):**
+KONTUR = opake Texel mit >=1 transparentem 4er-Nachbarn oder
+Rahmenkante. UMRISS-ANTEIL = |Kontur|/|opak| <= 25 %;
+UMRISSTOENE = Toene auf der Kontur mit >=8 Texeln, OHNE
+Requisitentoene (Klinge/Speer/Stock), Ziel >=3.
+SPIEGELGLEICHHEIT um die BBOX-Mittelachse der opaken Texel
+(Anker: Corm 47,9 / Bran 84,2 / Held-down 26,0), Ziel <=65 —
+Defekt sitzt bei Bran/Mile/Torwaechter. PROFILAEHNLICHKEIT =
+100*(1 - Sum|a_i-b_i| / Sum max(a_i,b_i)) ueber zeilenindizierte
+Breitenprofile, Held-Referenz player_down_0, Ziel paarweise <=70;
+P0.d rechnet Ziel-Breitenbaender je Figur VOR und friert sie ein
+(m23: machbar, verlangt Massenspreizung 151..242 Texel).
+MATERIALFLAECHEN via MATERIAL-TABELLE des Art-Agenten (Figur ->
+Material -> Tonmenge, Deliverable-Pflicht; P0.d liest sie).
+KOERPER-L = Mittel der opaken Nicht-Kontur-Nicht-Rim-Texel ueber
+ALLE Grids der Figur (m21-Eindeutigkeit). RIM >=12 % DER KONTUR
+(Rim-Texel liegen AUF oder 1 innerhalb der Kontur — zaehlen);
+Rim in CH-1 STATISCH oben-links (M7; seite-Kopplung = CH-4).
+TALK-ECHT >=6 % Texel-Diff MIT Silhouettenaenderung ist CH-1-GATE
+in §3 (M12; die 5 Talk-Grids zaehlen zum Umfang). Positiv-/
+Negativkontrolle: P0.d reproduziert die Anker ALLER sechs Figuren
+aus dem Review (nicht nur zwei).
 
-## §3 MESSZIELE (eingefroren; Quelle = P0.d; ALLE 6 Menschen)
+E6 **SPERRLISTE NAMENTLICH (M4/M8/M9/m4):** verbotene dominante
+Rampen je Figur: Bran Holz+Erde; Corm Stein(g/s/S)+Erde; Hedda
+Erde; Mile Erde+Knochen(O/B/b); Torwaechter Erde+Palisade (Rost
+ERLAUBT und exklusiv); Held: keine Boden-Leitrampe seines
+Wirkorts (alle Karten). ZUSATZREGEL: keine zwei Menschen teilen
+dieselbe dominante Rampe; verwandte Rampen brauchen dE00>=15
+der Leittoene.
 
-M-CH1: Umriss <= 25 % UND >= 3 Umrisstoene | Spiegelgleichheit
-<= 65 % | Profilaehnlichkeit PAARWEISE <= 70 | Hue-Spanne >= 20
-Grad je 3-Stufen-Rampe (>= 40 bei 4) | jede Materialflaeche >= 40
-Texel: >= 3 Stufen, Schrittverhaeltnis <= 1,6, kein Einzelton
-> 55 % | Rim >= 12 % der Kontur, Ton je Figur definiert | dL
-25..90 gegen JEDE begehbare Leitkachel (inkl. Weg 91!) |
-Solitaer-Texel <= 8 % | SPERRLISTE: dominante Figur-Rampe !=
-dominante Rampe der Standkacheln ihres Wirkorts (Bran!=Holz,
-Corm!=g/s, Grufthund-Regel erst CH-2). Positiv-/Negativkontrolle:
-P0.d gegen die ALTEN Grids muss die IST-Werte aus Teil A/C
-reproduzieren (z. B. Held-Umriss 35 %, Corm-Symmetrie 87 %) —
-sonst misst das Werkzeug falsch.
+E7 **BESTANDSSCHUTZ PRAEZISIERT:** §0.3 neu: das Node-M5-Gate
+(smoke:3336-3392) ist BEWIESEN art-invariant solange die AABB
+12x14 bleibt (M9-Tests: volldeckendes Ersatz-Grid aendert keinen
+Wert) — die relevante Grenze ist das BILD-M5 aus shot_gfx6.py
+(texel 10 vs Soll 8, Marge 2). §0.4 neu (M10): Aufruf
+python3 .tmp/shot_gfx6.py mit Teillauf-Schalter m3,m4; venv
+.tmp/venv braucht pip install playwright (Binaries liegen in
+~/.cache/ms-playwright); eigener Server Port 8124 (nie 8123),
+danach beenden; Szenen: GRAVEYARD mit player_down_0+skeleton_0;
+IST-ANKER: dWarm 66,53 (min 18), K3-Tint 11,02 (min 6),
+ausgebrannt 0, M4 V(Kopf) 0,529 (0,45..0,85), voll_lesbar 100
+(min 25); voll_silhouette 265 vs Referenz 275 ist WARNUNG ohne
+Gate (deklariert — eine umgebaute Silhouette darf sie ausloesen).
 
-## §4 BESTANDS-SCHUTZ
+E8 **SANKTIONS-KATALOG NEU (abschliessend, Marker GP7CH):**
+(1) check_gfx6_art.mjs:74-79 Symbol-Deckel '=+*' -> +14 Zeichen
+(inkl. Kommentarzeilen :5/:14, m2); (2) ART_DIRECTION.md Regeln
+2/4/10 (E4); (3) check_gfx6_art ADDITIV: alle /^(player|npc)_/-
+Keys ausser npc_blase sind 16 breit / 24 hoch (M18);
+(4) DEKLARIERT-TOT zusaetzlich: .tmp/check_gfx4_art.mjs (heute
+schon rot, Beleg '='-Ton; M19); (5) check_gp6_art_self: erwartete
+Rot-Zahl 5 -> 6 (Zeile :26 sym-Deckel kippt durch E3; namentlich
+deklariert, M11-Tests). SONST NICHTS — insbesondere KEINE
+Masstabellen-Zeile (E2) und kein Flusstest.
 
-Alle §0.2-Suiten gruen. M3/M4-Realproof NEU gruen (§0.4). M5 gruen.
-Tuer-Umbau: DORF-§36-Golden byte-gleich (sol/geo unberuehrt —
-Over-Span ist rein visuell), Beweis im Report. Figuren-Bogen
-VORHER/NACHHER archiviert. KEINE Aenderung an skeleton/ghoul/
-hound/rust/warden/npc_blase/Item-/HUD-Grids.
+E9 **UMFANG + TOPOLOGIE (m5/m6/m24):** Phase 1 wird geteilt:
+1a HELD (17 player_-Grids + 3 sword_slash_-Grids — die Klinge
+gehoert zum Helden; m6) -> 1b NPCs (15 npc_-Grids inkl. der 5
+ECHTEN Talk-Frames; gleiche Datei, seriell nach 1a) -> 1c
+parallel zu 1a/1b: TUEREN (sprites_tiles.js + map_dorf.js E2)
++ PALETTEN-ANWENDUNG. shield_* gehoert dem ROSTPANZER und ist
+CH-2 (deklariert, niemand "repariert es mit"). npc_blase-Anker:
+Kopfoberkante bleibt in Grid-Zeile 0/1 jeder Figur (m6), sonst
+schwebt die Questblase. FLIP-DEKLARATION (m7): Mile-Tasche und
+Torwaechter-Speer wechseln beim Linkslauf die Seite —
+AKZEPTIERT wie das Helden-Schild (Bestandsverhalten).
 
-## §5 JURY + ABNAHME
+E10 **PHASE 0 NEU (P0.a-e, je eigener Commit):**
+P0.a Split (V2, Fassade, sha256-Beweis der Key-Reihenfolge; m10).
+P0.b Paletten-Rechner nach E3.
+P0.c FIGUREN-BOGEN: reiner Node-PNG-Dump OHNE Browser (m8;
+Muster .tmp/png.mjs + gp7ch_probe/render.mjs), ECHTE Kacheln
+grass_g5_00 (L49,9) / dorf_lehm_00 (72,8) / path (90,9),
+Reihenfolge Held down/up/side dann Bran/Hedda/Corm/Mile/
+Torwaechter je 0/1/talk, Squint via Nearest-Neighbour 50 %,
+Dateischema figuren_bogen_<vorher|nachher>_<boden>_<1x|6x|squint>
+.png (M16).
+P0.d Messwerkzeug nach E5 mit Kontrollpflicht.
+P0.e REFERENZ-BOGEN (M15): VOR Phase 1 gegen die HEUTIGEN Grids,
+Ausgabe VERSIONIERT nach design/referenz/ (nicht .tmp!), eigener
+Commit — Phase 1 startet NICHT ohne diese Datei; Nachher-Bogen
+mit identischer Anordnung.
 
-Figuren-Bogen-Jury: 2 Juroren (direkte Agenten, PNG), Linsen
-Silhouette/Lesbarkeit und Material/Licht; Skala wie gehabt;
-Vergleich VORHER/NACHHER-Bogen. Danach frische APK auf 8125 und
-MICHAEL-Geraetefrage (finale Instanz): "Lauf durch Gramfeld —
-erkennst du aus der Entfernung, wer wer ist? Sehen die Menschen
-GUT aus?" Budget: >= 2 Iterationsrunden nach Michaels Rezepten
-sind Teil von CH-1, keine neue Etappe.
-
-## §6 SANKTIONS-KATALOG (abschliessend; Marker GP7CH, git-diff-Beleg)
-
-(1) check_gfx6_art.mjs:74-79: Symbol-Satz-Deckel '=+*' -> '=+*'
-plus die 8 neuen V1-Zeichen (alnum bleibt 61; Wortlaut minimal).
-(2) Masstabellen +1 Musterzeile 16x32 fuer das Tuer-Span-Paar an
-BEIDEN Orten (smoke ~1744-1777, check_gfx6_art ~128-172);
-Gegen-Gate "alle Klassen belegt" darf NICHT erweitert werden
-muessen — pruefen, sonst melden. (3) NICHTS SONST: kein Flusstest,
-kein Golden, keine weitere Zeile. Erwartet-kippende Alt-Waechter
-(bereits tot/abgeloest, Teil B §5): keine Aktion.
-
-## §7 BUILD-TOPOLOGIE
-
-Phase 0 (P0.a-d, sequentiell, je Commit) -> Phase 1 ART (ein
-Agent) -> SANKTION (§6, eigener Schritt, Builder ruehren keine
-Tests an) -> PRUEFUNG (V-TESTS Suiten+Messziele+M3/M4-Proof;
-V-SPEC adversarial gegen diese Spec) -> Fix-Schleife max 2 ->
-EIN CH-1-Commit -> Jury -> APK -> Michael. Alle Ausfuehrenden
-Opus; Werkzeuge deterministisch; Exit-Codes nie glauben.
-
-## §8 DEKLARATIONEN
-
-Talk-/Idle-FRAMEZAHLEN bleiben (2+1) — mehr Bewegung ist CH-3.
-Gegner unveraendert (CH-2). Flash-statt-Blink/Sterbe-Umbau CH-2.
-Das V3-Ausstiegs-Gate (24x32) wird NACH der CH-1-Jury ausgewertet,
-nicht vorher diskutiert. Der Grufthund-dL-Skandal (Teil C T8)
-wartet auf CH-2 — deklariert, nicht vergessen.
+## UNVERAENDERT AUS REV 1
+Steckbriefe Teil C §2 (mit E3/E6-Anpassungen: Bran-Leder eigene
+Rampe, Mile-Kittel eigene Familie), Suiten-Kanon §0.2 (+
+check_boss_slice3 namentlich als dritter Flusstest, m9),
+Jury/Abnahme §5 (2 Juroren + Michael-Geraetefrage, >=2
+Iterationsrunden budgetiert), V3-Ausstiegs-Gate, Bau nur Opus,
+Exit-Codes nie glauben, Port 8123 tabu.
