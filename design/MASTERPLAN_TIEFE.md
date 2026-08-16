@@ -1,5 +1,10 @@
 # MASTERPLAN "Tiefe" — Grimlight als Langzeit-Programm
 
+Direktiven-Lage: 13.08. Tiefe-Programm (unten); NEU 16.08.:
+(1) MENSCHEN "viel besser" (mehrere Charakter-Pässe, zuerst),
+(2) Kampf VIEL näher an Diablo (schneller, Horden, später Magie),
+(3) Slice-6-Abnahme OFFEN bis die Optik stimmt.
+
 Direktive Michael (13.08.2026): Ein Spiel mit der Tiefe von Secret
 of Mana / Diablo — Rätsel, Ausrüstung, Charakterentwicklung.
 "Gerne auch als riesengroßes Projekt, das Monate dauern darf, aber
@@ -38,20 +43,37 @@ es muss perfekt werden."
 - **Slice 5 — Sound & Game-Feel** (LÄUFT AN): WebAudio-Chiptune,
   Musik je Karte, Kampf-/UI-Sounds, Treffer-Feedback (Hitstop/
   Shake dosiert), Lautstärke/Stumm in Pause-Menü.
-- **Slice 6 — Welt & Seelen:** Dorf-Karte (neues Biom!), NPCs mit
-  Dialog, Händler (Gold-Senke), Quest-Grundgerüst (3-5 Quests),
-  Save-Schema v2.
-- **Slice 7 — Rätsel & Dungeons:** Trigger-/Event-Engine + ein
-  komplett neuer Dungeon, der Schalter/Block/Licht-Rätsel wirklich
-  nutzt; Bomben o. ä. als neues Werkzeug.
-- **Slice 8 — Macht & Wahl:** Waffen-Entwicklung à la SoM,
-  Techniken, Sets/Uniques, Balance-Fundament (Zahlen-Framework
-  statt Einzelwerte).
-- **Laufend dazwischen:** GP7 "Sichtbare Lichtsprache & Boden"
-  (Backlog liegt: Dunkel-Inventur PFLICHT, Walddach-Verzahnung,
-  Warm-Rampe, Bodentextur — Juroren sehen 8,0-8,2 erreichbar),
-  weitere Grafik-/Balance-Pässe nach Bedarf, iOS/Release-Signatur
-  als spätere Meilensteine.
+- **Slice 6 — Welt & Seelen** (GEBAUT, ABNAHME OFFEN): Dorf-Karte,
+  NPCs, Händler, 4 Quests, Save v2 — funktional fertig (7410d4d).
+  Michael 16.08.: "sieht auch nicht gut aus" — die Slice-Abnahme
+  hängt jetzt an der OPTIK (Menschen + Dorf). Abnahmeweg: GP7-CH
+  Runde(n) + Dorf-Feinschliff (Backlog design/SLICE6_JURY.md),
+  dann erneuter Gerätetest.
+- **GP7-CH — DIE MENSCHEN (NEU, HÖCHSTE PRIORITÄT, Michael
+  16.08.: "viel besser"):** mehrere Charakter-Grafikpässe für
+  Held + 5 NPCs + alle Gegner: Seitenansichten/Laufzyklen, eigene
+  Kleider-Rampen, Gesichter/Silhouetten, Rimlight-Sprache,
+  Sekundärbewegung; Jury-gemessen, Michael nimmt je Runde ab.
+  Option bei Bedarf: Sprite-Maß rauf (16×24 -> 20×28) als eigener
+  sanktionierter Schnitt.
+- **Slice 7 — Kampf & Horden (NEU; Michael 16.08.: "viel näher an
+  Diablo"):** Tempo (Move/Attack-Speed), Cleave/Schwungbogen,
+  Wellen-Spawns + Horden (Messziel: N Gegner @ 60 fps am Gerät),
+  Massen-Feedback (Splitter/Gold-Ströme/Kettenkills), Engine-
+  Ertüchtigung (Kollision/KI für Masse). GRÖSSTE sanktionierte
+  Test-Ära der Projektgeschichte (Flusstests ankern Kampfwerte);
+  GDD-Kernformel-Zeile wird mit Michael-Sanktion geändert.
+- **Slice 8 — Magie & Macht:** Mana + Skills (Feuerball/Nova als
+  Flächenvernichtung), Waffen-Entwicklung à la SoM, Techniken,
+  Sets/Uniques, Balance-Framework. Baut auf den Horden auf.
+- **Slice 9 — Rätsel & Dungeons** (zurückgestellt 16.08.):
+  Trigger-/Event-Engine, neuer Dungeon mit Schalter/Block/Licht-
+  Rätseln — die neuen Dungeons werden gleich hordentauglich
+  (Hallen!) entworfen.
+- **Laufend dazwischen:** GP7-WELT "Lichtsprache & Boden" (Backlog:
+  Dunkel-Inventur PFLICHT, Walddach-Verzahnung, Warm-Rampe,
+  Bodentextur; Juroren sehen 8,0-8,2) + Dorf-Feinschliff
+  (SLICE6_JURY.md), Balance-Pässe, iOS/Release später.
 
 ## Betrieb
 
