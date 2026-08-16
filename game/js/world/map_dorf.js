@@ -216,19 +216,26 @@ const DORF_LEGEND = {
   'H': { art: 'dorf_dach_c', span: [3, 2], solid: false, shadowArt: 'dorf_bake_klein' },   // Heddas Kate, Stroh intakt
   'L': { art: 'dorf_dach_d', span: [3, 2], solid: false, shadowArt: 'dorf_bake_klein' },   // verlassene Kate, Stroh loechrig
   'N': { art: 'dorf_dach_d_m', span: [3, 2], solid: false, shadowArt: 'dorf_bake_klein' }, // dito, gespiegelt
-  // Joch der geborstenen Dorfglocke — Landmarke, kein Schattenbake (offenes Joch).
-  'G': { art: 'dorf_glocke', span: [3, 2], solid: false },
+  // Joch der geborstenen Dorfglocke — Landmarke. SLICE 6 PHASE 4b (Juror-B):
+  // ohne shadowArt fiel der Schatten auf das kalte canopy_shadow-Stipple
+  // zurueck (gemessen DeltaL 43,6 je Punkt, gruenschwarzer 0-Ton im warmen
+  // Dorf). Der 48x32-Bake ist maszgleich zum span [3,2].
+  'G': { art: 'dorf_glocke', span: [3, 2], solid: false, shadowArt: 'dorf_bake_klein' },
   // Marktsegel mit gebackenen Scher-Posen (GP6 §5.2): 8er-Folge ueber 5 distinkte
   // Posen; swayPoses[0] MUSS gleich art sein (tilemap.js-Waechter).
+  // PHASE 4b (Juror-B): shadowArt wie bei den Dach-Spans — sonst kaltes
+  // canopy_shadow-Stipple unter dem Segel.
   'M': {
     art: 'dorf_segel',
     span: [3, 2],
     solid: false,
+    shadowArt: 'dorf_bake_klein',
     swayPoses: ['dorf_segel', 'dorf_segel_r1', 'dorf_segel_r2', 'dorf_segel_r1',
       'dorf_segel', 'dorf_segel_l1', 'dorf_segel_l2', 'dorf_segel_l1'],
   },
   // Osttor-Bogen ueber der Portal-Schwelle — NICHT solide, man laeuft hindurch.
-  'O': { art: 'dorf_dach_tor', span: [3, 2], solid: false },
+  // PHASE 4b (Juror-B): shadowArt wie bei den Dach-Spans, maszgleich [3,2].
+  'O': { art: 'dorf_dach_tor', span: [3, 2], solid: false, shadowArt: 'dorf_bake_klein' },
 };
 
 export const DORF = {

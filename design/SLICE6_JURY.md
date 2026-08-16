@@ -55,7 +55,15 @@ Prio nach Juroren-Konsens:
    Bran/Mile stecken in der Holzrampe ihrer Gebaeude (Traufe!),
    Rimlight-Frage. Palisade liest als Leiter (Pfostenbreiten
    mischen, Riegel brechen; evtl. West/Sued 1 Kachel nach innen).
-7. Platzdichte (Tristram-Geruempel als solide Deko 'x'-Muster:
+7. **Materialgrenzen-Nachstempel** (Fund des shadowArt-Fixes
+   16.08.): tilemap.js:1030-1038 stempelt bei GEMISCHTEM
+   Bake-Fussabdruck (z. B. Glockenfuss '6' zwischen Weg-Zellen)
+   je abweichender Zelle ein kaltes canopy_shadow (0/n-Toene) —
+   Rest: 59 kalte Texel am Joch, 2 Zellen am Segel. Fix braucht
+   tilemap.js (Materialklassifikation) ODER Boden-Umbau unter der
+   Glocke. Nachpruefung B: Ziel-dL 27 mit 28,6 getroffen, Form
+   jetzt organisch — Rest ist Feinschliff.
+8. Platzdichte (Tristram-Geruempel als solide Deko 'x'-Muster:
    Karren/Holzstoss/Troege — Prop-Verbot betrifft nur
    Pluenderbares), Dialogkasten-Verankerung unten + Umlaute im
    Font, Ladenpanel-Materialsprache + fehlende Icons.
