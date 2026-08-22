@@ -155,3 +155,34 @@ check_boss_slice3 namentlich als dritter Flusstest, m9),
 Jury/Abnahme §5 (2 Juroren + Michael-Geraetefrage, >=2
 Iterationsrunden budgetiert), V3-Ausstiegs-Gate, Bau nur Opus,
 Exit-Codes nie glauben, Port 8123 tabu.
+
+## REV 2.2 (22.08.2026, Fable) — METHODENWECHSEL NACH VERSUCH 1
+
+Versuch 1 (Branch gp7ch1-versuch1) wurde von V-TESTS+V-SPEC ABGELEHNT:
+Held +45,4 L aufgehellt (verboten), Held-Animation zerstoert
+(Laufframe-Diff 43->6 Texel, Angriffspose 135->20), Umriss bei 6/6
+schlechter, Bran/Hedda/Corm lesen nicht als Menschen (Sack/Amphore/
+Zelt). Ursache: Workflow-Agenten konnten ihre Renders NICHT als Bild
+lesen und optimierten blind gegen Zahlen-Gates (Goodhart).
+Fundament+Sanktion waren sauber und sind auf main (Commit oben).
+
+BINDEND AB VERSUCH 2:
+M1 ART-FIRST: Zeichner laufen als DIREKTE Agenten mit Bild-
+   Selbstkontrolle (render 6x -> Read -> korrigieren, >= 3 interne
+   Schleifen je Figur; Vergleich gegen design/referenz/-Vorher).
+   PRIMAERES GATE = "liest als Mensch bei 1x UND 6x" + Steckbrief-
+   Treue (Bild-Juror). Zahlen-Gates sind LEITPLANKEN danach;
+   Konflikt Lesbarkeit vs. Zahl -> MELDEN, nie erzwingen.
+M2 NEUE HARTE LEITPLANKEN (Untergrenzen aus dem Vorher-Stand):
+   Held Koerper-L bleibt 78,8 +- 8 (dE00-Pfad NUR ueber Hue/
+   Saettigung, nie Helligkeit); Frame-Diffs >= VORHER (Walk-Paar
+   >= 43 Texel, Attack vs Stand >= 135, side/down >= 161);
+   Frame-Paare ungleich (Bestandsgate); jede Figur behaelt
+   erkennbare Arme, Schultern, Requisit.
+M3 MESSWERKZEUG-FIX PFLICHT vor der Gate-Auswertung: RIMTOENE aus
+   der Material-Tabelle (nicht hartcodiert), Solitaer-Prozent ohne
+   Rundung, Anker-Modus vorher/nachher, Corm-Messszene (d6 Kapelle
+   (21,6)) in der Realmessung.
+M4 REIHENFOLGE: Held (1 Agent, direkt) -> Bild-Juror -> Iteration;
+   danach NPCs mit dem Held als Stilanker; Versuch-1-Stand von Mile/
+   Torwaechter darf als Ausgangspunkt dienen (lasen als Figuren).
