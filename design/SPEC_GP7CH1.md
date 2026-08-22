@@ -186,3 +186,39 @@ M3 MESSWERKZEUG-FIX PFLICHT vor der Gate-Auswertung: RIMTOENE aus
 M4 REIHENFOLGE: Held (1 Agent, direkt) -> Bild-Juror -> Iteration;
    danach NPCs mit dem Held als Stilanker; Versuch-1-Stand von Mile/
    Torwaechter darf als Ausgangspunkt dienen (lasen als Figuren).
+
+## REV 2.3 (22.08.2026, Fable) — GATE-AUFLOESUNGEN NACH HELD-VERSUCH 2
+
+Held-Versuch 2 (art-first, 10 Bild-Schleifen, alle M2-Leitplanken
+gruen, Animation lebendiger) belegt arithmetisch vier Gate-Konflikte.
+Aufloesung (bindend, KEIN stilles Schwellen-Basteln — jede Aenderung
+hat einen gemessenen Grund):
+G-A **dE00>=25 fuer den Helden ist an seiner L-Lage UNERREICHBAR**
+    (Werkzeug-E1-Tabelle: max 21,9 auf Lehm; Gras/Gruft nie unter
+    C*ab<30,5). Der einzige Weg waere der +48-L-Sprung, den PHASE0
+    verbietet. ENTSCHEID: Held-Bodentrennung = Rim >=12 % (ist 15,4)
+    + geschlossene Silhouettenkante + dE00 >= VORHER je Klasse (kein
+    Rueckschritt). dE00>=25 bleibt NPC-Gate (ihre L-Fenster sind
+    breit genug).
+G-B **Umriss-Anteil (geometrisch) fuer den Helden:** der noetige
+    Beinspalt (Laufanimation = harte M2-Untergrenze) + der vom
+    Steckbrief verlangte lesbare Schwertgriff sperren <=25 %
+    (Minimum rechnerisch 24,9 % nur bei geschlossenen Beinen).
+    ENTSCHEID: fuer FIGUREN MIT LAUFANIMATION gilt die TON-Lesart:
+    Schwarz-Anteil k+n <= 28 % (ist 26,8, vorher 35,2) UND >= 3
+    Umrisstoene (ist 3). NPCs (ohne Laufzyklus in CH-1) behalten
+    das geometrische <=25 %.
+G-C **Solitaer-Texel:** bewusste Ein-Texel-MERKMALE (Augen, Glanz-
+    punkt, Hand) sind kein Rauschen. ENTSCHEID: die Material-Tabelle
+    fuehrt eine Flaeche art:"merkmal"; Solitaer-Gate <=8 % rechnet
+    OHNE deklarierte Merkmal-Texel (Deckel: max 12 Merkmal-Texel je
+    Grid, sonst Missbrauch). Bild-Juror prueft, ob die Augen als
+    Augen lesen — sonst gilt die Ausnahme nicht.
+G-D **Hue-Spanne Umhang 22,1 Grad** (von 3) ist das Maximum aus dem
+    Bestandssatz u/U/X/^/Z; >=40 braeuchte neue Hexwerte fuer X/Z
+    (M3/M4-gebunden, Bestand). ENTSCHEID: fuer CH-1 akzeptiert und
+    deklariert; Revision in CH-4 (Licht auf Figuren).
+G-E Profilaehnlichkeit Held/Hedda 88,8 und Held/Corm 87,9 sind
+    nach 1a gestiegen (Held voller) — wird in 1b durch die NPC-
+    Silhouetten geloest (NPCs weichen dem Helden aus, nicht
+    umgekehrt; Held ist der Stil-Anker).
