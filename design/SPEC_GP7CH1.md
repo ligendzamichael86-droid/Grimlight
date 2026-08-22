@@ -248,3 +248,15 @@ G-A' **Nachtrag zu G-A (Held V2 Korrekturrunde):** dE00 je Boden-
     verworfen. ENTSCHEID: Toleranz dE00 >= Vorher - 0,6 bei
     dokumentierter Stilregel-2-Ursache; die Bodentrennung des
     Helden wird ueber Rim/Kante + Bild-Juror abgenommen.
+G-H **NPC-Idle-Untergrenze ausser Kraft (Rev 2.3, vor 1b):** die
+    Werkzeug-L2-Floors Bran 146 / Hedda 116 / Corm 146 / Mile 128 /
+    Torwaechter 145 Texel stammen aus dem Vorher-Idle = Ganzkoerper-
+    Verschiebung um 1 Zeile (Zielbild T9: falsche Technik). Fuer
+    NPC-Idle gilt stattdessen T9: Silhouetten-Diff 4-10 % auf >= 3
+    Regionen, <= 50 % aus starrer Verschiebung; Talk >= 6 % MIT
+    Silhouettenaenderung; Paare ungleich. Rot am L2-Idle-Floor ist
+    fuer NPCs erwartet und KEIN Mangel (Held-Floors bleiben).
+G-I 1b laeuft mit ZWEI direkten Zeichnern parallel (A: Bran/Hedda/
+    Corm, B: Mile/Torwaechter) in EINER Datei — Mutex-Protokoll
+    (.tmp/gp7ch_npc/LOCK via mkdir, frisch lesen, nur eigene Key-
+    Bloecke patchen). Stil-Anker = design/GP7CH1_ANKER_HELD.md.
