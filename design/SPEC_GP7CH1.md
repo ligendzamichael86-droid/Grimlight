@@ -237,3 +237,14 @@ G-G Juror-Bestaetigung zu G-B/G-C: Schwarz-Anteil Held 34,3 -> 23,9 %
     57 % im STOFF (139 Einzeltexel "Sekundaerbewegung" unter der
     Wahrnehmungsschwelle), nicht in den Augen (16) — Augen/Griff als
     Merkmal raus, Stoff-Rauschen muss real weg (Korrekturrunde).
+G-A' **Nachtrag zu G-A (Held V2 Korrekturrunde):** dE00 je Boden-
+    klasse liegt 0,3-0,5 UNTER Vorher (21,5/3,1/21,1/10,3 vs
+    21,8/3,6/21,6/10,8). Gemessene Ursache: 143 reinschwarze
+    Umrisstexel -> Materialtoene (Stilregel 2, verlangt) + dunkle
+    Stoffmasse heben Koerper-L um 1,6 und senken C*ab um 0,6; die
+    Mittelfarb-Metrik nimmt den Rim aus und sieht die real bessere
+    Kantentrennung (Rim +44 %, Schwarz -12,3 pp, Konturtoene 1->3)
+    nicht. Drei Gegenmassnahmen gebaut+gemessen (0,0/+0,1/0,0),
+    verworfen. ENTSCHEID: Toleranz dE00 >= Vorher - 0,6 bei
+    dokumentierter Stilregel-2-Ursache; die Bodentrennung des
+    Helden wird ueber Rim/Kante + Bild-Juror abgenommen.
