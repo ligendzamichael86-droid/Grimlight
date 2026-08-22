@@ -222,3 +222,18 @@ G-E Profilaehnlichkeit Held/Hedda 88,8 und Held/Corm 87,9 sind
     nach 1a gestiegen (Held voller) — wird in 1b durch die NPC-
     Silhouetten geloest (NPCs weichen dem Helden aus, nicht
     umgekehrt; Held ist der Stil-Anker).
+G-F **Licht beim Linkslauf (Bild-Juror Held V2, Fehler erster
+    Ordnung):** die Engine spiegelt Seitenframes (`_flip`), ein
+    einseitiger Rim landet links-laufend auf der Schattenseite und
+    wuerde von JEDER Figur geerbt. ENTSCHEID (Art-only, CH-1): in
+    SEITENFRAMES ist der Rim/Z-Lichtakzent FLIP-NEUTRAL (Licht von
+    OBEN: Kuppel/Schulter-Oberkante, keine einseitige senkrechte
+    Lichtkante); Front/Rueck behalten oben-links. Ein richtungs-
+    abhaengiger Rim NACH dem Spiegeln ist Engine-Arbeit (seite in
+    pushTinted) und wird fuer CH-4 deklariert. Gilt fuer alle
+    Figuren mit Seitenansicht (Held jetzt; Gegner in CH-2).
+G-G Juror-Bestaetigung zu G-B/G-C: Schwarz-Anteil Held 34,3 -> 23,9 %
+    (T2 bestanden, Konturtoene 4 -> 12); Solitaer-Rauschen liegt zu
+    57 % im STOFF (139 Einzeltexel "Sekundaerbewegung" unter der
+    Wahrnehmungsschwelle), nicht in den Augen (16) — Augen/Griff als
+    Merkmal raus, Stoff-Rauschen muss real weg (Korrekturrunde).
