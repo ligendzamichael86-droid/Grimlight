@@ -8444,4 +8444,109 @@ export const TILE_ART = {
     '................................................',
     '................................................',
   ],
+  // --- GP7-CH-1 E2: TUEREN ZWEI KACHELN BREIT (Rev-2-Entscheid E2) ----------
+  // Der Massstabsbruch (Figur 16x24 gegen eine 16-px-Tuer) wird in der BREITE
+  // geloest, nicht in der Hoehe: ein echter 16x32-Hoch-Span ist in dieser
+  // Engine nicht baubar (tilemap.js:752 wirft bei Span-Zeichen in den
+  // GROUND-rows, :900 bei Over-Zeichen auf solider Legende) und ueber KEINER
+  // der sieben Dorftueren steht freie Wand — jede liegt unter einem Dach-Span.
+  // Beleg: design/GP7CH1_SPEC_REVIEW.md B2, nachgemessen mit
+  // .tmp/gp7ch_p1/01_tuermessung.mjs (echte anchorOffset aus tilemap.js).
+  //
+  // GEMESSENE TRAUFENDECKUNG je Tuer (opake Texel des Dachgrids ueber der
+  // Tuerkachel, Zeile fuer Zeile):
+  //   Kapelle  (21,4)   1 Zeile  verdeckt -> 15 px sichtbar
+  //   Schmiede (12,9)   2 Zeilen          -> 14 px
+  //   Kate     (11,22)  4 Zeilen          -> 12 px
+  //   Speicher (25,23)  4 Zeilen          -> 12 px
+  //   Kate     (5,18)   7 Zeilen          ->  9 px
+  //   Hedda    (30,8)   8 Zeilen          ->  8 px
+  //   Kate     (5,9)    9 Zeilen          ->  7 px
+  //   Mittel = 77/7 = 11,0 px — genau die "sichtbaren ~11 px" aus E2.
+  //
+  // BAUREGEL daraus: der Segmentbogen (Kaempfer Zeile 8, Scheitel Zeile 3,
+  // Laibung als k-Linie) traegt die vier gut sichtbaren Tueren. Die drei tief
+  // verdeckten lesen ueber die drei Elemente, die IMMER im Sichtstreifen
+  // liegen: die zwei k-Laibungen in den Spalten 3 und 28 der Doppelkachel,
+  // die beiden Messing-Ringgriffe (Zeilen 9/10) und die Steinschwelle
+  // (Zeilen 13-15). Die tiefste Traufe deckt bis Zeile 8 — die Griffe stehen
+  // also bei JEDER der sieben Tueren im Bild.
+  //
+  // Die beiden Haelften sind EIN Bild: Spalten 0-15 = _l, 16-31 = _r; die
+  // Mittelfuge der zwei Fluegel faellt exakt auf die Kachelgrenze. Nur
+  // BESTANDStoene (Holz q/j/Q/c/J, Stein n/g/s/S, Messing Y/y, Umriss k) —
+  // die 14 neuen GP7-CH-1-Toene gehoeren den Figuren, nicht der Welt.
+  // Reproduzierbarer Generator: .tmp/gp7ch_p1/05_tuerbau.mjs
+  dorf_tuer_zu_l: [
+    'jcQkqqqqqqqJJJJJ',
+    'jcQkqqqqJJJccccc',
+    'jQjkqqJJcccQQQQQ',
+    'jcQkqJccQQQkkkkk',
+    'jcQkJcQQkkkqcQjk',
+    'jcQkcQkkcQjqcQjk',
+    'jQjkQkgggsgggsgk',
+    'jcQkkQjqcQjqcQjk',
+    'jcQkcQjqcQjqcQjk',
+    'jcQkcQjqcQjqcyYk',
+    'jQjkcQjqcQjqcYYk',
+    'jcQkgsgggsgggsgk',
+    'jcQkcQjqcQjqcQjk',
+    'ggggsssSssssSsss',
+    'nnnngsgggsgggsgg',
+    'kkkknnknnknnknnk',
+  ],
+  dorf_tuer_zu_r: [
+    'JJJccqqqqqqqkjQj',
+    'cccQQcccqqqqkjQj',
+    'QQQjjQQQccqqkjjj',
+    'kkkkkjjjQQcqkjQj',
+    'kcQjqkkkjjQckjQj',
+    'kcQjqcQjkkjQkjQj',
+    'ksgggsgggskjkjjj',
+    'kcQjqcQjqcQkkjQj',
+    'kcQjqcQjqcQjkjQj',
+    'kyYjqcQjqcQjkjQj',
+    'kYYjqcQjqcQjkjjj',
+    'ksgggsgggsggkjQj',
+    'kcQjqcQjqcQjkjQj',
+    'sSssssSssssSgggg',
+    'gsgggsgggsggnnnn',
+    'nnknnknnknnkkkkk',
+  ],
+  dorf_tuer_offen_l: [
+    'jcQkqqqqqqqJJJJJ',
+    'jcQkqqqqJJJccccc',
+    'jQjkqqJJcccQQQQQ',
+    'jcQkqJccQQQkkkkk',
+    'jcQkJcQQkkkkkkkk',
+    'jcQkcQkkkkkkkkkk',
+    'jQjkQkgskkkkkkkk',
+    'jcQkkQjqkkkkkkkk',
+    'jcQkcQjqkkkkkkkk',
+    'jcQkcQjqkkkkkkkk',
+    'jQjkcQjqnnnnnnnn',
+    'jcQksggsnnnnnnnn',
+    'jcQkcQjqngnngnng',
+    'ggggsssSssssSsss',
+    'nnnngsgggsgggsgg',
+    'kkkknnknnknnknnk',
+  ],
+  dorf_tuer_offen_r: [
+    'JJJccqqqqqqqkjQj',
+    'cccQQcccqqqqkjQj',
+    'QQQjjQQQccqqkjjj',
+    'kkkkkjjjQQcqkjQj',
+    'kkkkkkkkjjQckjQj',
+    'kkkkkkkkkkjQkjQj',
+    'kkkkkkkkgskjkjjj',
+    'kkkkkkkkqjQkkjQj',
+    'kkkkkkkkqjQckjQj',
+    'kkkkkkkkqjQckjQj',
+    'nnnnnnnnqjQckjjj',
+    'nnnnnnnngsggkjQj',
+    'nngnngnnqjQckjQj',
+    'sSssssSssssSgggg',
+    'gsgggsgggsggnnnn',
+    'nnknnknnknnkkkkk',
+  ],
 };

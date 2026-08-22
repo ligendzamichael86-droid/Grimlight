@@ -16,10 +16,16 @@
 // DRAMATURGIE (GDD.md:38-40 "Gramfeld", Tristram-Stimmung):
 // - Dauerzwielicht: ambient 0,28 / Tint #1a1410 (Phase-0-Eichung, M1-Band 56..69).
 // - Vernagelte Fenster ('V'/'v') an den drei verlassenen Katen im Westen.
+//   GP7-CH-1 E2 (deklariert): das EINE 'v' an Heddas Kate (31,8) ist der zweiten
+//   Tuerhaelfte gewichen — es war ohnehin das einzige vernagelte Fenster an einem
+//   BEWOHNTEN Haus (Herdfeuer davor, Strohdach intakt) und stand damit gegen den
+//   Satz oben. Die vier uebrigen 'v' (Kapelle 23,4 / Schmiede 14,9 /
+//   Speicher 27,23) bleiben unangetastet.
 // - ZWEI Warmlichter, beide Pflicht-torchChars (Entscheid E5): 'F' Herdfeuer vor
 //   Heddas Kate (SPEC A3, das eine rote Licht-Gate) und 'E' die Esse der Schmiede.
-// - Haeuser sind NICHT betretbar (SPEC §6.1): 'T'/'t' sind Zustands-Deko
-//   (zu/offen) und solide. Die Dach-Transparenz (tilemap.js CROWN_PLAYER_ALPHA)
+// - Haeuser sind NICHT betretbar (SPEC §6.1): 'T'/'t' (+ 'J'/'j', die rechten
+//   Tuerhaelften aus GP7-CH-1 E2) sind Zustands-Deko (zu/offen) und solide.
+//   Die Dach-Transparenz (tilemap.js CROWN_PLAYER_ALPHA)
 //   greift deshalb nur beim Vorbeilaufen an der begehbaren TRAUFE — dem obersten
 //   Streifen jedes Dach-Spans (Entscheid E2, Beweiszelle (12,7) hinter der
 //   Schmiede).
@@ -27,10 +33,11 @@
 //
 // LEGENDEN-NAMENSRAUM (Entscheide E7/F5, deklariert): Legenden sind JE KARTE
 // eigene Namensraeume. Hier gilt Mnemonik vor GRAVEYARD-Konvention —
-// 'T'/'t' = Tuer zu/offen (GY: T = tree_trunk), 'Y' = toter Stamm (GY: Y =
-// Over-Span Back-Krone), 'G' = Glocken-Joch (Palette 'G' = NPC-Stoff, anderer
-// Namensraum). Das ist KEIN Widerspruch und darf von spaeteren Agenten nicht als
-// solcher gewertet werden.
+// 'T'/'t' = Tuer zu/offen LINKE Haelfte (GY: T = tree_trunk), 'J'/'j' = dieselbe
+// Tuer RECHTE Haelfte (GP7-CH-1 E2; Palette 'J'/'j' sind Holztoene, anderer
+// Namensraum), 'Y' = toter Stamm (GY: Y = Over-Span Back-Krone), 'G' =
+// Glocken-Joch (Palette 'G' = NPC-Stoff, anderer Namensraum). Das ist KEIN
+// Widerspruch und darf von spaeteren Agenten nicht als solcher gewertet werden.
 //
 // ANKER-VERSATZ (Entscheid E1): die neun dorf_*-Over-Keys stehen mit W = 0 in
 // der ANCHOR_CLAMP-Tabelle (world/tilemap.js) — Gebaeude sind keine Kronen, ihr
@@ -40,8 +47,12 @@
 import { tc, tileRect } from './coords.js';
 
 // 44x28. Zeichenweise identisch zu .tmp/slice6_p0/dorf_rows.txt ("GRAMFELD rows").
-// Merkpunkte: Kapelle (Nord, C/t), Schmiede (West-Mitte, W/E/A), Heddas Kate
-// (Ost-Mitte, W/T/F), drei verlassene Katen (V/T/v), Speicher (Sued, Z), Brunnen
+// GP7-CH-1 E2: SIEBEN Ein-Zeichen-Aenderungen gegenueber dorf_rows.txt, jede
+// ersetzt ein SOLIDES Wandzeichen durch die rechte Tuerhaelfte (Soliditaets-
+// Raster damit byte-gleich, S6-§7F(c)-Golden gruen): (22,4) C->j, (31,8) v->J,
+// (6,9) V->J, (13,9) W->j, (6,18) V->J, (12,22) V->J, (26,23) Z->J.
+// Merkpunkte: Kapelle (Nord, C/t+j), Schmiede (West-Mitte, W/E/A), Heddas Kate
+// (Ost-Mitte, W/T+J/F), drei verlassene Katen (V/T+J), Speicher (Sued, Z), Brunnen
 // 2x2 (1/2/3/4), geborstene Dorfglocke (5/6), Marktstand-Theke (7/8), Osttor-
 // Schwelle (D, Portal) am rechten Kartenrand.
 const DORF_ROWS = [
@@ -49,12 +60,12 @@ const DORF_ROWS = [
   '#.,..,.....................................#',
   '#...........,.................,....,.......#',
   '#..Y....,.......,..,CCCC...................#',
-  '#.,.................CtCv...............Y...#',
+  '#.,.................Ctjv...............Y...#',
   '#....................SS............,.......#',
   '#.Y...,...,......,...==...............,....#',
   '#....................==,..,................#',
-  '#,.....-...WWWW......==......WTv...b.......#',
-  '#...VTV-...WtWv....,.==......===.,....,..Y.#',
+  '#,.....-...WWWW......==......WTJ...b.......#',
+  '#...VTJ-...Wtjv....,.==......===.,....,..Y.#',
   '#....------E==A=.....==......F=............#',
   '#.........======x=...==..,....=x..........,#',
   '#..b...,.b.,....,==============............#',
@@ -63,12 +74,12 @@ const DORF_ROWS = [
   '#.....,.........===34=======6=============D#',
   '#......---------================...........#',
   '#......-........=======78=======...,.....,.#',
-  '#.,.VTV....,....================...........#',
+  '#.,.VTJ....,....================...........#',
   '#................-..,....=x................#',
   '#..........-------.......=,........fff.....#',
   '#...,........-.......................f.....#',
-  '#.Y.......VTV...........ZZZZ.........fb....#',
-  '#.......................ZTZv.............,.#',
+  '#.Y.......VTJ...........ZZZZ.........fb....#',
+  '#.......................ZTJv.............,.#',
   '#.......b....,....,b..........,..,....,....#',
   '#...................................Y......#',
   '#......Y...................................#',
@@ -112,7 +123,8 @@ const DORF_OVER_ROWS = [
 ];
 
 // EINE Legende fuer Ground UND Over (createTilemap nimmt genau eine, Muster
-// GRAVEYARD). 38 Zeichen, alle in Gebrauch, alle aus dorf_layout.json.
+// GRAVEYARD). 40 Zeichen, alle in Gebrauch: 38 aus dorf_layout.json + 'J'/'j'
+// (GP7-CH-1 E2, die rechten Tuerhaelften).
 // Alle variants-Listen tragen UNGERADES n (n-Waechter §2.A2/§0.6):
 // '.' 9, ',' 5, '=' 5, '-' 7, '#' 3, 'W' 3, 'x' 3.
 const DORF_LEGEND = {
@@ -175,8 +187,30 @@ const DORF_LEGEND = {
   'V': { art: 'dorf_wand_vernagelt', solid: true },  // GDD.md:38-40
   'v': { art: 'dorf_fenster_vernagelt', solid: true }, // Paar zu 'V'
   // Tueren sind DEKO und solide — die Haeuser sind nicht betretbar (§6.1).
-  'T': { art: 'dorf_tuer_zu', solid: true },
-  't': { art: 'dorf_tuer_offen', solid: true },
+  // GP7-CH-1 E2: jede Tuer ist ZWEI Kacheln breit (Massstabsbruch gegen die
+  // 16x24-Figur wird in der BREITE geloest, nicht in der Hoehe — der 16x32-
+  // Hoch-Span ist in dieser Engine nicht baubar, siehe SPEC_GP7CH1.md E2 und
+  // GP7CH1_SPEC_REVIEW.md B2). 'T'/'t' zeigen jetzt auf die LINKE Haelfte,
+  // 'J'/'j' sind die neuen rechten Haelften. Die alten Ein-Kachel-Grids
+  // dorf_tuer_zu / dorf_tuer_offen bleiben in TILE_ART stehen, sind aber ab
+  // hier UNBENUTZT (deklariert; kein Loeschen — smoke prueft Legenden-Arts,
+  // nicht ihre Verwendung, und ein Bestandsgrid zu entfernen waere ein
+  // Nicht-Art-Edit ohne Sanktion).
+  //
+  // ENTSCHEID LINKS/RECHTS (Layout, nicht Geschmack): die zweite Haelfte ist
+  // bei ALLEN SIEBEN Tueren die Zelle RECHTS der heutigen Tuer. Das ist der
+  // einzige Zuschnitt, der (a) die Tuer der drei GROSSEN Haeuser mittig unter
+  // die 4-Kachel-Fassade legt (Kapelle 20-23 -> Tuer 21/22, Schmiede 11-14 ->
+  // 12/13, Speicher 24-27 -> 25/26), (b) die Kapellentuer exakt auf ihre zwei
+  // Stufenkacheln (21,5)/(22,5) setzt und (c) die Schmiedetuer NICHT auf die
+  // Esse (11,10) schiebt — der Weg nach links waere bei der Schmiede zur
+  // Haelfte von der soliden Esse verstellt.
+  // 'J'/'j' sind im Legenden-NAMENSRAUM dieser Karte frei (Konvention E7/F5,
+  // Kopf dieser Datei: Palette 'J'/'j' sind Holztoene, anderer Namensraum).
+  'T': { art: 'dorf_tuer_zu_l', solid: true },
+  't': { art: 'dorf_tuer_offen_l', solid: true },
+  'J': { art: 'dorf_tuer_zu_r', solid: true },
+  'j': { art: 'dorf_tuer_offen_r', solid: true },
   // --- solider Grund: Feuer (die beiden torchChars, 3-Frame-Zyklus) ---------
   'F': {
     art: 'dorf_herdfeuer_0',

@@ -20,11 +20,18 @@ SNES-Pixel-Look, Diablo-Stimmung: entsättigt, dunkel, warme Lichtinseln.
 ## Stilregeln
 
 1. Jedes Objekt nutzt eine Hell/Mittel/Dunkel-Rampe, Licht kommt von oben links.
-2. Alle Figuren haben eine geschlossene k-Kontur (klare Silhouette vor dunklem Boden).
+2. Jede Figur hat eine LÜCKENLOSE Silhouettenkante. Der Kantenton ist selektiv:
+   k auf der Schattenseite, der dunkelste Materialton der angrenzenden Fläche
+   auf der Lichtseite, ein Rim-Ton entlang der oberen Lichtkante. Ein Aussetzen
+   der Kante zu transparent ist NICHT erlaubt. (GP7CH, neu gefasst; vorher
+   "geschlossene k-Kontur", was das selektive Outline verboten hätte.)
 3. Boden bleibt sehr dunkel (e/w als Basis); helle Töne (b, y, i) sind Akzente
    und lenken das Auge: Knochen, Gold, Klingen, Feuer.
-4. Warm gegen kalt: Fackel-Orange/Gelb sind die einzigen warmen Lichtquellen,
-   der Rest der Welt ist kalt-grün/grau/blau.
+4. Warm ist erlaubt als MATERIAL (Holz, Leder, Lehm, Stoff), verboten als LICHT:
+   leuchtende Warmtöne (o/y/1) bleiben Feuer, Gold und Klingenreflex vorbehalten.
+   (GP7CH, neu gefasst; die alte Fassung "Fackel-Orange/Gelb sind die einzigen
+   warmen Lichtquellen, der Rest der Welt ist kalt-grün/grau/blau" war seit
+   Slice 6 Bestandsbruch: 35 der 64 Töne sind warm.)
 5. Held: violetter Kapuzen-Umhang (u/U), Gesicht im Hutschatten, Schwert immer
    sichtbar (unten seitlich, oben auf dem Rücken, seitlich in der Hand).
 6. Skelette: b/B-Knochen mit tiefen k-Augenhöhlen und Rippen-Lücken.
@@ -33,6 +40,10 @@ SNES-Pixel-Look, Diablo-Stimmung: entsättigt, dunkel, warme Lichtinseln.
 8. Tiles sind voll deckend (kein '.'), Figuren-Sprites nutzen Transparenz.
 9. Lauf-Frames unterscheiden sich mindestens in der Beinstellung.
 10. Neue Farben nur als komplette Rampe und nur, wenn keine bestehende passt.
+    AUSNAHME, deklariert (GP7CH): die beiden Rim-Töne `_` #e0c3c3 (warm) und
+    `|` #abdcda (kalt) sind bewusst ein PAAR statt einer Rampe. Sie sind kein
+    Material, sondern die obere Lichtkante aus Regel 2 und werden warm oder
+    kalt nach der Lichtsituation der Figur gesetzt.
 
 ## Slice 1 — Katakomben, Ghul, Props (Ergänzung)
 

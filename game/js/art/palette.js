@@ -312,4 +312,105 @@ export const PALETTE = {
   //         (water_mid / water_mid_calm — der einzige Ton UNTER 'w').
   //     Die Rampe wird damit als ZEILEN-Sprache gelesen, nicht mehr als
   //     Per-Pixel-Rauschen. Kein neuer Ton, keine neue Palettenbreite.
+  //
+  // =========================================================================
+  // GP7-CH-1 §E3 — DIE 14 NEUEN SYMBOL-TOENE (Menschen). GUELTIGER STAND.
+  // =========================================================================
+  // Quelle WOERTLICH: .tmp/gp7ch_p0/toene.json (Rechner .tmp/gp7ch_p0/
+  // 04_rechner.mjs, Phase 0 P0.b), Tabelle eingefroren in
+  // design/GP7CH1_PHASE0.md ("Die 14 neuen Toene"). Kein Hex-Wert ist beim
+  // Eintragen nachjustiert worden.
+  //
+  // WARUM SYMBOLE: die 61 alnum-Schluessel sind voll ('l' ist verboten) und
+  // die Slice-6-Methode (Null-Texel-Toene umwidmen) ist abgeerntet — ohne
+  // neuen Namensraum ist eine echte Stofframpe je Mensch nicht baubar
+  // (Landkarte Teil C §5, Vorentscheid). Die 14 Zeichen stammen aus dem
+  // bewiesen kollisionsfreien Satz  ! % & ( ) : ; ? @ [ ] ^ _ |  (m3: frei
+  // von PALETTE, von ALLEN Karten-Legenden und von ALLEN Grids). Symbol-Keys
+  // sind ein eigener Namensraum gegenueber den Map-Legenden (wie '=' seit GP4).
+  //
+  // AUFLAGEN (E3/M11, nachgerechnet in .tmp/gp7ch_p0/nachweis.txt, 0 ROT):
+  //  * dE00 >= 10 zu ALLEN 64 Bestandstoenen — Minimum 10,30 ('!' gegen '4')
+  //  * dE00 >= 8 INNERHALB einer neuen Rampe — Minimum 8,07
+  //  * dE00 >= 12 ZWISCHEN zwei neuen Rampen — Minimum 12,07
+  //  * dE00 >= 12 zu u/U/X/Z (V6 "der Held bleibt das einzige Violett") —
+  //    Minimum 12,03 ('%' gegen 'Z'). '^' IST die Held-Rampe (Einschub) und
+  //    haelt dieselbe Auflage mit 13,26 zu X und Z.
+  //  * C*ab < 30,5 (Fackelkern-Deckel '1', palette.js:71-73) — Maximum 29,85
+  //    ('^'); zum Vergleich Bestand: G 30,32 / '1' 30,48.
+  //  * KEINE Paletten-L-Regel gegen das M1-Band (M13 = Kategorienfehler: M1
+  //    ist ein Bild-Median, keine Palettengroesse). Nachweis ist die
+  //    REALMESSUNG nach dem Figuren-Umbau (M1 56..69, E1 >= 0,64 %,
+  //    L<16 <= 2,0 %). Der dunkelste neue Ton liegt bei L601 64,1, also weit
+  //    ueber dem L<16-Deckel; 13 der 14 Toene liegen ueber L601 96 und
+  //    stuetzen die E1-Highlight-Untergrenze.
+  //
+  // SANKTIONIERTE FOLGE (E8, KEIN Fehler): .tmp/check_gfx6_art.mjs:74-79
+  // deckelt den Zeichensatz auf "61 alnum + 3 Symbole" und wird durch diesen
+  // Block ROT ("Symbol-Toene falsch"); ebenso .tmp/check_gp6_art_self.mjs:26
+  // (erwartete Rot-Zahl 5 -> 6). Beide Stellen stehen namentlich im
+  // Sanktions-Katalog. smoke_test.mjs:81-93, sprite_factory.js:17-19 und
+  // art_slice3_selfcheck pruefen nur die MITGLIEDSCHAFT in PALETTE und
+  // bleiben gruen. Die mobile/-Spiegelkopie entsteht je APK-Build neu.
+  //
+  //   Ton | Rampe | Hex      | L601  | C*ab | Hue   | Rolle
+  //   ----+-------+----------+-------+------+-------+------------------------
+  //    !  | G     | #5b3438  |  64,1 | 18,8 |  15,5 | Hedda Wolle Schatten
+  //    %  | G     | #a07887  | 133,7 | 18,2 | 353,5 | Hedda Wolle Licht
+  //    &  | CORM  | #188185  |  98,1 | 28,1 | 201,5 | Corm Wolle dunkel
+  //    (  | CORM  | #4b918a  | 123,3 | 24,0 | 187,4 | Corm Wolle mittel
+  //    )  | CORM  | #71a394  | 146,3 | 20,2 | 173,0 | Corm Wolle hell
+  //    :  | BRAN  | #795a57  |  98,9 | 14,0 |  28,6 | Bran Leder dunkel
+  //    ;  | BRAN  | #a77769  | 131,8 | 22,7 |  41,9 | Bran Leder mittel
+  //    ?  | BRAN  | #b0988c  | 157,8 | 11,8 |  54,1 | Bran Leder hell
+  //    @  | MILE  | #327596  | 100,7 | 26,3 | 246,8 | Mile Kittel dunkel
+  //    [  | MILE  | #4691b0  | 126,1 | 27,1 | 239,2 | Mile Kittel mittel
+  //    ]  | MILE  | #62adba  | 152,1 | 24,2 | 215,1 | Mile Kittel hell
+  //    ^  | HELD  | #6c75a8  | 120,1 | 29,9 | 288,3 | Held Zwischenstufe X->Z
+  //    _  | RIM   | #e0c3c3  | 203,7 | 10,9 |  20,2 | Rim warm
+  //    |  | RIM   | #abdcda  | 205,1 | 16,7 | 194,6 | Rim kalt
+  //
+  // HEDDA — Krapp-Wolle: die Bestands-Rampe G bekommt ihre zwei fehlenden
+  // Stufen, damit aus dem Ein-Ton-Kleid (83 Texel, 1 Stufe) eine Rampe wird:
+  //   ! (64,1) -> G (98,0) -> % (133,7); Schritte 33,9 / 35,7 = 1,05,
+  //   Hue-Spanne 22,1 Grad (T4-Ziel >= 20), Saettigungsmaximum in der Mitte.
+  // Der Schatten dreht WARM Richtung Braunrot (Hue 15,5), NICHT kuehl: der
+  // kuehle Sektor gehoert dem Helden (E3/M12 — die kuehle Suche liess nur
+  // 4,7 % Kandidaten uebrig, alle hart an der 'U'-Schranke).
+  '!': '#5b3438', // Krapp-Wolle SCHATTEN, Rampe G Stufe 1/3 (Hedda). L 64,1 | C*ab 18,8
+  '%': '#a07887', // Krapp-Wolle LICHT,    Rampe G Stufe 3/3 (Hedda). L 133,7 | C*ab 18,2
+  // CORM — eigene PETROL-Familie, komplette 3er-Rampe: & -> ( -> ).
+  // Sie ist ausdruecklich NICHT die Steinrampe seiner eigenen Kapellenwand
+  // (g/s/S) und nicht Erde (E6-Sperrliste); L601 liegt im P0.d-Fenster
+  // 116,71..159,37. Schritte 25,2 / 23,1 = 1,09, Hue-Spanne 28,5 Grad.
+  '&': '#188185', // Wolle DUNKEL,  Rampe CORM Stufe 1/3. L 98,1 | C*ab 28,1
+  '(': '#4b918a', // Wolle MITTEL,  Rampe CORM Stufe 2/3 (Leitton). L 123,3 | C*ab 24,0
+  ')': '#71a394', // Wolle HELL,    Rampe CORM Stufe 3/3. L 146,3 | C*ab 20,2
+  // BRAN — versengtes Leder, eigene warme Familie: : -> ; -> ?.
+  // Er verlaesst damit die Holzrampe seiner eigenen Schmiede (q/j/Q/c/J) und
+  // greift NICHT nach Rost 4/5/6 — Rost bleibt EXKLUSIV beim Torwaechter (M9,
+  // sonst stehen zwei rostbraune Maenner nebeneinander). Schritte 32,8 / 26,1
+  // = 1,26, Hue-Spanne 25,5 Grad, Saettigungsmaximum in der Mittelstufe.
+  ':': '#795a57', // Leder DUNKEL,  Rampe BRAN Stufe 1/3. L 98,9 | C*ab 14,0
+  ';': '#a77769', // Leder MITTEL,  Rampe BRAN Stufe 2/3 (Leitton). L 131,8 | C*ab 22,7
+  '?': '#b0988c', // Leder HELL,    Rampe BRAN Stufe 3/3. L 157,8 | C*ab 11,8
+  // MILE — Kittel, eigene STAHLBLAU-Familie: @ -> [ -> ].
+  // Bewusst weder Krapp (das ist Heddas Alleinstellung) noch Gruen (Gras-
+  // Sperrliste) noch Leinen/Knochen O/B/b (die Naehe zu den Skeletten war der
+  // Befund). Schritte 25,4 / 26,0 = 1,02, Hue-Spanne 31,7 Grad.
+  '@': '#327596', // Kittel DUNKEL, Rampe MILE Stufe 1/3. L 100,7 | C*ab 26,3
+  '[': '#4691b0', // Kittel MITTEL, Rampe MILE Stufe 2/3 (Leitton). L 126,1 | C*ab 27,1
+  ']': '#62adba', // Kittel HELL,   Rampe MILE Stufe 3/3. L 152,1 | C*ab 24,2
+  // HELD — EINSCHUB in die Bestands-Stofframpe u -> U -> X -> ^ -> Z.
+  // Die 48,2-L-Schlucht X->Z war das Schrittverhaeltnis 1,745 (T5-Ziel <= 1,6);
+  // mit '^' lauten die Schritte 27,6 / 31,3 / 20,9 / 27,3 = 1,497. Das
+  // analytisch zulaessige Einschubfenster war L601 118,78..123,31.
+  '^': '#6c75a8', // Umhang ZWISCHENSTUFE, Rampe HELD Stufe 4/5. L 120,1 | C*ab 29,9
+  // RIM — zwei helle Kantentoene, warm UND kalt einsetzbar (T6: jede Figur
+  // braucht >= 12 % der Kontur als Rim, heute haben zwei von elf ueberhaupt
+  // einen). DEKLARIERTE AUSNAHME von Stilregel 10 ("neue Farben nur als
+  // komplette Rampe"): ein Rim ist keine Materialrampe, sondern eine Kante —
+  // die Ausnahme steht in ART_DIRECTION.md (Sanktion E4/E8).
+  '_': '#e0c3c3', // Rim WARM (Haut/Leder/Holzseite). L 203,7 | C*ab 10,9
+  '|': '#abdcda', // Rim KALT (Stoff/Stahl/Steinseite). L 205,1 | C*ab 16,7
 };
