@@ -301,7 +301,47 @@ export const DORF = {
     { ...tc(30, 10), id: 'hedda' },       // Alte Hedda — Herdfeuer (29,10)
     { ...tc(21, 6), id: 'corm' },         // Vater Corm, der Kuester — Kapellenstufe (21,5)/(22,5)
     { ...tc(24, 18), id: 'mile' },        // Mile, das Botenkind — Theke (23,17)/(24,17)
-    { ...tc(39, 16), id: 'torwaechter' }, // Der Torwaechter — Osttor (42,14)/(42,15)
+    // GP7-CH-1 POLITUR (Osttor-Eintritt). ALT: tc(39, 16) = (632,264) — exakt
+    // 16 px UNTER dem Eintritts-Spawn tc(39,15) = (632,248). Beide Sprites sind
+    // 16x24 und stehen mittig ueber ihrer 12x14-AABB (player.js:236-240 ==
+    // npcs.js:206-210, Kasten = [cx-8,cx+8) x [cy-17,cy+7)); bei 16 px
+    // Mittenabstand ueberlappten sie sich um 16x8 = 128 Kasten-Texel (30 opake).
+    // Der Torwaechter wird zudem SPAETER gezeichnet (Y-Sortierung nach Fusskante,
+    // main.js:2754: 271 > 255) und stand damit VOR dem Helden — das erste Bild,
+    // das Michael vom Dorf sieht, zeigte einen halb verdeckten Helden.
+    //
+    // NEU: (650, 260) = tc(40,16) + (2,-4). BEWUSST KEINE Kachelmitte — die
+    // Konvention dieses Feldes ist "Weltpixel = ZENTRUM der AABB" (SPEC §2.1,
+    // maps.js:4-5), nicht "Kachelmitte". Eine Kachelmitte ist hier arithmetisch
+    // ausgeschlossen, siehe die Decke unten: tc(40,16) traegt 22,63 px.
+    //
+    // DECKE (nicht verhandelbar, MESSUNG statt Meinung): npcs.js:33
+    // NPC_REDE_ABSTAND = 22 px, und tools/smoke_test.mjs:6535-6547
+    // (S6-§7F(f) §2.3) tippt den Angriffs-Pegel im ERSTEN Frame nach dem
+    // Betreten und erwartet, dass sich der Dialog des Torwaechters oeffnet.
+    // Der Anker muss also <= 22 px vom Eintritts-Spawn stehen UND unter dem
+    // Spawn (Blick 'down' = (0,1), Skalarprodukt > 0 -> dy > 0). Gemessen:
+    // ein Anker jenseits der 22 px (geprueft mit tc(41,16), 35,78 px) faerbt
+    // SIEBEN Pruefungen rot (der ganze (f)-Strang Dialog/Laden haengt daran),
+    // 825 ok -> 818 ok. Ein Mitten-Abstand >= 24 px ist damit erst nach einer
+    // SANKTIONIERTEN Aenderung an smoke_test.mjs:6535 zu haben.
+    //
+    // WAS STATTDESSEN GELOEST IST — die Ueberlappung, nicht der Abstand: bei
+    // |dx| >= 16 (Sprite-Breite) beruehren sich die Kaesten hoechstens.
+    // dx = +18 / dy = +12 -> Abstand 21,63 px (ansprechbar bleibt), Kasten-
+    // Ueberlappung 0 Texel, 2 px Luft zwischen den Sprites, Held vollstaendig
+    // sichtbar (258/258 opake Texel).
+    // OSTTOR-LAGE: der Anker steht unter dem Torbogen-Span 'O' (40,14)/[3,2]
+    // (Welt 640..688 x 225..257 nach anchorOffset dy=+1), 22 px westlich der
+    // Schwelle — der Torbogen verdeckt 6 der 249 opaken Wach-Texel (2,4 %,
+    // nur die Haubenkante; weiter oestlich/hoeher schneidet die Bogenlaibung
+    // den Kopf ab, gemessen bis 43 Texel bei (653,252)).
+    // BEGEHBARKEIT: die 12x14-AABB (644..656 x 253..267) liegt ueber (40,15)
+    // = '=' und (40,16) = '.', beide solid:false; keine solide Kachel darunter.
+    // PORTAL: die Portal-AABB tileRect(42,14,1,2) ist 672..688 x 224..256 —
+    // 16 px oestlich der AABB-Kante, kein Kontakt, und der Weg-Korridor
+    // (Zeilen 14/15) bleibt frei (die AABB steht zu 11 von 14 px in Zeile 16).
+    { x: 650, y: 260, id: 'torwaechter' }, // Der Torwaechter — Osttor (42,14)/(42,15)
   ],
   // Osttor: die zwei 'D'-Schwellenkacheln -> GRAVEYARD-Westtor. Der Ziel-Spawn
   // tc(3,12) steht OESTLICH der Friedhofs-Wegkachel (1,12) und liegt damit nicht
