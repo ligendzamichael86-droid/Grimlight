@@ -260,3 +260,25 @@ G-I 1b laeuft mit ZWEI direkten Zeichnern parallel (A: Bran/Hedda/
     Corm, B: Mile/Torwaechter) in EINER Datei — Mutex-Protokoll
     (.tmp/gp7ch_npc/LOCK via mkdir, frisch lesen, nur eigene Key-
     Bloecke patchen). Stil-Anker = design/GP7CH1_ANKER_HELD.md.
+G-J **Torwaechter Koerper-L (NPC-B, 10.09.):** die Rost-Rampe 4/5/6
+    deckelt bei ~111 L (hellste Stufe 125,7, Einzelton <=55 %);
+    dE00-Pfad auf warmem Lehm/Weg blockiert (Rostorange = gleiche
+    Hue-Familie) — Konflikt E6 (Rost EXKLUSIV = Identitaet) vs E1.
+    ENTSCHEID wie G-A: Trennung ueber Rim (12,6 %), Kante, Stahl-
+    haube + Speer-Silhouette; Fortschritt gemessen: auf dem Weg von
+    dL -5,6 (dunkler als Boden!) auf +11,0. Deklariert.
+G-K **Profilaehnlichkeit <=70 fuer ERWACHSENE-MAENNER-Paare
+    (Held/Torwaechter 87,1; Held/Bran offen)** ist im 16-px-Raster
+    nicht darstellbar (Review m23: braucht Massenspreizung 151..242;
+    ~3,5 px Zeilenunterschied im Schnitt = Karikatur). ENTSCHEID:
+    <=70 gilt fuer Typ-uebergreifende Paare (Held/Hedda/Corm/Mile
+    untereinander und zum Held); Paare erwachsener Maenner brauchen
+    <=90 UND einen NICHT-Profil-Differenzierer (Requisit bricht den
+    Rahmen: Speer/Hammer; Kopf-Schulter-Verhaeltnis; Rampe). Der
+    Cast-Juror prueft die Unterscheidbarkeit im Squint-Bild.
+G-L Werkzeug-Artefakt (B-Befund 5): figuren_messung.mjs rampeVon
+    kennt die 14 neuen Toene nicht ("dominante Rampe Holz" fuer
+    Mile falsch, 'unbekannt:'-Splitter). Nachzug NACH 1b (nicht
+    waehrend A misst). Mile-Kopfoberkante Zeile 4 (Blase +4 px):
+    Steckbrief-bedingt akzeptiert. Stale Kommentar ueber
+    npc_torwaechter_0 beim Integrieren nachziehen.
