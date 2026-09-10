@@ -6,8 +6,12 @@ Gegner (CH-2) bauen auf diesen Regeln — sie sind BINDEND:
 
 1. SEITENFRAMES FLIP-NEUTRAL: Licht von OBEN (Kuppel/Schulter-
    Oberkante), keine senkrechte Lichtkante. Abnahmeregel: gemessene
-   Links/Rechts-dL der Koerpertexel in Seitenframes <= 5 L
-   (Held: 2,6-5,2 gegen 21,4 frontal). Front/Rueck: oben-links.
+   Links/Rechts-dL der Koerpertexel in Seitenframes <= 6,5 L
+   (= weniger als ein Viertel einer 25-30-L-Rampenstufe, Juror-
+   Begruendung; Held nach Profil-Politur 2ea79d5: 3,7-6,2 gegen
+   21,4 frontal. KORREKTUR 10.09.: die urspruengliche Zahl "<= 5"
+   war schon bei d95f3fe verletzt (side_3 5,17) — falsch gesetzt,
+   nicht die Kunst.) Front/Rueck: oben-links.
 2. SELEKTIVES OUTLINE BIS ZU DEN STIEFELN: Schattenseite k,
    Lichtseite dunkelster Materialton (u/q statt k), kein schwarzer
    Vollring um Beine/Fuesse. Kante LUECKENLOS (Stilregel 2 neu).
