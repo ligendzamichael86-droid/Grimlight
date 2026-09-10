@@ -49,6 +49,9 @@ es muss perfekt werden."
   hängt jetzt an der OPTIK (Menschen + Dorf). Abnahmeweg: GP7-CH
   Runde(n) + Dorf-Feinschliff (Backlog design/SLICE6_JURY.md),
   dann erneuter Gerätetest.
+- **GP7-CH-1 GEBAUT 10.09. (Cast-Juror: FREIGEGEBEN, Median 5,75→7,75;
+  Übergabe uebergaben/2026-09-10_gp7ch1_menschen.md; Michael-Gerätetest
+  offen; Option Dorf-Abdunklung via Standkacheln).**
 - **GP7-CH — DIE MENSCHEN (NEU, HÖCHSTE PRIORITÄT, Michael
   16.08.: "viel besser"):** mehrere Charakter-Grafikpässe für
   Held + 5 NPCs + alle Gegner: Seitenansichten/Laufzyklen, eigene

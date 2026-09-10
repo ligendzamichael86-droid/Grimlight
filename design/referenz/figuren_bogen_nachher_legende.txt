@@ -1,0 +1,89 @@
+FIGUREN-BOGEN NACHHER — Legende (erzeugt von tools/figuren_bogen.mjs)
+Spec: design/SPEC_GP7CH1.md E9 (Umfang) + E10 P0.c/P0.e, Review M15/M16/m8,
+Nachfix-Befund R5. WERKZEUG-REV 2.
+
+UMFANG  Rev 2 fuehrt alle Grids, die Spec E9 fuer Phase 1a/1b in den Umfang
+        nimmt: 17 player_-Grids + 3 sword_slash_-Grids (1a) und 15 npc_-Grids
+        (1b). Rev 1 hatte nur 12 Lauf-Frames des Helden und deckte damit bloss
+        27 der 35 Grids ab (Befund R5). NEU in Rev 2: player_attack_down/up/side,
+        player_die_0/1, sword_slash_down/up/side.
+        Die Gegner-Zeile K ist KONTEXT, nicht Umfang (shield_* ist CH-2).
+
+RASTER  Zelle 32x48 px (2x3 Kacheln), Markenband 8 px unter jeder Zeile,
+        Bogen 544x224 px bei 1x, 3264x1344 px bei 6x und squint.
+        Figur horizontal in der Zelle zentriert, Fusskante gemeinsam auf
+        Zellunterkante minus 8 px. Freie Zellen rechts = Boden pur (Referenzflaeche).
+        squint = 1x, per Nearest Neighbour 50 % runter (Quelltexel 2x/2y), dann
+        wieder hoch — deckungsgleich mit dem 6x-Bogen. Das Markenband wird nach
+        dem Halbieren NEU gestempelt (Chrom, nicht Kunst): kollabieren sollen die
+        Figuren, nicht die Beschriftung.
+
+BOEDEN (echte Kacheln, gekachelt — keine Flachfarbe)
+  gras  grass_g5_00   16x16  L(Rec601) 49.9  GRAVEYARD-Gras
+  lehm  dorf_lehm_00  16x16  L(Rec601) 72.8  DORF-Lehm
+  weg   path          16x16  L(Rec601) 90.9  DORF-Weg
+
+SPALTENLEGENDE (Marke im Band -> Grid-Key -> Grid-Mass)
+  Zeile H = HELD (17 Zellen)
+    Hinweis: je Richtung 4 Lauf-Frames + 1 Attack-Frame (down, up, side), danach die 2 Sterbe-Frames
+    H01  player_down_0          16x24  Zelle x=0..31
+    H02  player_down_1          16x24  Zelle x=32..63
+    H03  player_down_2          16x24  Zelle x=64..95
+    H04  player_down_3          16x24  Zelle x=96..127
+    H05  player_attack_down     16x24  Zelle x=128..159
+    H06  player_up_0            16x24  Zelle x=160..191
+    H07  player_up_1            16x24  Zelle x=192..223
+    H08  player_up_2            16x24  Zelle x=224..255
+    H09  player_up_3            16x24  Zelle x=256..287
+    H10  player_attack_up       16x24  Zelle x=288..319
+    H11  player_side_0          16x24  Zelle x=320..351
+    H12  player_side_1          16x24  Zelle x=352..383
+    H13  player_side_2          16x24  Zelle x=384..415
+    H14  player_side_3          16x24  Zelle x=416..447
+    H15  player_attack_side     16x24  Zelle x=448..479
+    H16  player_die_0           16x24  Zelle x=480..511
+    H17  player_die_1           16x24  Zelle x=512..543
+  Zeile S = SCHWERTHIEB (Mini-Zeile, Effekt-Overlay) (3 Zellen)
+    Hinweis: gehoert dem Helden (E9/m6), ist aber Overlay: im Spiel auf der Schwert-Hitbox gezeichnet, nicht fussgebunden — hier liegt es wie alles andere auf der gemeinsamen Fusskante (Chrom)
+    S01  sword_slash_down       16x16  Zelle x=0..31
+    S02  sword_slash_up         16x16  Zelle x=32..63
+    S03  sword_slash_side       16x16  Zelle x=64..95
+  Zeile N = NPC (15 Zellen)
+    N01  npc_bran_0             16x24  Zelle x=0..31
+    N02  npc_bran_1             16x24  Zelle x=32..63
+    N03  npc_bran_talk          16x24  Zelle x=64..95
+    N04  npc_hedda_0            16x24  Zelle x=96..127
+    N05  npc_hedda_1            16x24  Zelle x=128..159
+    N06  npc_hedda_talk         16x24  Zelle x=160..191
+    N07  npc_corm_0             16x24  Zelle x=192..223
+    N08  npc_corm_1             16x24  Zelle x=224..255
+    N09  npc_corm_talk          16x24  Zelle x=256..287
+    N10  npc_mile_0             16x24  Zelle x=288..319
+    N11  npc_mile_1             16x24  Zelle x=320..351
+    N12  npc_mile_talk          16x24  Zelle x=352..383
+    N13  npc_torwaechter_0      16x24  Zelle x=384..415
+    N14  npc_torwaechter_1      16x24  Zelle x=416..447
+    N15  npc_torwaechter_talk   16x24  Zelle x=448..479
+  Zeile K = KONTEXT (Gegner) (5 Zellen)
+    K01  skeleton_0             16x16  Zelle x=0..31
+    K02  ghoul_0                16x20  Zelle x=32..63
+    K03  hound_0                16x12  Zelle x=64..95
+    K04  rust_0                 16x18  Zelle x=96..127
+    K05  warden_idle            24x32  Zelle x=128..159
+
+DATEIEN (Mass, Bytes, sha256)
+  figuren_bogen_nachher_gras_1x.png          544x 224      8143 B  7358e2b6bf7a2d517bc874e5bf07357a772ae911bfe9516ca383fc6226e3cd77
+  figuren_bogen_nachher_gras_6x.png         3264x1344     74899 B  9dad180ca11b02a08c7a3506aebb20bc7260b638dfd4e2000c05d9348fd4d9e8
+  figuren_bogen_nachher_gras_squint.png     3264x1344     63951 B  4d867700dd11050edb3d28115d3a63c7969a922d3a8c13fc720f30111c43c420
+  figuren_bogen_nachher_lehm_1x.png          544x 224      8629 B  ce51fc5eea4e3cc2628526fd9c12f8ddf56c3b18c32b8d7472632a0a469a2963
+  figuren_bogen_nachher_lehm_6x.png         3264x1344     84974 B  bea51ea13ae0d47c0609ac8d75b448a8594fd53b29421086c14bd5021883a4db
+  figuren_bogen_nachher_lehm_squint.png     3264x1344     73198 B  5be9e9e06ba215974517984b18a429c7962d98e32882b19feaa0dbdf51fbcc12
+  figuren_bogen_nachher_weg_1x.png           544x 224      7935 B  ab676b1f99e5d82b9ac08ce23a104528c81fc68784ba390d2ed516446381e72b
+  figuren_bogen_nachher_weg_6x.png          3264x1344     67560 B  2429037f794f1d17d4009ec8a77ffc33dc8f141e5c659996cdddc8ff1e761d29
+  figuren_bogen_nachher_weg_squint.png      3264x1344     65539 B  d235bcf79ce5021f651f78534533d55025d494da7fdcb47354fafc2e289b79f4
+
+PROVENIENZ (sha256 der Art-Quellen, aus denen dieser Bogen gerendert wurde)
+  game/js/art/sprites_figuren.js     aee659517ad88b2d5c38a8ac06d8ef81f1a747386df170b8ea6354ed46bbfcd8
+  game/js/art/sprites_tiles.js       46c26c767476999deca74ff88c026e8a007fbe7a4057fda62f8488bdecfcca09
+  game/js/art/sprites.js             41d6b7a90c9bdd057e10c4924a460ef8fdd5a665a8b36237642928d4fe81284d
+  game/js/art/palette.js             c7a7dd51e7f6b86521c9fbbbedb5a9778e27acebd38476b494cbd4739b963285
