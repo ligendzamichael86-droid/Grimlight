@@ -329,21 +329,25 @@ export const PALETTE = {
   // von PALETTE, von ALLEN Karten-Legenden und von ALLEN Grids). Symbol-Keys
   // sind ein eigener Namensraum gegenueber den Map-Legenden (wie '=' seit GP4).
   //
-  // AUFLAGEN (E3/M11, nachgerechnet in .tmp/gp7ch_p0/nachweis.txt, 0 ROT):
-  //  * dE00 >= 10 zu ALLEN 64 Bestandstoenen — Minimum 10,30 ('!' gegen '4')
-  //  * dE00 >= 8 INNERHALB einer neuen Rampe — Minimum 8,07
-  //  * dE00 >= 12 ZWISCHEN zwei neuen Rampen — Minimum 12,07
+  // AUFLAGEN (E3/M11; Erstlauf .tmp/gp7ch_p0/nachweis.txt 0 ROT, nach der
+  // CAST-JUROR-RUNDE 10.09. neu gerechnet in .tmp/gp7ch_palette2/ — 1 ROT,
+  // benannt und begruendet im Cast-Juror-Block unten):
+  //  * dE00 >= 10 zu ALLEN 64 Bestandstoenen — Minimum 9,04 (')' gegen '=')
+  //    ist ROT; ohne ')' liegt das Minimum unveraendert bei 10,30 ('!'/'4'),
+  //    die sechs anderen neu gerechneten Toene bei 10,37 bis 14,10.
+  //  * dE00 >= 8 INNERHALB einer neuen Rampe — Minimum 8,02 ('&'/'(')
+  //  * dE00 >= 12 ZWISCHEN zwei neuen Rampen — Minimum 13,34 ('!'/':')
   //  * dE00 >= 12 zu u/U/X/Z (V6 "der Held bleibt das einzige Violett") —
-  //    Minimum 12,03 ('%' gegen 'Z'). '^' IST die Held-Rampe (Einschub) und
-  //    haelt dieselbe Auflage mit 13,26 zu X und Z.
-  //  * C*ab < 30,5 (Fackelkern-Deckel '1', palette.js:71-73) — Maximum 29,85
-  //    ('^'); zum Vergleich Bestand: G 30,32 / '1' 30,48.
+  //    Minimum 13,26 ('^' gegen 'Z'). '^' IST die Held-Rampe (Einschub) und
+  //    haelt dieselbe Auflage.
+  //  * C*ab < 30,5 (Fackelkern-Deckel '1', palette.js:71-73) — Maximum 30,36
+  //    (';'); zum Vergleich Bestand: G 30,32 / '1' 30,48.
   //  * KEINE Paletten-L-Regel gegen das M1-Band (M13 = Kategorienfehler: M1
   //    ist ein Bild-Median, keine Palettengroesse). Nachweis ist die
   //    REALMESSUNG nach dem Figuren-Umbau (M1 56..69, E1 >= 0,64 %,
-  //    L<16 <= 2,0 %). Der dunkelste neue Ton liegt bei L601 64,1, also weit
-  //    ueber dem L<16-Deckel; 13 der 14 Toene liegen ueber L601 96 und
-  //    stuetzen die E1-Highlight-Untergrenze.
+  //    L<16 <= 2,0 %). Der dunkelste neue Ton liegt seit der Cast-Juror-Runde
+  //    bei L601 58,5 ('&'), also weiter weit ueber dem L<16-Deckel; 11 der 14
+  //    Toene liegen ueber L601 96 und stuetzen die E1-Highlight-Untergrenze.
   //
   // SANKTIONIERTE FOLGE (E8, KEIN Fehler): .tmp/check_gfx6_art.mjs:74-79
   // deckelt den Zeichensatz auf "61 alnum + 3 Symbole" und wird durch diesen
@@ -353,16 +357,78 @@ export const PALETTE = {
   // art_slice3_selfcheck pruefen nur die MITGLIEDSCHAFT in PALETTE und
   // bleiben gruen. Die mobile/-Spiegelkopie entsteht je APK-Build neu.
   //
+  // =========================================================================
+  // CAST-JUROR-RUNDE 10.09. — SIEBEN TOENE NEU GERECHNET (& ( ) : ; ? %)
+  // =========================================================================
+  // Quelle: design/GP7CH1_JURY.md §5 (Rezepte "bindend"). Nachgerechnet in
+  // .tmp/gp7ch_palette2/ mit demselben Rechenweg wie .tmp/gp7ch_p0/
+  // 04_rechner.mjs + lib_farbe.mjs (CIEDE2000, voller 8-Bit-sRGB-Scan je
+  // Slot). Die anderen sieben Symbol-Toene (! @ [ ] ^ _ |) sind UNVERAENDERT,
+  // ebenso jedes Grid: die sieben Zeichen kommen ausschliesslich in
+  // npc_corm_0/1/talk, npc_bran_0/1/talk und npc_hedda_0/1/talk vor (Zensus
+  // ueber sprites_figuren.js: 864 Texel in 9 Grids; sprites_tiles.js: 0
+  // Treffer). Bestandsgrafik kann durch diese Zeilen nicht kippen.
+  //
+  //   CORM  &  #188185 -> #005356  ΔL* -17,5  Hue 201,5 -> 201,6  C 28,1 -> 21,7
+  //         (  #4b918a -> #1d6862  ΔL* -16,0  Hue 187,4 -> 187,7  C 24,0 -> 24,1
+  //         )  #71a394 -> #4d7468  ΔL* -17,5  Hue 173,0 -> 172,2  C 20,2 -> 16,8
+  //   BRAN  :  #795a57 -> #83564c  L* konst.  Hue  28,6 ->  37,8  C 14,0 -> 22,0
+  //         ;  #a77769 -> #b0725f  L* konst.  Hue  41,9 ->  42,8  C 22,7 -> 30,4
+  //         ?  #b0988c -> #b0998b  L* konst.  Hue  54,1 ->  59,3  C 11,8 -> 12,2
+  //   HEDDA %  #a07887 -> #ae7189  L* konst.  Hue 353,5 -> 353,6  C 18,2 -> 27,8
+  //
+  // NACHWEIS CORM (die bindende Zahl des Juror-Rezepts): dE00 der Kutte-
+  // Mittelfarbe (Toene & ( ) ueber alle drei Grids) gegen die Bodenkacheln —
+  // path_v5 26,2 | path 26,4 | dorf_lehm_00 26,3 | schlechteste Lehmkachel
+  // (dorf_lehm_08) 26,2. Alle vier ueber der E1-Ersatzschwelle 25; der Juror
+  // hatte 26,6..27,3 gemessen. Rampe 3-stufig monoton, Schrittverhaeltnis
+  // 1,013, Hue-Spanne 29,4 Grad.
+  // NACHWEIS BRAN: Koerper-L 117,2 -> 116,9 (Toene gleich hell), dL zum Weg
+  // 25,5 -> 25,2 auf der P0.d-Lesart bzw. 26,5 -> 25,7 auf der Rampen-Lesart,
+  // E1 unberuehrt; der Abstand zu Heddas Krapp waechst auf ALLEN neun Paaren
+  // (kleinster 11,1 -> 11,3; die beiden Leittoene ';'/'%' 12,3 -> 16,7).
+  // NACHWEIS HEDDA: Koerper-L 116,5 -> 116,6, Rampe !/G/% monoton, C*ab 27,8
+  // unter dem Deckel 30,5.
+  //
+  // DREI KOLLISIONEN — GEMELDET STATT ERZWUNGEN:
+  //  1. ')' haelt "dE00 >= 10 zu allen 64 Bestandstoenen" NICHT: 9,04 gegen
+  //     '=' (Wasser-Kammglanz) und 9,07 gegen '7'. Im gesamten Juror-Korridor
+  //     ΔL* -15..-18 gibt es bei fester Hue-Lage 173 Grad KEINEN Wert >= 10
+  //     (Maximum 9,04, voller 8-Bit-Scan; auch mit +-14 Grad Hue-Spiel und
+  //     +-6 Chroma bleibt das Maximum 9,76). E3 haelt erst wieder bei ΔL*
+  //     >= -11 (zu flach fuer das Rezept) oder <= -24 (zu tief). Gewaehlt ist
+  //     das Korridor-Maximum; dafuer musste Chroma von 20,2 auf 16,8 zurueck
+  //     (bei unveraendertem Chroma waeren es nur 7,7).
+  //  2. '&' kann "Chroma unveraendert" nicht halten: auf Hue 201,5 liegt das
+  //     sRGB-Gamut-Maximum schon bei ΔL* -15 bei C*ab 23,0 (IST 28,1), bei
+  //     ΔL* -18 bei 21,5. Gewaehlt 21,7; die Differenz zum Gamut-Maximum
+  //     geht an die Intra-Rampen-Auflage >= 8 gegen '(' (erreicht 8,02).
+  //  3. Brans Rezept "Hue 42 -> 60..70 Grad bei Chroma +8..+12" ist mit E3
+  //     unvereinbar. Der warme Sektor auf L* 41 / 54 / 65 ist von 2 j Q c 5 6
+  //     h Y V J besetzt; bei Mittelton-Hue 60..70 liegt das erreichbare
+  //     Maximum bei 8,05 statt 10 — und zwar bei JEDEM Chroma, auch bei
+  //     Chroma 0. Umgesetzt ist deshalb die Chroma-Haelfte des Rezepts mit
+  //     der groessten E3-vertraeglichen Drehung. '?' ist zusaetzlich von 'h'
+  //     (#c29267) eingeklemmt und nimmt nur +0,4 Chroma auf; auch +-6 L*
+  //     Drift oeffnet dort nichts (Maximum 8,9).
+  //
+  // ABWEICHENDE LESART, DIE FABLE ENTSCHEIDEN MUSS: auf der P0.d-KOERPER-
+  // Mittelfarbe (ganze Figur ohne Kontur und Rim) faellt Corm durch die
+  // Absenkung auf dL 1,4 und dE00 22,3 gegen den Weg — dort sind nach dieser
+  // Runde BEIDE E1-Pfade zu (vorher dL 26,9 / dE00 26,1). Der Juror hat auf
+  // der KUTTEN-Mittelfarbe gerechnet (dort 26,2, siehe oben); die Auswahl
+  // dieser Lesart ist keine Palettenfrage.
+  //
   //   Ton | Rampe | Hex      | L601  | C*ab | Hue   | Rolle
   //   ----+-------+----------+-------+------+-------+------------------------
   //    !  | G     | #5b3438  |  64,1 | 18,8 |  15,5 | Hedda Wolle Schatten
-  //    %  | G     | #a07887  | 133,7 | 18,2 | 353,5 | Hedda Wolle Licht
-  //    &  | CORM  | #188185  |  98,1 | 28,1 | 201,5 | Corm Wolle dunkel
-  //    (  | CORM  | #4b918a  | 123,3 | 24,0 | 187,4 | Corm Wolle mittel
-  //    )  | CORM  | #71a394  | 146,3 | 20,2 | 173,0 | Corm Wolle hell
-  //    :  | BRAN  | #795a57  |  98,9 | 14,0 |  28,6 | Bran Leder dunkel
-  //    ;  | BRAN  | #a77769  | 131,8 | 22,7 |  41,9 | Bran Leder mittel
-  //    ?  | BRAN  | #b0988c  | 157,8 | 11,8 |  54,1 | Bran Leder hell
+  //    %  | G     | #ae7189  | 134,0 | 27,8 | 353,6 | Hedda Wolle Licht
+  //    &  | CORM  | #005356  |  58,5 | 21,7 | 201,6 | Corm Wolle dunkel
+  //    (  | CORM  | #1d6862  |  80,9 | 24,1 | 187,7 | Corm Wolle mittel
+  //    )  | CORM  | #4d7468  | 103,0 | 16,8 | 172,2 | Corm Wolle hell
+  //    :  | BRAN  | #83564c  |  98,3 | 22,0 |  37,8 | Bran Leder dunkel
+  //    ;  | BRAN  | #b0725f  | 130,4 | 30,4 |  42,8 | Bran Leder mittel
+  //    ?  | BRAN  | #b0998b  | 158,3 | 12,2 |  59,3 | Bran Leder hell
   //    @  | MILE  | #327596  | 100,7 | 26,3 | 246,8 | Mile Kittel dunkel
   //    [  | MILE  | #4691b0  | 126,1 | 27,1 | 239,2 | Mile Kittel mittel
   //    ]  | MILE  | #62adba  | 152,1 | 24,2 | 215,1 | Mile Kittel hell
@@ -372,28 +438,44 @@ export const PALETTE = {
   //
   // HEDDA — Krapp-Wolle: die Bestands-Rampe G bekommt ihre zwei fehlenden
   // Stufen, damit aus dem Ein-Ton-Kleid (83 Texel, 1 Stufe) eine Rampe wird:
-  //   ! (64,1) -> G (98,0) -> % (133,7); Schritte 33,9 / 35,7 = 1,05,
-  //   Hue-Spanne 22,1 Grad (T4-Ziel >= 20), Saettigungsmaximum in der Mitte.
+  //   ! (64,1) -> G (98,0) -> % (134,0); Schritte 33,9 / 36,0 = 1,06,
+  //   Hue-Spanne 22,0 Grad (T4-Ziel >= 20), Saettigungsmaximum in der Mitte.
   // Der Schatten dreht WARM Richtung Braunrot (Hue 15,5), NICHT kuehl: der
   // kuehle Sektor gehoert dem Helden (E3/M12 — die kuehle Suche liess nur
   // 4,7 % Kandidaten uebrig, alle hart an der 'U'-Schranke).
   '!': '#5b3438', // Krapp-Wolle SCHATTEN, Rampe G Stufe 1/3 (Hedda). L 64,1 | C*ab 18,8
-  '%': '#a07887', // Krapp-Wolle LICHT,    Rampe G Stufe 3/3 (Hedda). L 133,7 | C*ab 18,2
+  '%': '#ae7189', // Krapp-Wolle LICHT,    Rampe G Stufe 3/3 (Hedda). L 134,0 | C*ab 27,8
+                  // Cast-Juror-Runde 10.09.: C*ab 18,2 -> 27,8 bei KONSTANTEM L* (54,7)
+                  // und konstanter Hue (353,5 -> 353,6). Aus blassem Rosa wird staubiges
+                  // Krapprot; Koerper-L der Figur bleibt 116,5 -> 116,6 (E1 unberuehrt).
   // CORM — eigene PETROL-Familie, komplette 3er-Rampe: & -> ( -> ).
   // Sie ist ausdruecklich NICHT die Steinrampe seiner eigenen Kapellenwand
-  // (g/s/S) und nicht Erde (E6-Sperrliste); L601 liegt im P0.d-Fenster
-  // 116,71..159,37. Schritte 25,2 / 23,1 = 1,09, Hue-Spanne 28,5 Grad.
-  '&': '#188185', // Wolle DUNKEL,  Rampe CORM Stufe 1/3. L 98,1 | C*ab 28,1
-  '(': '#4b918a', // Wolle MITTEL,  Rampe CORM Stufe 2/3 (Leitton). L 123,3 | C*ab 24,0
-  ')': '#71a394', // Wolle HELL,    Rampe CORM Stufe 3/3. L 146,3 | C*ab 20,2
+  // (g/s/S) und nicht Erde (E6-Sperrliste). Cast-Juror-Runde 10.09.: die
+  // ganze Rampe um ΔL* -16,0 bis -17,5 abgesenkt (Auftrag -15..-18), Hue
+  // gehalten (Abweichung <= 0,75 Grad). Das P0.d-L601-Fenster 116,71..159,37
+  // ist damit BEWUSST verlassen — der Juror hat den E1-Ersatzpfad ueber dE00
+  // gerechnet und ihn fuer die Kutte offen gemessen (Nachweis im Cast-Juror-
+  // Block oben). Schritte 22,4 / 22,1 = 1,01, Hue-Spanne 29,4 Grad.
+  '&': '#005356', // Wolle DUNKEL,  Rampe CORM Stufe 1/3. L 58,5 | C*ab 21,7
+                  // (ΔL* -17,5; Chroma 28,1 -> 21,7 ist GAMUT-erzwungen, siehe oben)
+  '(': '#1d6862', // Wolle MITTEL,  Rampe CORM Stufe 2/3 (Leitton). L 80,9 | C*ab 24,1
+                  // (ΔL* -16,0; Chroma unveraendert, Abweichung +0,07)
+  ')': '#4d7468', // Wolle HELL,    Rampe CORM Stufe 3/3. L 103,0 | C*ab 16,8
+                  // (ΔL* -17,5; EINZIGE E3-Verletzung der Palette: dE00 9,04 zu '=')
   // BRAN — versengtes Leder, eigene warme Familie: : -> ; -> ?.
   // Er verlaesst damit die Holzrampe seiner eigenen Schmiede (q/j/Q/c/J) und
   // greift NICHT nach Rost 4/5/6 — Rost bleibt EXKLUSIV beim Torwaechter (M9,
-  // sonst stehen zwei rostbraune Maenner nebeneinander). Schritte 32,8 / 26,1
-  // = 1,26, Hue-Spanne 25,5 Grad, Saettigungsmaximum in der Mittelstufe.
-  ':': '#795a57', // Leder DUNKEL,  Rampe BRAN Stufe 1/3. L 98,9 | C*ab 14,0
-  ';': '#a77769', // Leder MITTEL,  Rampe BRAN Stufe 2/3 (Leitton). L 131,8 | C*ab 22,7
-  '?': '#b0988c', // Leder HELL,    Rampe BRAN Stufe 3/3. L 157,8 | C*ab 11,8
+  // sonst stehen zwei rostbraune Maenner nebeneinander). Genau diese Sperre
+  // ist der Grund, warum die Cast-Juror-Runde 10.09. hier nur die CHROMA-
+  // Haelfte ihres Rezepts umsetzen konnte (Begruendung im Block oben):
+  // L* je Stufe konstant (Abweichung <= 0,36), Chroma : +8,0 / ; +7,6 / ? +0,4,
+  // Drehung : +9,2 / ; +1,0 / ? +5,2 Grad. Schritte 32,1 / 27,9 = 1,15,
+  // Hue-Spanne 21,5 Grad, Saettigungsmaximum in der Mittelstufe.
+  ':': '#83564c', // Leder DUNKEL,  Rampe BRAN Stufe 1/3. L 98,3 | C*ab 22,0
+  ';': '#b0725f', // Leder MITTEL,  Rampe BRAN Stufe 2/3 (Leitton). L 130,4 | C*ab 30,4
+                  // (der Fackelkern-Deckel C*ab < 30,5 bindet hier und deckelt
+                  //  die Juror-Vorgabe "+8 bis +12" bei +7,6)
+  '?': '#b0998b', // Leder HELL,    Rampe BRAN Stufe 3/3. L 158,3 | C*ab 12,2
   // MILE — Kittel, eigene STAHLBLAU-Familie: @ -> [ -> ].
   // Bewusst weder Krapp (das ist Heddas Alleinstellung) noch Gruen (Gras-
   // Sperrliste) noch Leinen/Knochen O/B/b (die Naehe zu den Skeletten war der

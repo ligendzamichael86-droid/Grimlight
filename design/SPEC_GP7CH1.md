@@ -282,3 +282,18 @@ G-L Werkzeug-Artefakt (B-Befund 5): figuren_messung.mjs rampeVon
     waehrend A misst). Mile-Kopfoberkante Zeile 4 (Blase +4 px):
     Steckbrief-bedingt akzeptiert. Stale Kommentar ueber
     npc_torwaechter_0 beim Integrieren nachziehen.
+G-M **Cast-Juror-Runde Palette (10.09.):** Corm-Wolle &() um dL*
+    -16..-17,5 (Hue/Chroma gehalten, Gamut-bedingt C 28->22 bei &);
+    Bran-Leder :;? nur Chroma-Haelfte (+8/+7,6), Hue +9/+1/+5 Grad —
+    die Juror-Drehung 60-70 Grad ist E3-unvereinbar (warmer Sektor
+    von 2 j Q c 5 6 h Y V J besetzt, max 8,05 = die E6-Sperre "Bran
+    != Holz" in Zahlen); Hedda % Chroma 18->27,8 bei gleichem L.
+    DEKLARIERT: ')' haelt dE00 9,04 statt >=10 gegen '=' (Wasser-
+    Kammglanz; kommt nie neben Corm vor; Korridor-Maximum) — akzeptiert.
+G-N **dE00-Ersatzpfad-Lesart (aus dem Corm-Fall):** der dE00-Pfad
+    rechnet auf der Mittelfarbe der DOMINANTEN Materialflaeche (>=40
+    Texel) der Figur — nicht auf der Ganzkoerper-Mittelfarbe (die ist
+    bei mehrmaterialigen Figuren keine wahrnehmbare Groesse; Corm:
+    Kutte dE00 26,2 vs Ganzkoerper 22,3 gegen Weg). Das L-Fenster
+    bleibt auf Koerper-L (E5). Werkzeug-Nachzug: beide Werte
+    ausgeben, Gate auf Materialflaeche.
