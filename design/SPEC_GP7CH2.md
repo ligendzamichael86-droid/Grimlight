@@ -145,3 +145,151 @@ Kollaps im Lichtsystem = CH-4-Backlog; Perf-Schatten-Bake = Kampf-
 Slice; Grufthund Schwarz <= 30 (vier Laeufe); 2-Frame-Zusammensacken
 NICHT in CH-2 (waere Drawer-Aenderung enemies.js:618) — *_die-Pose
 wird nur besser gezeichnet.
+
+# REV 2 (11.09.2026, Fable) — ALLE 10 BLOCKER / 25 MAJOR / 25 MINOR EINGEARBEITET
+
+Quelle: design/GP7CH2_SPEC_REVIEW.md (beide Linsen; Fix-Formulierungen
+BINDEND, gelten woertlich wo hier nur der Entscheid steht). Rev 1
+bleibt Grundlage; die folgenden Entscheide ERSETZEN widersprechenden
+Rev-1-Text. Verifizierte Bauwege (Flash eager, eigene Decal-Keys,
+DIE_TIME byte-gleich, Rigs gruen) bleiben.
+
+## E-A ENGINE (Linse 1 B1/B2/B4, M1/M3/M4/M7, m1/m2/m5/m11/m12; Linse 2 M13/M16/m3/m6)
+E-A1 FLASH-QUELLE = FLANKEN-ZAEHLER in main.js (WeakMap je Entity, im
+ZEICHENPFAD dekrementiert, nie im Update-Zweig): Flanke hurtTimer/
+invulnTimer 0->>0 setzt 3 Frames (4 beim Kill). NIE `hurtTimer>0`
+direkt (Timer frieren im die/dead-Zweig ein — Leichen wuerden
+dauerblitzen). Ausschluesse woertlich: Gegner state!=='die', Spieler
+state!=='dead'. Sanktion: enemies.js:620 (1 Zeile), boss.js:324
+(1 Zeile), player.js:229-231 (ein dreizeiliger if-Block) — sonst
+nichts; Hund-Aufsteh-Blink :621-624 bleibt.
+E-A2 FLASH-MASKE GEOMETRISCH: Kontur-Texel (E5: opak mit >=1 trans-
+parentem 4er-Nachbarn oder Rahmenkante) -> '.', NICHT Tonfilter k/n
+(der brennt Held-Umriss 47 % weiss und laesst Loecher). Ton #fff8ea
+(L 248,5; >=12 L ueber JEDEM hellsten Koerperton, auch N 232,9).
+Zeichenreihenfolge Original->Kalt->Warm->Flash; eager nach main.js:131.
+E-A3 UNVERWUNDBARKEIT = eigene Vokabel: KALTE Maske (|-Familie
+#abdcda) im 6-Hz-Puls, Alpha nur diskret {0, 0,08, 0,12, 0,16}; warm
+= getroffen, kalt = geschuetzt. P0.f prueft beide Masken.
+E-A4 DECALS: buildWorld raeumt `decals` UND `lebendeVorFrame` in
+derselben Zeile; Frame-Diff NUR im else-Zweig direkt hinter
+updateEnemies (main.js:2079), nie ueber eine buildWorld-Grenze.
+KEINE Flip-Keys fuer Decals (Leiche hat keine Blickrichtung; bei
+Bedarf aus *_die_flip einfrieren) — Rig smoke:6396-6408 bleibt
+unangetastet. Decal-Draw setzt tintCfg.flash=0 explizit, respektiert
+window.__noTint, wird vor den Renderables gezeichnet; deklariert:
+Leichen behalten das Licht ihres Todesmoments (CH-4-Revision).
+*_decal unterscheidet sich MESSBAR von *_die (Texel-Diff >=30 % ODER
+>=2 Zeilen flacher ODER Wertabsenkung >=20 L). Uebergang lebend->
+*_die ist ein bewusster Ein-Frame-Schnitt (HITSTOP_K kaschiert).
+E-A5 DYNAMIK-BEWEIS: Gleichheit der WELTKOORDINATEN je Tick (player/
+enemies x,y aus Scratch-Sonde) — nicht der playerScreen()-Folge (die
+aendert sich absichtlich: Draw-Verlust 90->0). Additives Quelltext-
+Gate (Muster smoke:5294-5300): Flash-/Decal-Block enthaelt keine
+Zuweisung an hurtTimer|invulnTimer|dieTimer|hitstop|DIE_TIME;
+entities-Dateien behalten die Zuweisungszahl. Silhouetten-Verlust-
+Gate zaehlt nur Frames innerhalb hurtTimer>0 / invulnTimer>0.
+E-A6 Gate "Decals nach buildWorld = 0" MUSS von einer Kampfkarte MIT
+Kill nach DORF reisen (S6-Boot startet in DORF — waere falsch-gruen).
+E-A7 gp6_art_self bleibt bei 6 Rot (Symbolzeile seit CH-1 rot). Neue
+Sanktion §5(7): .tmp/shot_gfx6.py:309 Palettenregex um Symboltoene
+(misst sonst in einer 64-Ton-Welt); §5(3) = ZWEI Beruehrungen von
+check_gfx6_art (P0.e additiv "rust aus {16x18,20x18}", Rost-Commit
+verschaerft auf 20x18). main.js:131 (nicht 130).
+
+## E-B KUNST-GATES (Linse 1 B3/M2/M5/M8, m3/m4/m8/m9; Linse 2 B1/B2/B5/M1-M3/M5/M6/M14/M15/M17, m4/m5/m7/m10-m12)
+E-B1 LEITKLASSEN nach V2 WOERTLICH (>=80 % der BEGEHBAREN Zellen):
+GRAVEYARD = grass_*+dirt_patch* (85,4 %, L 47,0..56,3); CAT/FG/BOSS =
+stone_floor* (L 52,5). ALLES andere (Weg 11,6 %, water_v 14 %, bones,
+skull, stairs, floor_decal_*) = Minderheitsklasse. FENSTER (dL 25..90):
+Skelett/Hund 81,3..137,0; Ghul/Rost 78,0..142,5; Warden 77,5..142,5.
+WERTLEITER (Baender >=5 L getrennt): DUNKEL 85..100 (Hund, Rost) /
+MITTEL 105..113 (Ghul) / HELL 120..126 (Skelett) / GROSS 131..134
+(Warden). Koerper-L ist INNENRAUM-Groesse (E5, Kontur raus): P0.a
+gibt je Figur das Rampen-Mittel der Innenflaeche ohne k/n als
+Zeichner-Zielzahl aus (Skelett ~138..148, Hund ~95..108, Rost
+~92..108, Ghul ~108..122).
+E-B2 MINDERHEITS-KRITERIUM (Weg/Wasser): dL>=10 ODER dE00>=20 ODER
+(Rim>=12 % UND dL >= VORHER+15). P0.a weist dL/dE00 gegen Weg und
+Wasser je Gegner separat aus; Rot ist deklarationspflichtig (G-J).
+E-B3 PROFIL: FUSSBUENDIGE E5-Lesart (Teil C 0.3; Teil-A-Matrix ist
+KEIN Anker; P0.a reproduziert Teil C: 59,7/78,9/86,9/80,4/80,0/77,6).
+Ganze Figur <=60 fuer JEDES Gegner-Paar (auch innerfamiliaer);
+Fallback <=70 nur mit Nicht-Profil-Differenzierer am Squint-Bogen
+(G-K-Muster). Kopf-Schulter = oberste 6 BELEGTE Zeilen (Hund: 3):
+<=65 jedes Paar, <=55 innerhalb einer Familie; Warden-Paare ausge-
+nommen (Eichkoerper). Paarmenge = die 5 Gegner untereinander (nicht
+gegen Menschen). P0.a rechnet Ziel-Kopf-Schulter-Profile VOR und
+friert sie als Steckbriefzeile ein.
+E-B4 FAMILIEN (eingefroren): AUFRECHT-SCHMAL Skelett / AUFRECHT-
+MASSIG Ghul / AUFRECHT-BREIT Rostpanzer (20x18) / VIERBEINER Hund /
+GROSS Warden. Familie+Wertstufe nie beide gleich.
+E-B5 FLIP-NEUTRAL gilt fuer JEDES Gegner-Grid (alle werden gespiegelt,
+enemies.js:634-641): Halbseiten-L-Differenz <=6,5 L; Skelett M3-hart
+<=8,2. Rechenhilfe: ein Rampenschritt auf 9 Texeln = ~4 L Halbseite.
+E-B6 dE00 ZWISCHEN RAMPEN: im Band L601 80..95 ist >=12 arithmetisch
+unerreichbar (Maximum 10,7..11,7) -> dort gilt >=10 zu allen 78 UND
+>=8 innerhalb UND dokumentierte Nicht-Farb-Trennung (Familie +
+Wertstufe + Rim). P0.b rechnet die Reserve je Ziel-L VOR.
+E-B7 WALK: Silhouetten-Diff >=8 % UND Aenderung in >=2 getrennten
+Zeilenbaendern (heute Fuss-only) — zusaetzlich >=IST als Untergrenze;
+gilt fuer JEDES Posenpaar (P0.a misst hound_telegraph/leap/down und
+Warden-Grids nach).
+E-B8 Sekundaerstrukturen (Sehnen, Rippen, Nieten) >=2 Texel in einer
+Richtung; 1-px-Diagonalen zaehlen als Solitaer; Merkmal-Deckel nur
+Augen/Glut/Glanz namentlich. Umriss-Ersetzung deklariert: Gate =
+Schwarz k+n <=25 % (Hund <=30), nicht E5-Umriss/opak.
+E-B9 Rost/Warden Rim = '|' (b hat L 203,3 = '_' — im Grau unsichtbar).
+Rost 20x18: Schild-Landezone Spalten 13-18/Zeilen 4-15 bleibt zurueck-
+gesetzt; Ausladung in Spalten 0-2/17-19; Silhouetten-Nachweis in
+Seitenansicht MIT gezeichnetem Schild. Hund-Decal <=4 Zeilen, Band
+8-11. Decal allgemein <=6 Zeilen UND <=40 % der Basisgrid-Hoehe;
+Rahmen-% aufs eigene *_decal-Grid.
+E-B10 HORDEN-BOGEN-GATES: Trenn-Rate NEU = Grenzkanten nur zwischen
+MATERIAL-Texeln (k/n raus), getrennt bei Rim ODER |dL|>=25 ODER
+dE00>=20, Anker in P0.c neu gemessen (Teil-C-0 % ungueltig); Zweit-
+gate mittlere |dL| benachbarter Koerper-L >=15. Szenen-Schwarz <=26 %
+als KENNZAHL (gewichtetes Mittel; Hund-Ausnahme mitgerechnet). Decal-
+Bodenbedeckung: Gate GESTRICHEN (physisch max 3,75 %) -> Kennzahl
+<=4 % + Sichtpruefung "Schlachtfeld, nicht Teppich". SQUINT BLIND:
+Juror (nicht Zeichner) bekommt die Squint-Kacheln ohne Legende in
+Zufallsreihenfolge, Treffer nur bei Farbe UND Graustufe; Ziel 1x
+>=4/5, 6x 5/5.
+
+## E-C UMFANG + PALETTE (Linse 2 B3/B4/B6/M12, m13; Linse 1 m7/m10)
+E-C1 FUSSVOLK GESTRICHEN aus CH-2 (Backlog Kampf-Slice: eigene Rampe
++ Spawn dort). Grund: keine freie Bestandsrampe im Fenster ausser den
+CH-1-Menschenrampen (wuerde als Bran/Mile lesen) und kein Tonbudget.
+E-C2 VARIANTEN GESTRICHEN aus CH-2 (Backlog Kampf-Slice) — kein
+Budget, kein Gate, kein Bild. Elite-Overlay-Ideen bleiben Notiz.
+E-C3 PALETTE: x (Trank/Herz, C*ab 64) und f (fog_blob 234 Texel,
+GRAVEYARD fog:true, dE00 3,9 zu D) sind GESPERRT. Bedarf: Skelett-
+Knochen 3 + Ghul-Lumpen 2 + Hund 3 = 8 neue Symbol-Toene. Kandidaten
+" $ / < > { } (7, kollisionsfrei: einfach gequotete Grid-Literale,
+Legenden nur # . , = ~ -, Guards generisch) + `  (Backtick, mit
+Nachweis) = 8. Auflagen E3 + E-B6. JSON-Deliverables escapen `"`;
+nie RegExp-Zeichenklassen ueber Palettenschluessel.
+E-C4 SPERRLISTE ERGAENZT: kein Gegner fuehrt eine CH-1-Menschenrampe
+(!/%/G, &/(/), :/;/?, @/[/]) als dominante Flaeche; Hund zusaetzlich
+!= t/T/L/D (Katakomben-Stein) und != &/(/) (Corm) im Hex — Hund =
+KALT-GESAETTIGT Petrol hue 195..215, C*ab 24..30, EIGENE 3 Toene,
+ortsgetrennt zu Corm (DORF) deklariert; "kalt-neutral" entfaellt
+(existiert bei L 90..100 nicht). Blutakzente ueber r/R, nie x.
+E-C5 WARDEN = dritte Vollfigur des Passes? NEIN — Ausnahmeliste
+(deklariert): Rim flip-neutral '|' >=12 %, lueckenlose Kante, Sekun-
+daerbewegung Stoff, Koerper-L 131..134 (b-Anteil senken); AUSGESETZT
+fuer den Warden: Spiegelgleichheit, Solitaer, Konturtoene-Zahl
+(Eichkoerper, 9 Grids). Skelett/Ghul/Rost/Hund = Vollfiguren.
+E-C6 Referenz-Boegen nach design/referenz/gp7ch2/ (CH-1-Dateien bleiben).
+Horden-Bogen VORHER eingefroren: seed 12345, Roster 12 Skelett/8 Ghul/
+5 Hund/4 Rost/1 Warden, Kachelsatz stone_floor+_v1/_v2/_v3+_cracked
+Formel (tx*7+ty*11)%n, 320x180, Y-Sort y+aabb.h, Frame 0, Schatten wie
+Prototyp; Tafel C vorher/nachher 5-spaltig; sha256 je PNG.
+
+## E-D ABNAHME (Linse 2 M10)
+Michael-Auftrag NEU: "?god=1 durch die Fluestergruft bis zur Schluessel-
+kammer UND durch die Katakomben (3 Rost, keine Eliten): (1) sag mir bei
+JEDEM Gegner, den du siehst, welche Sorte das ist, BEVOR du drauf bist;
+(2) fuehlt sich Draufhauen jetzt nach etwas an, oder flackert es nur?"
+Deklariert: die 30er-Horde ist am Geraet nicht herstellbar (max 6-7
+gleichzeitig sichtbar) — ihr Beleg ist der Horden-Bogen.
