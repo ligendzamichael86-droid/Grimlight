@@ -1,0 +1,245 @@
+HORDEN-BOGEN VORHER — Legende (erzeugt von tools/horden_bogen.mjs, Rev 1)
+Spec: design/SPEC_GP7CH2.md Rev 2 E-C6 / E-B10 / E-A2 / E-B9,
+      design/GP7CH2_LANDKARTE_C_ZIELBILD.md Sec. 5, Review B5/M11/M15/m4/m7.
+Herkunft: gehaertet aus .tmp/gp7ch_ch2_sonde/horde.mjs + knaeuel.mjs.
+
+SCHALTER DIESES LAUFS
+  --etikett vorher   --tafel ALLE   --boden beide
+  --rim aus   --flash aus   --grau aus   --squintblind AN   --nurmessen aus
+
+EINGEFRORENE ANORDNUNG (Spec E-C6 — kein Schalter, Aenderung verschiebt ALLE Positionen)
+  seed 12345; Roster 12 skeleton / 8 ghoul / 5 hound / 4 rust / 1 warden; Frame 0 je Figur;
+  Kachelsatz Gruft = stone_floor + _v1/_v2/_v3 + _cracked, Formel (tx*7 + ty*11) % n;
+  Leinwand Tafel A/D 320x180, Tafel B 120x90, Tafel C 192x48;
+  Y-Sort nach y + aabb.h; Schattenprofile wie im Prototyp; kein Fussvolk (Spec E-C1).
+  Streuung: x = 20 + rnd()*(320-60), y = 24 + rnd()*(180-60), flip = rnd() < 0.5,
+  je Figur 3 Zieher, Typ-Reihenfolge wie im Roster (Review M11).
+
+TAFELN
+  A_feld           30 Gegner deterministisch gestreut (seed 12345), Y-sortiert, mit Weichschatten — die Spielsituation.
+  B_knaeuel        20 Gegner in 4 Reihen mit 9 px X-Abstand — erzwungener Ueberlapp, der Haertefall.
+  C_leiter         5 Gegner-Spalten (Roster-Reihenfolge, eingefroren) + Held als Massstab, fussbuendig.
+  D_schlachtfeld   30 Decals (Bodenbedeckung) + 10 lebende Gegner.
+
+BOEDEN (echte Kacheln, gekachelt — keine Flachfarbe)
+  gruft  L(Rec601) 50.38  stone_floor, stone_floor_v1, stone_floor_v2, stone_floor_v3, stone_floor_cracked  — CATACOMBS / FLUESTERGRUFT / BOSS_KAMMER (Leitklasse Gruft-Stein)
+  gras   L(Rec601) 49.89  grass_g5_00  — GRAVEYARD (Leitklasse GY-Gras)
+
+DARSTELLUNGEN  1x = Spielaufloesung; 6x = Nearest Neighbour x6;
+  squint = 1x per NN 50 % runter (Quelltexel 2x/2y), dann zurueck auf 1x-Mass und x6 —
+  deckungsgleich mit der 6x-Datei, zum pixelgenauen Uebereinanderlegen.
+  KEINE Beschriftung im Bild (kein Chrom, das die Messung verunreinigt oder den
+  Blindtest verraet) — die Anordnung steht unten und vollstaendig im Mess-JSON.
+
+SIMULATIONEN (deklariert — das ist KEINE Kunst und KEIN Engine-Code)
+  --rim   : oberster opaker Texel je Spalte + linkester je Zeile des dargestellten
+            Grids bekommt den kalten Rim-Ton '|' (L 205,1). Muster aus knaeuel.mjs
+            (dort Ton 1); Ton nach E-B9/Review m4, weil nur er im Graustufen-Squint
+            gegen 'b' (L 203,3) bestehen bleibt.
+  --flash : GEOMETRISCHE Kontur-Maske nach E-A2 — Kontur-Texel fallen aus der Maske,
+            geflasht wird der Innenraum mit #fff8ea bei Alpha 0.8. Der Umriss
+            bleibt schwarz. Getroffen werden 3 Figuren, gezogen aus einem
+            EIGENEN Strom (seed 12345), damit der Schalter die Aufstellung nicht
+            verschiebt. Der Prototyp-Flash (Vollflaeche inkl. Umriss) ist NICHT gebaut.
+  --grau  : Rec.601-Graustufen, NUR auf das fertige Bild. Die Messzahlen aendern sich
+            dadurch NICHT (sie rechnen auf den Farbtexeln).
+
+MESSGROESSEN (Spec E-B10) — vollstaendig mit Rohzaehlern im Mess-JSON
+  Tafel            Boden   Schwarz%  Ueberl%  Trenn%  Kanten  mdL(KL)  mdL(Bild)  Decal%  Flaeche%
+  A_feld          gruft     37.6    50.0    44.4      18    20.9    64.8     0.0     8.2
+  A_feld          gras      37.6    50.0    44.4      18    20.9    64.8     0.0     8.2
+  B_knaeuel       gruft     39.6   100.0    78.1      73    33.4    45.1     0.0    23.1
+  B_knaeuel       gras      39.6   100.0    78.1      73    33.4    45.1     0.0    23.1
+  C_leiter        gruft     31.1     0.0     -         0    20.9     -       0.0    15.3
+  C_leiter        gras      31.1     0.0     -         0    20.9     -       0.0    15.3
+  D_schlachtfeld  gruft     34.9    20.0     -         0    20.9    28.1     2.9     3.4
+  D_schlachtfeld  gras      34.9    20.0     -         0    20.9    28.1     2.9     3.4
+
+POSITIVKONTROLLE  Koerper-L (E5) ueber ALLE Grids gegen die Anker aus Teil A 1.1
+  skeleton  gemessen 162.6  Anker 162.5  Abweichung 0.06  (161 Texel)
+  ghoul     gemessen 96.2  Anker 96.0  Abweichung 0.17  (273 Texel)
+  hound     gemessen 75.6  Anker 75.4  Abweichung 0.15  (339 Texel)
+  rust      gemessen 112.8  Anker 112.7  Abweichung 0.15  (265 Texel)
+  warden    gemessen 139.2  Anker 139.5  Abweichung -0.29  (3176 Texel)
+
+ANORDNUNG JE TAFEL (Zeichenreihenfolge = Y-Sort; spaetere Figur liegt vorn)
+  A_feld  320x180  30 lebend, 0 Decal(s)
+     1  ghoul     ghoul_0        ox=172 oy= 29 16x20  flip=n fuss_y=49
+     2  hound     hound_0        ox= 84 oy= 40 16x12  flip=n fuss_y=52
+     3  skeleton  skeleton_0     ox=231 oy= 43 16x16  flip=j fuss_y=59
+     4  skeleton  skeleton_0     ox=224 oy= 45 16x16  flip=n fuss_y=61
+     5  hound     hound_0        ox=128 oy= 50 16x12  flip=n fuss_y=62
+     6  skeleton  skeleton_0     ox= 79 oy= 47 16x16  flip=n fuss_y=63
+     7  rust      rust_0         ox=267 oy= 46 16x18  flip=n fuss_y=64
+     8  hound     hound_0        ox= 20 oy= 58 16x12  flip=j fuss_y=70
+     9  skeleton  skeleton_0     ox=188 oy= 59 16x16  flip=n fuss_y=75
+    10  ghoul     ghoul_0        ox=232 oy= 55 16x20  flip=n fuss_y=75
+    11  rust      rust_0         ox=192 oy= 57 16x18  flip=j fuss_y=75
+    12  skeleton  skeleton_0     ox= 91 oy= 66 16x16  flip=n fuss_y=82
+    13  skeleton  skeleton_0     ox=101 oy= 67 16x16  flip=n fuss_y=83
+    14  ghoul     ghoul_0        ox=118 oy= 66 16x20  flip=j fuss_y=86
+    15  skeleton  skeleton_0     ox=244 oy= 72 16x16  flip=j fuss_y=88
+    16  ghoul     ghoul_0        ox=264 oy= 70 16x20  flip=j fuss_y=90
+    17  ghoul     ghoul_0        ox= 78 oy= 70 16x20  flip=n fuss_y=90
+    18  rust      rust_0         ox=163 oy= 76 16x18  flip=n fuss_y=94
+    19  ghoul     ghoul_0        ox=272 oy= 74 16x20  flip=n fuss_y=94
+    20  hound     hound_0        ox=144 oy= 89 16x12  flip=n fuss_y=101
+    21  rust      rust_0         ox=255 oy= 95 16x18  flip=j fuss_y=113
+    22  skeleton  skeleton_0     ox=277 oy=104 16x16  flip=n fuss_y=120
+    23  hound     hound_0        ox=178 oy=108 16x12  flip=j fuss_y=120
+    24  ghoul     ghoul_0        ox=123 oy=102 16x20  flip=j fuss_y=122
+    25  ghoul     ghoul_0        ox=239 oy=102 16x20  flip=j fuss_y=122
+    26  skeleton  skeleton_0     ox=140 oy=110 16x16  flip=j fuss_y=126
+    27  warden    warden_idle    ox=184 oy= 94 24x32  flip=j fuss_y=126
+    28  skeleton  skeleton_0     ox=233 oy=111 16x16  flip=j fuss_y=127
+    29  skeleton  skeleton_0     ox=245 oy=123 16x16  flip=j fuss_y=139
+    30  skeleton  skeleton_0     ox= 63 oy=128 16x16  flip=n fuss_y=144
+  B_knaeuel  120x90  20 lebend, 0 Decal(s)
+     1  skeleton  skeleton_0     ox=  8 oy= 12 16x16  flip=n fuss_y=28
+     2  skeleton  skeleton_0     ox= 17 oy= 12 16x16  flip=n fuss_y=28
+     3  skeleton  skeleton_0     ox= 26 oy= 12 16x16  flip=n fuss_y=28
+     4  skeleton  skeleton_0     ox= 35 oy= 12 16x16  flip=n fuss_y=28
+     5  skeleton  skeleton_0     ox= 44 oy= 12 16x16  flip=n fuss_y=28
+     6  ghoul     ghoul_0        ox= 12 oy= 22 16x20  flip=n fuss_y=42
+     7  ghoul     ghoul_0        ox= 21 oy= 22 16x20  flip=n fuss_y=42
+     8  ghoul     ghoul_0        ox= 30 oy= 22 16x20  flip=n fuss_y=42
+     9  ghoul     ghoul_0        ox= 39 oy= 22 16x20  flip=n fuss_y=42
+    10  ghoul     ghoul_0        ox= 48 oy= 22 16x20  flip=n fuss_y=42
+    11  rust      rust_0         ox= 15 oy= 40 16x18  flip=n fuss_y=58
+    12  rust      rust_0         ox= 24 oy= 40 16x18  flip=n fuss_y=58
+    13  rust      rust_0         ox= 33 oy= 40 16x18  flip=n fuss_y=58
+    14  rust      rust_0         ox= 42 oy= 40 16x18  flip=n fuss_y=58
+    15  rust      rust_0         ox= 51 oy= 40 16x18  flip=n fuss_y=58
+    16  skeleton  skeleton_0     ox= 17 oy= 54 16x16  flip=n fuss_y=70
+    17  skeleton  skeleton_0     ox= 26 oy= 54 16x16  flip=n fuss_y=70
+    18  skeleton  skeleton_0     ox= 35 oy= 54 16x16  flip=n fuss_y=70
+    19  skeleton  skeleton_0     ox= 44 oy= 54 16x16  flip=n fuss_y=70
+    20  skeleton  skeleton_0     ox= 53 oy= 54 16x16  flip=n fuss_y=70
+  C_leiter  192x48  6 lebend, 0 Decal(s)
+     1  skeleton  skeleton_0     ox=  8 oy= 24 16x16  flip=n fuss_y=40
+     2  ghoul     ghoul_0        ox= 40 oy= 20 16x20  flip=n fuss_y=40
+     3  hound     hound_0        ox= 72 oy= 28 16x12  flip=n fuss_y=40
+     4  rust      rust_0         ox=104 oy= 22 16x18  flip=n fuss_y=40
+     5  warden    warden_idle    ox=132 oy=  8 24x32  flip=n fuss_y=40
+     6  held      player_down_0  ox=168 oy= 16 16x24  flip=n fuss_y=40
+  D_schlachtfeld  320x180  10 lebend, 30 Decal(s)
+     1  rust      rust_0         ox= 21 oy= 61 16x18  flip=n fuss_y=79
+     2  hound     hound_0        ox=228 oy= 73 16x12  flip=j fuss_y=85
+     3  ghoul     ghoul_0        ox= 82 oy= 72 16x20  flip=n fuss_y=92
+     4  skeleton  skeleton_0     ox= 67 oy= 90 16x16  flip=n fuss_y=106
+     5  skeleton  skeleton_0     ox=242 oy= 91 16x16  flip=n fuss_y=107
+     6  skeleton  skeleton_0     ox=227 oy=104 16x16  flip=j fuss_y=120
+     7  ghoul     ghoul_0        ox=100 oy=121 16x20  flip=j fuss_y=141
+     8  warden    warden_idle    ox=233 oy=111 24x32  flip=n fuss_y=143
+     9  ghoul     ghoul_0        ox= 41 oy=130 16x20  flip=j fuss_y=150
+    10  skeleton  skeleton_0     ox=224 oy=141 16x16  flip=j fuss_y=157
+    Decals (flach, ohne Schatten, vor den Lebenden gezeichnet):
+    D 1  ghoul     ghoul_die      ox=172 oy= 29 flip=n
+    D 2  hound     hound_die      ox= 84 oy= 40 flip=n
+    D 3  skeleton  skeleton_die   ox=231 oy= 43 flip=j
+    D 4  skeleton  skeleton_die   ox=224 oy= 45 flip=n
+    D 5  hound     hound_die      ox=128 oy= 50 flip=n
+    D 6  skeleton  skeleton_die   ox= 79 oy= 47 flip=n
+    D 7  rust      rust_die       ox=267 oy= 46 flip=n
+    D 8  hound     hound_die      ox= 20 oy= 58 flip=j
+    D 9  skeleton  skeleton_die   ox=188 oy= 59 flip=n
+    D10  ghoul     ghoul_die      ox=232 oy= 55 flip=n
+    D11  rust      rust_die       ox=192 oy= 57 flip=j
+    D12  skeleton  skeleton_die   ox= 91 oy= 66 flip=n
+    D13  skeleton  skeleton_die   ox=101 oy= 67 flip=n
+    D14  ghoul     ghoul_die      ox=118 oy= 66 flip=j
+    D15  skeleton  skeleton_die   ox=244 oy= 72 flip=j
+    D16  ghoul     ghoul_die      ox=264 oy= 70 flip=j
+    D17  ghoul     ghoul_die      ox= 78 oy= 70 flip=n
+    D18  rust      rust_die       ox=163 oy= 76 flip=n
+    D19  ghoul     ghoul_die      ox=272 oy= 74 flip=n
+    D20  hound     hound_die      ox=144 oy= 89 flip=n
+    D21  rust      rust_die       ox=255 oy= 95 flip=j
+    D22  skeleton  skeleton_die   ox=277 oy=104 flip=n
+    D23  hound     hound_die      ox=178 oy=108 flip=j
+    D24  ghoul     ghoul_die      ox=123 oy=102 flip=j
+    D25  ghoul     ghoul_die      ox=239 oy=102 flip=j
+    D26  skeleton  skeleton_die   ox=140 oy=110 flip=j
+    D27  warden    warden_die     ox=184 oy= 94 flip=j
+    D28  skeleton  skeleton_die   ox=233 oy=111 flip=j
+    D29  skeleton  skeleton_die   ox=245 oy=123 flip=j
+    D30  skeleton  skeleton_die   ox= 63 oy=128 flip=n
+
+DEKLARATION DECALS: es gibt heute KEIN einziges *_decal-Grid. Tafel D zeichnet
+  ersatzweise die *_die-Grids als PLATZHALTER. Die Bodenbedeckung ist damit eine
+  OBERGRENZE (ein echtes Decal ist flacher, <= 6 Zeilen, E-B9). Der Warden bekommt
+  laut Spec Sec.8 gar kein Decal — im Nachher-Lauf faellt seine Leiche ersatzlos weg,
+  aus 30 Platzhaltern werden 29 Decals.
+
+DATEIEN (Mass, Bytes, sha256)
+  horden_bogen_vorher_A_feld_gruft_1x.png                    320x 180      6554 B  e7728310bc80c9843ebc9b8fe77baf4ef83d53118deaaea9f85f3cc570fb5f63
+  horden_bogen_vorher_A_feld_gruft_6x.png                   1920x1080     52990 B  46454acae0944215dd5a91f65c395698255a86a9560e7128b531fd7cee6ca81f
+  horden_bogen_vorher_A_feld_gruft_squint.png               1920x1080     44392 B  5d09088588afe663c6a63ce83b2907cf25846dd89b25f9f584a7d6493fa12ccb
+  horden_bogen_vorher_A_feld_gras_1x.png                     320x 180      5336 B  13d75d5cb2474dc5d0dd3929ba9b183e81ec25b2bcb11f201be63ce768f2d765
+  horden_bogen_vorher_A_feld_gras_6x.png                    1920x1080     41473 B  353d1860e4456930542fcd33c3e0feb5e11b6f6bb674f1e7a6787044bad1f41b
+  horden_bogen_vorher_A_feld_gras_squint.png                1920x1080     33412 B  8f56209dd6fe4e2701c918af12ac1a38e15020575ac23e418ce91a0d97b722d4
+  horden_bogen_vorher_B_knaeuel_gruft_1x.png                 120x  90      1800 B  e22bc6b4ca533ebe5f75794350b2b5a9f1b046acb468fb1c7bcc285b303513b5
+  horden_bogen_vorher_B_knaeuel_gruft_6x.png                 720x 540     10822 B  0edb032faa6a22532c941e433515c8823ce9197b8e29bb92654b275ce58eca01
+  horden_bogen_vorher_B_knaeuel_gruft_squint.png             720x 540      8830 B  9514e463108c720dfbdd04ff011d4d67c650359e0e69a6d34c8c7aecc3ff8b13
+  horden_bogen_vorher_B_knaeuel_gras_1x.png                  120x  90      1234 B  d383a1dcaabde4336e70fcd1a85921fe8feb6fb3534103c2084f87415e614ee7
+  horden_bogen_vorher_B_knaeuel_gras_6x.png                  720x 540      8600 B  645c4e7a0f1b7cdf7122714e7c70bcf9847fe021e90048d2cb5309b097e0e676
+  horden_bogen_vorher_B_knaeuel_gras_squint.png              720x 540      7312 B  787786fc33433cfa45a9bcccbb0a30fcad89488863b58907e6b8208dac6b38a6
+  horden_bogen_vorher_C_leiter_gruft_1x.png                  192x  48      2318 B  5365da0b441ceaeb41ff2ddb19c3c1a3d9464fa7b9d2e164876f3c0f9b7af358
+  horden_bogen_vorher_C_leiter_gruft_6x.png                 1152x 288     10314 B  83d49806d03a7b27985a5ee058d84fef7735f0be9e9578f741faf4029408dfbf
+  horden_bogen_vorher_C_leiter_gruft_squint.png             1152x 288      8415 B  e24fe6136cbc7dce4ff1bf362c49a3525d918f89d88fb5ba111f7074126e77ac
+  horden_bogen_vorher_C_leiter_gras_1x.png                   192x  48      1865 B  1e046ce1cd7707fa0944f8eae07bcc15f5bc73be9c171a258999196370f6babf
+  horden_bogen_vorher_C_leiter_gras_6x.png                  1152x 288      8444 B  d44fd3a20e0a352cc89d4204bddcbbd48d04c5c5caaca562ba1dd8d048f37f63
+  horden_bogen_vorher_C_leiter_gras_squint.png              1152x 288      6883 B  0f5fb2f6b8d2f6973ffaa397615be7592a820359bbc9afb5aea315bf09447ea0
+  horden_bogen_vorher_D_schlachtfeld_gruft_1x.png            320x 180      5618 B  c4ec67fa7f62217781a95004bd65ebc52f0e531a7fad5d6d5d4e271459efef6d
+  horden_bogen_vorher_D_schlachtfeld_gruft_6x.png           1920x1080     50143 B  28362e5ff225e833c0bac02ce0ffdf6cad1fad60d83e80cf4b464aa8527aa070
+  horden_bogen_vorher_D_schlachtfeld_gruft_squint.png       1920x1080     42389 B  ec97c12b9369f6647817c031da3c25cfecc62e2a2a5170aec575354a4799a571
+  horden_bogen_vorher_D_schlachtfeld_gras_1x.png             320x 180      4484 B  ce15d8ae9454d875b7e179109ea1370287396c64e942b3971909a1d6e8ba5d97
+  horden_bogen_vorher_D_schlachtfeld_gras_6x.png            1920x1080     38103 B  8d0a3ea45446acb9e64f94c96e658b1f23916268c63940023c162860a1dc486c
+  horden_bogen_vorher_D_schlachtfeld_gras_squint.png        1920x1080     30777 B  f0f74d37b4008b097b6a70752c9680dbfd018f90d4da3a78603bdb39b85438aa
+  horden_blind_vorher_gruft_farbe_1x_01.png                   32x  48       341 B  bc50969771af34e46d26256c056257ec1fbbd1884c790f0dc05994969a4dac80
+  horden_blind_vorher_gruft_farbe_6x_01.png                  192x 288      1264 B  2ea0457837772a52f264515d60827e3fc98ef689526efce3eb32d5fa71d7a0eb
+  horden_blind_vorher_gruft_grau_1x_01.png                    32x  48       320 B  bfc6aeb892ddffe7381436f7ddd44aa6bcce4b66c35a688c28babb49692edc1b
+  horden_blind_vorher_gruft_grau_6x_01.png                   192x 288      1236 B  056daee21334a4337de908e67978ed3bc00ad26262d5086f5a80c310a4fbb1cb
+  horden_blind_vorher_gruft_farbe_1x_02.png                   32x  48       352 B  b0e1c4bf0a63a432de871597c6aae979f42cdee6715b900f98918767f1ae38fd
+  horden_blind_vorher_gruft_farbe_6x_02.png                  192x 288      1298 B  3b23cb03cf81654cd5539ff2b7293d7d16bb4db58565eaad0f22248a1c086f00
+  horden_blind_vorher_gruft_grau_1x_02.png                    32x  48       333 B  eb5e51461a22044b22c95ba79a737941339b9e4ef2dc46749b2bc97b296ed5ee
+  horden_blind_vorher_gruft_grau_6x_02.png                   192x 288      1275 B  90a11fd6588999a367a5f7db31f1639b230c57d307772c2aaff987f59c20f916
+  horden_blind_vorher_gruft_farbe_1x_03.png                   32x  48       497 B  0268168ecd4d63053bba47edd20636b3cfd3921c8ef07d85670bc8b8cd6ae45f
+  horden_blind_vorher_gruft_farbe_6x_03.png                  192x 288      1552 B  f72fb51d98bb51249a6a87ea4fc7ff387b7cf553f8ad9a7722deaa88d41c1713
+  horden_blind_vorher_gruft_grau_1x_03.png                    32x  48       463 B  1ef03119ae47b57ddd3d72a1441e38da9e78387bc879dfcbe7d4e9bde193f17d
+  horden_blind_vorher_gruft_grau_6x_03.png                   192x 288      1517 B  2c85f19510f3eb02ee1558f7656ad9c5b951840c1e11afcd7229c92ee010adf1
+  horden_blind_vorher_gruft_farbe_1x_04.png                   32x  48       358 B  d8c6484c8e3b2b093b5e0a4438f8e41c7c7d77134cee5aeaccc488e92eba13d3
+  horden_blind_vorher_gruft_farbe_6x_04.png                  192x 288      1334 B  3fb483cac8b8e437b7ff8b05e1eec07fe56add8c7955e5dd5a4d550872f733de
+  horden_blind_vorher_gruft_grau_1x_04.png                    32x  48       332 B  7fb0dada7594e975fde70c057d755f34b3ffde2dc06fdf175bd2257d75f01071
+  horden_blind_vorher_gruft_grau_6x_04.png                   192x 288      1304 B  9671267aef4e0999422b10e63dd2080a7813b2a8369e703c5fc3b11ae1b32367
+  horden_blind_vorher_gruft_farbe_1x_05.png                   32x  48       386 B  952d57a1d10a8c241e8a5c01f567f1b923ded9ff63dca92f5d4487e930a80174
+  horden_blind_vorher_gruft_farbe_6x_05.png                  192x 288      1355 B  0859450031f21011081a7e776c6c7bf1a53f7b41b988cab3fe5c3bc3c029e09f
+  horden_blind_vorher_gruft_grau_1x_05.png                    32x  48       362 B  b28ad2b60ca049e78e26eb8cfc6479adc367e70c6c9a0f4c6ddd5caef47a091d
+  horden_blind_vorher_gruft_grau_6x_05.png                   192x 288      1328 B  0b550f159a87b913f72e16c006a7655200853e5cd9e5417475676ef4a2a65d7a
+  horden_blind_vorher_gras_farbe_1x_01.png                    32x  48       266 B  172f3a967533b1d8a5c7297086167e10d6a3812761075afee0171adebba189b0
+  horden_blind_vorher_gras_farbe_6x_01.png                   192x 288      1169 B  ac7c68c85c72ae635867572caaeb291fa4da6f408ca56eec5931ac3510941408
+  horden_blind_vorher_gras_grau_1x_01.png                     32x  48       254 B  762b274fce13677837113bff7cbfe7452026eb6748afefab9df99b4ac8291627
+  horden_blind_vorher_gras_grau_6x_01.png                    192x 288      1148 B  91281df2b89634a1e6ac005d2a5e0fd8f9386ec27eb27d955369690e3f8e6744
+  horden_blind_vorher_gras_farbe_1x_02.png                    32x  48       259 B  14ef00f747f74fbdc18d49dddb03ec30567e9efd696afafb543b0c1a789810da
+  horden_blind_vorher_gras_farbe_6x_02.png                   192x 288      1138 B  24d3ffc73b685c7ed574e7665b39e955c96da82b878f4f3bab99de774539741c
+  horden_blind_vorher_gras_grau_1x_02.png                     32x  48       250 B  087e9857abdaf9f296ed173a610d30d769cd8e6ebb6b8f6d9aeaa592d0fdd3e3
+  horden_blind_vorher_gras_grau_6x_02.png                    192x 288      1116 B  281b91a09e7d45c4669feab6b7d1d6429c493e1decf267c452b658e2e4f6d601
+  horden_blind_vorher_gras_farbe_1x_03.png                    32x  48       272 B  59353082367e0b0d953e9c4fbec83fca6e5c833e13619bc76a6683b88d17f716
+  horden_blind_vorher_gras_farbe_6x_03.png                   192x 288      1219 B  dc17c7a663ab581e18a716ae1ed3c50c7c772c947009b63e26c6c6e8641101b5
+  horden_blind_vorher_gras_grau_1x_03.png                     32x  48       261 B  347135d23c13317f0166c277b42bf92cf54acb914013ed712a3a64ad349de587
+  horden_blind_vorher_gras_grau_6x_03.png                    192x 288      1190 B  3f63d6a0f8665e33c7aa82cefb4d1ad6ac66603efae6f20a87f708827586507c
+  horden_blind_vorher_gras_farbe_1x_04.png                    32x  48       297 B  b47156b94be26b83c7a2005a3d22d83e51605f50eb2e8f827a61e0b49e764f37
+  horden_blind_vorher_gras_farbe_6x_04.png                   192x 288      1231 B  1057ade994d8270e666d37886fee4dc7ab91ce3ce1f3c21cf1095cfbb7e6cf7d
+  horden_blind_vorher_gras_grau_1x_04.png                     32x  48       284 B  3c80b36eab75d1cec5c7829bbe52ca524f0a7717bbeac04c64b6a8902bc43171
+  horden_blind_vorher_gras_grau_6x_04.png                    192x 288      1207 B  ed988882035e7eac8db337efc03b71d91adce8a86443c8471f10b1fcb83104f5
+  horden_blind_vorher_gras_farbe_1x_05.png                    32x  48       447 B  b2fb43ae7f10150fa77fe482a0db92d068b43b9986b80c6564c3419a7efb6121
+  horden_blind_vorher_gras_farbe_6x_05.png                   192x 288      1456 B  0a34154f62b81505a8b274b7bb3f2e1c82a1300a2f5493974b2af08ae4b5a96f
+  horden_blind_vorher_gras_grau_1x_05.png                     32x  48       419 B  3cda077116c4de04f4fb5beb32bfacc74cd264bd77ccd7a0cc6ced86edf663f1
+  horden_blind_vorher_gras_grau_6x_05.png                    192x 288      1424 B  f8895806096c758b1e5f24739e7b8764d972c6cc2985fb58dee1e1dcd10898c8
+  horden_bogen_vorher_messung.json                         (Mess-JSON)
+
+PROVENIENZ (sha256 der Art-Quellen, aus denen dieser Bogen gerendert wurde)
+  game/js/art/sprites_figuren.js     729e68853ac20be85c0dd81ebb071203f7675f159b918e21246ebb16dce11438
+  game/js/art/sprites_tiles.js       46c26c767476999deca74ff88c026e8a007fbe7a4057fda62f8488bdecfcca09
+  game/js/art/sprites.js             41d6b7a90c9bdd057e10c4924a460ef8fdd5a665a8b36237642928d4fe81284d
+  game/js/art/palette.js             f89ff2e3967c91f785ad8ec468d43be4cbba3b7dc7b91362b37acc438375e46e

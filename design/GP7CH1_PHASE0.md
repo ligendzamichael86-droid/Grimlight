@@ -37,6 +37,14 @@ L-Fenster ODER dE00-Pfad nach P0.d-Tabelle.
 
 ### Die 14 neuen Toene (P0.b, nach Fixer-Korrektur '^')
 
+**ERRATUM 12.09.2026 (Fable, aus GP7-CH-2 P0.b):** Diese Tabelle ist NICHT
+mehr der Auslieferungsstand. Die Cast-Jury-Runde vom 10.09.2026 hat sieben
+Toene neu gerechnet; massgeblich ist game/js/art/palette.js (Kommentarblock der Jury-Runde ab
+~361; die Eintraege selbst auf Zeile 447 (%), 459/461/463 (& ( )), 474/475/478 (: ; ?)):
+& #005356 (L601 58,5) · ( #1d6862 (80,9) · ) #4d7468 (103,0) · : #83564c ·
+; #b0725f · ? #b0998b · % #ae7189. Corm ist damit rund 40 L601 dunkler als
+hier notiert. Siehe design/GP7CH2_PHASE0.md R-C4.
+
 | Zeichen | Hex | L | C*ab | Hue | Rolle |
 |---|---|---|---|---|---|
 | ! | #5b3438 | 64.1 | 18.8 | 15.5 | Hedda — Krapp-Wolle, G-Rampe geschlossen (Schatten WARM Richtung Braunrot, E3/M12) |

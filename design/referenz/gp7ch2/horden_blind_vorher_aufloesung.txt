@@ -1,0 +1,17 @@
+SQUINT-BLIND AUFLOESUNG (vorher) — NUR FUER DEN JUROR, NACH dem Benennen oeffnen.
+Spec: design/SPEC_GP7CH2.md Rev 2 E-B10 ("SQUINT BLIND"), Review m7.
+Verfahren: der Juror sieht horden_blind_*_<01..05>.png OHNE Legende, in FARBE und in
+GRAUSTUFE, bei 1x und 6x, und benennt je Kachel die Gegner-Sorte. Ein Typ gilt als
+benannt, wenn er in Farbe UND Graustufe getroffen wird. Ziel: 1x >= 4/5, 6x 5/5.
+Der Juror ist NICHT der Zeichner.
+
+  gruft  Kachel 01  =  skeleton  (skeleton_0)
+  gruft  Kachel 02  =  hound     (hound_0)
+  gruft  Kachel 03  =  warden    (warden_idle)
+  gruft  Kachel 04  =  ghoul     (ghoul_0)
+  gruft  Kachel 05  =  rust      (rust_0)
+  gras   Kachel 01  =  hound     (hound_0)
+  gras   Kachel 02  =  skeleton  (skeleton_0)
+  gras   Kachel 03  =  ghoul     (ghoul_0)
+  gras   Kachel 04  =  rust      (rust_0)
+  gras   Kachel 05  =  warden    (warden_idle)

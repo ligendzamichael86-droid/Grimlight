@@ -1,0 +1,2621 @@
+{
+ "werkzeug": "tools/horden_bogen.mjs",
+ "werkzeug_rev": 1,
+ "etikett": "vorher",
+ "eingefroren": {
+  "seed": 12345,
+  "roster": [
+   {
+    "typ": "skeleton",
+    "n": 12,
+    "frame0": "skeleton_0",
+    "aabb": [
+     12,
+     14
+    ]
+   },
+   {
+    "typ": "ghoul",
+    "n": 8,
+    "frame0": "ghoul_0",
+    "aabb": [
+     14,
+     14
+    ]
+   },
+   {
+    "typ": "hound",
+    "n": 5,
+    "frame0": "hound_0",
+    "aabb": [
+     14,
+     12
+    ]
+   },
+   {
+    "typ": "rust",
+    "n": 4,
+    "frame0": "rust_0",
+    "aabb": [
+     14,
+     16
+    ]
+   },
+   {
+    "typ": "warden",
+    "n": 1,
+    "frame0": "warden_idle",
+    "aabb": [
+     20,
+     24
+    ]
+   }
+  ],
+  "kachelformel": "(tx*7 + ty*11) % n",
+  "leinwand_A": [
+   320,
+   180
+  ],
+  "leinwand_B": [
+   120,
+   90
+  ],
+  "leinwand_D": [
+   320,
+   180
+  ],
+  "y_sort": "y + aabb.h",
+  "schattenprofile": "wie Prototyp horde.mjs",
+  "decal_platzhalter": true,
+  "decal_keys": [
+   {
+    "typ": "skeleton",
+    "key": "skeleton_die"
+   },
+   {
+    "typ": "ghoul",
+    "key": "ghoul_die"
+   },
+   {
+    "typ": "hound",
+    "key": "hound_die"
+   },
+   {
+    "typ": "rust",
+    "key": "rust_die"
+   },
+   {
+    "typ": "warden",
+    "key": "warden_die"
+   }
+  ]
+ },
+ "formeln": {
+  "schwarz_sprenkel_anteil": "k/n-Texel / alle opaken Texel aller LEBENDEN Figuren der Szene (auch verdeckte), in Prozent. Das IST zugleich die in E-B10 geforderte Szenen-Schwarz-KENNZAHL (gewichtetes Mittel ueber die Typen; die Hund-Ausnahme <= 30 ist mitgerechnet, siehe je_typ).",
+  "ueberlapp_rate": "Anteil lebender Figuren, die mindestens 1 Texelposition mit einer anderen teilen (Kennzahl, kein Gate)",
+  "trennrate": "Grenzkante = 4er-Nachbarpaar sichtbarer Texel ZWEIER VERSCHIEDENER Figuren, BEIDE Material (k/n raus). Getrennt bei Rim ODER |dL| >= 25 ODER dE00 >= 20. Decal-Texel zaehlen nicht mit.",
+  "mittlere_dL_benachbarter_koerperL": "LESART 1 (Leiternachbarn): Koerper-L (E5: Kontur + Rim-Toene raus) je Typ des Frame-0-Grids, aufsteigend sortiert, Mittel der |dL| benachbarter Stufen (Zweitgate E-B10, Ziel >= 15)",
+  "mittlere_dL_bildnachbarn": "LESART 2 (Bildnachbarn, weil E-B10 \"benachbarte Typen\" nicht definiert): Mittel der |dL| ueber alle Paare lebender Figuren VERSCHIEDENEN Typs, die sich im Bild ueberschneiden oder 4er-beruehren",
+  "decal_bodenbedeckung": "sichtbare Decal-Texel / Bildflaeche in Prozent (Kennzahl; Gate gestrichen, Review M15)",
+  "flaechenanteil": "belegte Texelpositionen aller lebenden Figuren / Bildflaeche in Prozent (Kennzahl fuer die Perf-Abschaetzung)",
+  "koerper_L_e5": "Mittel der Rec.601-Luma ueber opake Texel OHNE Kontur (E5) und OHNE Rim-Toene — Formel aus .tmp/gp7ch_p0/figuren_messung.mjs:922"
+ },
+ "positivkontrolle_koerperL_teilA": [
+  {
+   "typ": "skeleton",
+   "gemessen": 162.6,
+   "anker_teilA": 162.5,
+   "abweichung": 0.06,
+   "texel": 161
+  },
+  {
+   "typ": "ghoul",
+   "gemessen": 96.2,
+   "anker_teilA": 96,
+   "abweichung": 0.17,
+   "texel": 273
+  },
+  {
+   "typ": "hound",
+   "gemessen": 75.6,
+   "anker_teilA": 75.4,
+   "abweichung": 0.15,
+   "texel": 339
+  },
+  {
+   "typ": "rust",
+   "gemessen": 112.8,
+   "anker_teilA": 112.7,
+   "abweichung": 0.15,
+   "texel": 265
+  },
+  {
+   "typ": "warden",
+   "gemessen": 139.2,
+   "anker_teilA": 139.5,
+   "abweichung": -0.29,
+   "texel": 3176
+  }
+ ],
+ "boeden": [
+  {
+   "name": "gruft",
+   "keys": [
+    "stone_floor",
+    "stone_floor_v1",
+    "stone_floor_v2",
+    "stone_floor_v3",
+    "stone_floor_cracked"
+   ],
+   "L": 50.38,
+   "ort": "CATACOMBS / FLUESTERGRUFT / BOSS_KAMMER (Leitklasse Gruft-Stein)"
+  },
+  {
+   "name": "gras",
+   "keys": [
+    "grass_g5_00"
+   ],
+   "L": 49.89,
+   "ort": "GRAVEYARD (Leitklasse GY-Gras)"
+  }
+ ],
+ "varianten": {
+  "rim": false,
+  "flash": false,
+  "grau": false,
+  "blind": true
+ },
+ "tafeln": [
+  {
+   "tafel": "A_feld",
+   "boden": "gruft",
+   "leinwand": [
+    320,
+    180
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 30,
+   "schwarz_sprenkel_anteil_pct": 37.58,
+   "schwarz_texel": 1889,
+   "gegner_texel": 5027,
+   "ueberlapp_rate_pct": 50,
+   "ueberlapp_texel": 317,
+   "trennrate_pct": 44.44,
+   "trennrate_grenzkanten": 18,
+   "trennrate_getrennt": 8,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 8,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": 47.64,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 64.78,
+   "mittlere_dL_bildnachbarn_paare": 6,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 8.18,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 8,
+     "texel": 1624,
+     "schwarz": 616,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "hound",
+     "figuren": 5,
+     "texel": 555,
+     "schwarz": 225,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 4,
+     "texel": 712,
+     "schwarz": 320,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 12,
+     "texel": 1608,
+     "schwarz": 600,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "A_feld",
+   "boden": "gras",
+   "leinwand": [
+    320,
+    180
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 30,
+   "schwarz_sprenkel_anteil_pct": 37.58,
+   "schwarz_texel": 1889,
+   "gegner_texel": 5027,
+   "ueberlapp_rate_pct": 50,
+   "ueberlapp_texel": 317,
+   "trennrate_pct": 44.44,
+   "trennrate_grenzkanten": 18,
+   "trennrate_getrennt": 8,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 8,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": 47.64,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 64.78,
+   "mittlere_dL_bildnachbarn_paare": 6,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 8.18,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 8,
+     "texel": 1624,
+     "schwarz": 616,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "hound",
+     "figuren": 5,
+     "texel": 555,
+     "schwarz": 225,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 4,
+     "texel": 712,
+     "schwarz": 320,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 12,
+     "texel": 1608,
+     "schwarz": 600,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "B_knaeuel",
+   "boden": "gruft",
+   "leinwand": [
+    120,
+    90
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 20,
+   "schwarz_sprenkel_anteil_pct": 39.6,
+   "schwarz_texel": 1285,
+   "gegner_texel": 3245,
+   "ueberlapp_rate_pct": 100,
+   "ueberlapp_texel": 755,
+   "trennrate_pct": 78.08,
+   "trennrate_grenzkanten": 73,
+   "trennrate_getrennt": 57,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 57,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": 46.59,
+   "mittlere_dL_benachbarter_koerperL": 33.37,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 45.1,
+   "mittlere_dL_bildnachbarn_paare": 31,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "skeleton",
+     "dL": 49.22
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 23.06,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 5,
+     "texel": 1015,
+     "schwarz": 385,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "rust",
+     "figuren": 5,
+     "texel": 890,
+     "schwarz": 400,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 10,
+     "texel": 1340,
+     "schwarz": 500,
+     "schwarz_pct": 37.31
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "B_knaeuel",
+   "boden": "gras",
+   "leinwand": [
+    120,
+    90
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 20,
+   "schwarz_sprenkel_anteil_pct": 39.6,
+   "schwarz_texel": 1285,
+   "gegner_texel": 3245,
+   "ueberlapp_rate_pct": 100,
+   "ueberlapp_texel": 755,
+   "trennrate_pct": 78.08,
+   "trennrate_grenzkanten": 73,
+   "trennrate_getrennt": 57,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 57,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": 46.59,
+   "mittlere_dL_benachbarter_koerperL": 33.37,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 45.1,
+   "mittlere_dL_bildnachbarn_paare": 31,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "skeleton",
+     "dL": 49.22
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 23.06,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 5,
+     "texel": 1015,
+     "schwarz": 385,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "rust",
+     "figuren": 5,
+     "texel": 890,
+     "schwarz": 400,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 10,
+     "texel": 1340,
+     "schwarz": 500,
+     "schwarz_pct": 37.31
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "C_leiter",
+   "boden": "gruft",
+   "leinwand": [
+    192,
+    48
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 6,
+   "schwarz_sprenkel_anteil_pct": 31.09,
+   "schwarz_texel": 439,
+   "gegner_texel": 1412,
+   "ueberlapp_rate_pct": 0,
+   "ueberlapp_texel": 0,
+   "trennrate_pct": null,
+   "trennrate_grenzkanten": 0,
+   "trennrate_getrennt": 0,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 0,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": null,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": null,
+   "mittlere_dL_bildnachbarn_paare": 0,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 15.32,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 1,
+     "texel": 203,
+     "schwarz": 77,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "held",
+     "figuren": 1,
+     "texel": 258,
+     "schwarz": 59,
+     "schwarz_pct": 22.87
+    },
+    {
+     "typ": "hound",
+     "figuren": 1,
+     "texel": 111,
+     "schwarz": 45,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 1,
+     "texel": 178,
+     "schwarz": 80,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 1,
+     "texel": 134,
+     "schwarz": 50,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "C_leiter",
+   "boden": "gras",
+   "leinwand": [
+    192,
+    48
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 6,
+   "schwarz_sprenkel_anteil_pct": 31.09,
+   "schwarz_texel": 439,
+   "gegner_texel": 1412,
+   "ueberlapp_rate_pct": 0,
+   "ueberlapp_texel": 0,
+   "trennrate_pct": null,
+   "trennrate_grenzkanten": 0,
+   "trennrate_getrennt": 0,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 0,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": null,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": null,
+   "mittlere_dL_bildnachbarn_paare": 0,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 0,
+   "decal_texel_gezeichnet": 0,
+   "decal_texel_sichtbar": 0,
+   "decal_anzahl": 0,
+   "flaechenanteil_pct": 15.32,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 1,
+     "texel": 203,
+     "schwarz": 77,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "held",
+     "figuren": 1,
+     "texel": 258,
+     "schwarz": 59,
+     "schwarz_pct": 22.87
+    },
+    {
+     "typ": "hound",
+     "figuren": 1,
+     "texel": 111,
+     "schwarz": 45,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 1,
+     "texel": 178,
+     "schwarz": 80,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 1,
+     "texel": 134,
+     "schwarz": 50,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "D_schlachtfeld",
+   "boden": "gruft",
+   "leinwand": [
+    320,
+    180
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 10,
+   "schwarz_sprenkel_anteil_pct": 34.86,
+   "schwarz_texel": 684,
+   "gegner_texel": 1962,
+   "ueberlapp_rate_pct": 20,
+   "ueberlapp_texel": 25,
+   "trennrate_pct": null,
+   "trennrate_grenzkanten": 0,
+   "trennrate_getrennt": 0,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 0,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": null,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 28.13,
+   "mittlere_dL_bildnachbarn_paare": 1,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 2.9,
+   "decal_texel_gezeichnet": 1993,
+   "decal_texel_sichtbar": 1669,
+   "decal_anzahl": 30,
+   "flaechenanteil_pct": 3.36,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 3,
+     "texel": 609,
+     "schwarz": 231,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "hound",
+     "figuren": 1,
+     "texel": 111,
+     "schwarz": 45,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 1,
+     "texel": 178,
+     "schwarz": 80,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 4,
+     "texel": 536,
+     "schwarz": 200,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  },
+  {
+   "tafel": "D_schlachtfeld",
+   "boden": "gras",
+   "leinwand": [
+    320,
+    180
+   ],
+   "varianten": {
+    "rim": false,
+    "flash": false,
+    "grau": false
+   },
+   "figuren": 10,
+   "schwarz_sprenkel_anteil_pct": 34.86,
+   "schwarz_texel": 684,
+   "gegner_texel": 1962,
+   "ueberlapp_rate_pct": 20,
+   "ueberlapp_texel": 25,
+   "trennrate_pct": null,
+   "trennrate_grenzkanten": 0,
+   "trennrate_getrennt": 0,
+   "trennrate_ursache": {
+    "rim": 0,
+    "dL": 0,
+    "dE00": 0
+   },
+   "trennrate_mittlere_dL_je_grenzkante": null,
+   "mittlere_dL_benachbarter_koerperL": 20.92,
+   "mittlere_dL_benachbarter_koerperL_lesart": "Leiternachbarn (nach Koerper-L sortierte Typen)",
+   "mittlere_dL_bildnachbarn": 28.13,
+   "mittlere_dL_bildnachbarn_paare": 1,
+   "koerper_L_je_typ": [
+    {
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "koerper_L_e5": 163.74,
+     "texel": 68
+    },
+    {
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "koerper_L_e5": 97,
+     "texel": 125
+    },
+    {
+     "typ": "hound",
+     "key": "hound_0",
+     "koerper_L_e5": 80.05,
+     "texel": 64
+    },
+    {
+     "typ": "rust",
+     "key": "rust_0",
+     "koerper_L_e5": 114.52,
+     "texel": 116
+    },
+    {
+     "typ": "warden",
+     "key": "warden_idle",
+     "koerper_L_e5": 135.6,
+     "texel": 411
+    }
+   ],
+   "wertleiter_stufen": [
+    {
+     "von": "hound",
+     "nach": "ghoul",
+     "dL": 16.95
+    },
+    {
+     "von": "ghoul",
+     "nach": "rust",
+     "dL": 17.52
+    },
+    {
+     "von": "rust",
+     "nach": "warden",
+     "dL": 21.09
+    },
+    {
+     "von": "warden",
+     "nach": "skeleton",
+     "dL": 28.13
+    }
+   ],
+   "decal_bodenbedeckung_pct": 2.9,
+   "decal_texel_gezeichnet": 1993,
+   "decal_texel_sichtbar": 1669,
+   "decal_anzahl": 30,
+   "flaechenanteil_pct": 3.36,
+   "je_typ": [
+    {
+     "typ": "ghoul",
+     "figuren": 3,
+     "texel": 609,
+     "schwarz": 231,
+     "schwarz_pct": 37.93
+    },
+    {
+     "typ": "hound",
+     "figuren": 1,
+     "texel": 111,
+     "schwarz": 45,
+     "schwarz_pct": 40.54
+    },
+    {
+     "typ": "rust",
+     "figuren": 1,
+     "texel": 178,
+     "schwarz": 80,
+     "schwarz_pct": 44.94
+    },
+    {
+     "typ": "skeleton",
+     "figuren": 4,
+     "texel": 536,
+     "schwarz": 200,
+     "schwarz_pct": 37.31
+    },
+    {
+     "typ": "warden",
+     "figuren": 1,
+     "texel": 528,
+     "schwarz": 128,
+     "schwarz_pct": 24.24
+    }
+   ],
+   "flash_figuren_index": []
+  }
+ ],
+ "anordnung": [
+  {
+   "tafel": "A_feld",
+   "leinwand": [
+    320,
+    180
+   ],
+   "was": "30 Gegner deterministisch gestreut (seed 12345), Y-sortiert, mit Weichschatten — die Spielsituation.",
+   "figuren": [
+    {
+     "nr": 1,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 172,
+     "oy": 29,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 49
+    },
+    {
+     "nr": 2,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 84,
+     "oy": 40,
+     "grid": "16x12",
+     "flip": false,
+     "fuss_y": 52
+    },
+    {
+     "nr": 3,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 231,
+     "oy": 43,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 59
+    },
+    {
+     "nr": 4,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 224,
+     "oy": 45,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 61
+    },
+    {
+     "nr": 5,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 128,
+     "oy": 50,
+     "grid": "16x12",
+     "flip": false,
+     "fuss_y": 62
+    },
+    {
+     "nr": 6,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 79,
+     "oy": 47,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 63
+    },
+    {
+     "nr": 7,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 267,
+     "oy": 46,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 64
+    },
+    {
+     "nr": 8,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 20,
+     "oy": 58,
+     "grid": "16x12",
+     "flip": true,
+     "fuss_y": 70
+    },
+    {
+     "nr": 9,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 188,
+     "oy": 59,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 75
+    },
+    {
+     "nr": 10,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 232,
+     "oy": 55,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 75
+    },
+    {
+     "nr": 11,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 192,
+     "oy": 57,
+     "grid": "16x18",
+     "flip": true,
+     "fuss_y": 75
+    },
+    {
+     "nr": 12,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 91,
+     "oy": 66,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 82
+    },
+    {
+     "nr": 13,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 101,
+     "oy": 67,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 83
+    },
+    {
+     "nr": 14,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 118,
+     "oy": 66,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 86
+    },
+    {
+     "nr": 15,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 244,
+     "oy": 72,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 88
+    },
+    {
+     "nr": 16,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 264,
+     "oy": 70,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 90
+    },
+    {
+     "nr": 17,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 78,
+     "oy": 70,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 90
+    },
+    {
+     "nr": 18,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 163,
+     "oy": 76,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 94
+    },
+    {
+     "nr": 19,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 272,
+     "oy": 74,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 94
+    },
+    {
+     "nr": 20,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 144,
+     "oy": 89,
+     "grid": "16x12",
+     "flip": false,
+     "fuss_y": 101
+    },
+    {
+     "nr": 21,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 255,
+     "oy": 95,
+     "grid": "16x18",
+     "flip": true,
+     "fuss_y": 113
+    },
+    {
+     "nr": 22,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 277,
+     "oy": 104,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 120
+    },
+    {
+     "nr": 23,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 178,
+     "oy": 108,
+     "grid": "16x12",
+     "flip": true,
+     "fuss_y": 120
+    },
+    {
+     "nr": 24,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 123,
+     "oy": 102,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 122
+    },
+    {
+     "nr": 25,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 239,
+     "oy": 102,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 122
+    },
+    {
+     "nr": 26,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 140,
+     "oy": 110,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 126
+    },
+    {
+     "nr": 27,
+     "typ": "warden",
+     "key": "warden_idle",
+     "ox": 184,
+     "oy": 94,
+     "grid": "24x32",
+     "flip": true,
+     "fuss_y": 126
+    },
+    {
+     "nr": 28,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 233,
+     "oy": 111,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 127
+    },
+    {
+     "nr": 29,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 245,
+     "oy": 123,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 139
+    },
+    {
+     "nr": 30,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 63,
+     "oy": 128,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 144
+    }
+   ],
+   "decals": []
+  },
+  {
+   "tafel": "B_knaeuel",
+   "leinwand": [
+    120,
+    90
+   ],
+   "was": "20 Gegner in 4 Reihen mit 9 px X-Abstand — erzwungener Ueberlapp, der Haertefall.",
+   "figuren": [
+    {
+     "nr": 1,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 8,
+     "oy": 12,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 28
+    },
+    {
+     "nr": 2,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 17,
+     "oy": 12,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 28
+    },
+    {
+     "nr": 3,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 26,
+     "oy": 12,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 28
+    },
+    {
+     "nr": 4,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 35,
+     "oy": 12,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 28
+    },
+    {
+     "nr": 5,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 44,
+     "oy": 12,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 28
+    },
+    {
+     "nr": 6,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 12,
+     "oy": 22,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 42
+    },
+    {
+     "nr": 7,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 21,
+     "oy": 22,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 42
+    },
+    {
+     "nr": 8,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 30,
+     "oy": 22,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 42
+    },
+    {
+     "nr": 9,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 39,
+     "oy": 22,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 42
+    },
+    {
+     "nr": 10,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 48,
+     "oy": 22,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 42
+    },
+    {
+     "nr": 11,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 15,
+     "oy": 40,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 58
+    },
+    {
+     "nr": 12,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 24,
+     "oy": 40,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 58
+    },
+    {
+     "nr": 13,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 33,
+     "oy": 40,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 58
+    },
+    {
+     "nr": 14,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 42,
+     "oy": 40,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 58
+    },
+    {
+     "nr": 15,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 51,
+     "oy": 40,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 58
+    },
+    {
+     "nr": 16,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 17,
+     "oy": 54,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 70
+    },
+    {
+     "nr": 17,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 26,
+     "oy": 54,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 70
+    },
+    {
+     "nr": 18,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 35,
+     "oy": 54,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 70
+    },
+    {
+     "nr": 19,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 44,
+     "oy": 54,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 70
+    },
+    {
+     "nr": 20,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 53,
+     "oy": 54,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 70
+    }
+   ],
+   "decals": []
+  },
+  {
+   "tafel": "C_leiter",
+   "leinwand": [
+    192,
+    48
+   ],
+   "was": "5 Gegner-Spalten (Roster-Reihenfolge, eingefroren) + Held als Massstab, fussbuendig.",
+   "figuren": [
+    {
+     "nr": 1,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 8,
+     "oy": 24,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 40
+    },
+    {
+     "nr": 2,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 40,
+     "oy": 20,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 40
+    },
+    {
+     "nr": 3,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 72,
+     "oy": 28,
+     "grid": "16x12",
+     "flip": false,
+     "fuss_y": 40
+    },
+    {
+     "nr": 4,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 104,
+     "oy": 22,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 40
+    },
+    {
+     "nr": 5,
+     "typ": "warden",
+     "key": "warden_idle",
+     "ox": 132,
+     "oy": 8,
+     "grid": "24x32",
+     "flip": false,
+     "fuss_y": 40
+    },
+    {
+     "nr": 6,
+     "typ": "held",
+     "key": "player_down_0",
+     "ox": 168,
+     "oy": 16,
+     "grid": "16x24",
+     "flip": false,
+     "fuss_y": 40
+    }
+   ],
+   "decals": []
+  },
+  {
+   "tafel": "D_schlachtfeld",
+   "leinwand": [
+    320,
+    180
+   ],
+   "was": "30 Decals (Bodenbedeckung) + 10 lebende Gegner.",
+   "figuren": [
+    {
+     "nr": 1,
+     "typ": "rust",
+     "key": "rust_0",
+     "ox": 21,
+     "oy": 61,
+     "grid": "16x18",
+     "flip": false,
+     "fuss_y": 79
+    },
+    {
+     "nr": 2,
+     "typ": "hound",
+     "key": "hound_0",
+     "ox": 228,
+     "oy": 73,
+     "grid": "16x12",
+     "flip": true,
+     "fuss_y": 85
+    },
+    {
+     "nr": 3,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 82,
+     "oy": 72,
+     "grid": "16x20",
+     "flip": false,
+     "fuss_y": 92
+    },
+    {
+     "nr": 4,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 67,
+     "oy": 90,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 106
+    },
+    {
+     "nr": 5,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 242,
+     "oy": 91,
+     "grid": "16x16",
+     "flip": false,
+     "fuss_y": 107
+    },
+    {
+     "nr": 6,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 227,
+     "oy": 104,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 120
+    },
+    {
+     "nr": 7,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 100,
+     "oy": 121,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 141
+    },
+    {
+     "nr": 8,
+     "typ": "warden",
+     "key": "warden_idle",
+     "ox": 233,
+     "oy": 111,
+     "grid": "24x32",
+     "flip": false,
+     "fuss_y": 143
+    },
+    {
+     "nr": 9,
+     "typ": "ghoul",
+     "key": "ghoul_0",
+     "ox": 41,
+     "oy": 130,
+     "grid": "16x20",
+     "flip": true,
+     "fuss_y": 150
+    },
+    {
+     "nr": 10,
+     "typ": "skeleton",
+     "key": "skeleton_0",
+     "ox": 224,
+     "oy": 141,
+     "grid": "16x16",
+     "flip": true,
+     "fuss_y": 157
+    }
+   ],
+   "decals": [
+    {
+     "nr": 1,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 172,
+     "oy": 29,
+     "flip": false
+    },
+    {
+     "nr": 2,
+     "typ": "hound",
+     "key": "hound_die",
+     "ox": 84,
+     "oy": 40,
+     "flip": false
+    },
+    {
+     "nr": 3,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 231,
+     "oy": 43,
+     "flip": true
+    },
+    {
+     "nr": 4,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 224,
+     "oy": 45,
+     "flip": false
+    },
+    {
+     "nr": 5,
+     "typ": "hound",
+     "key": "hound_die",
+     "ox": 128,
+     "oy": 50,
+     "flip": false
+    },
+    {
+     "nr": 6,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 79,
+     "oy": 47,
+     "flip": false
+    },
+    {
+     "nr": 7,
+     "typ": "rust",
+     "key": "rust_die",
+     "ox": 267,
+     "oy": 46,
+     "flip": false
+    },
+    {
+     "nr": 8,
+     "typ": "hound",
+     "key": "hound_die",
+     "ox": 20,
+     "oy": 58,
+     "flip": true
+    },
+    {
+     "nr": 9,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 188,
+     "oy": 59,
+     "flip": false
+    },
+    {
+     "nr": 10,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 232,
+     "oy": 55,
+     "flip": false
+    },
+    {
+     "nr": 11,
+     "typ": "rust",
+     "key": "rust_die",
+     "ox": 192,
+     "oy": 57,
+     "flip": true
+    },
+    {
+     "nr": 12,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 91,
+     "oy": 66,
+     "flip": false
+    },
+    {
+     "nr": 13,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 101,
+     "oy": 67,
+     "flip": false
+    },
+    {
+     "nr": 14,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 118,
+     "oy": 66,
+     "flip": true
+    },
+    {
+     "nr": 15,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 244,
+     "oy": 72,
+     "flip": true
+    },
+    {
+     "nr": 16,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 264,
+     "oy": 70,
+     "flip": true
+    },
+    {
+     "nr": 17,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 78,
+     "oy": 70,
+     "flip": false
+    },
+    {
+     "nr": 18,
+     "typ": "rust",
+     "key": "rust_die",
+     "ox": 163,
+     "oy": 76,
+     "flip": false
+    },
+    {
+     "nr": 19,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 272,
+     "oy": 74,
+     "flip": false
+    },
+    {
+     "nr": 20,
+     "typ": "hound",
+     "key": "hound_die",
+     "ox": 144,
+     "oy": 89,
+     "flip": false
+    },
+    {
+     "nr": 21,
+     "typ": "rust",
+     "key": "rust_die",
+     "ox": 255,
+     "oy": 95,
+     "flip": true
+    },
+    {
+     "nr": 22,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 277,
+     "oy": 104,
+     "flip": false
+    },
+    {
+     "nr": 23,
+     "typ": "hound",
+     "key": "hound_die",
+     "ox": 178,
+     "oy": 108,
+     "flip": true
+    },
+    {
+     "nr": 24,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 123,
+     "oy": 102,
+     "flip": true
+    },
+    {
+     "nr": 25,
+     "typ": "ghoul",
+     "key": "ghoul_die",
+     "ox": 239,
+     "oy": 102,
+     "flip": true
+    },
+    {
+     "nr": 26,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 140,
+     "oy": 110,
+     "flip": true
+    },
+    {
+     "nr": 27,
+     "typ": "warden",
+     "key": "warden_die",
+     "ox": 184,
+     "oy": 94,
+     "flip": true
+    },
+    {
+     "nr": 28,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 233,
+     "oy": 111,
+     "flip": true
+    },
+    {
+     "nr": 29,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 245,
+     "oy": 123,
+     "flip": true
+    },
+    {
+     "nr": 30,
+     "typ": "skeleton",
+     "key": "skeleton_die",
+     "ox": 63,
+     "oy": 128,
+     "flip": false
+    }
+   ]
+  }
+ ],
+ "blind_plan": [
+  {
+   "boden": "gruft",
+   "position": 1,
+   "typ": "skeleton",
+   "key": "skeleton_0"
+  },
+  {
+   "boden": "gruft",
+   "position": 2,
+   "typ": "hound",
+   "key": "hound_0"
+  },
+  {
+   "boden": "gruft",
+   "position": 3,
+   "typ": "warden",
+   "key": "warden_idle"
+  },
+  {
+   "boden": "gruft",
+   "position": 4,
+   "typ": "ghoul",
+   "key": "ghoul_0"
+  },
+  {
+   "boden": "gruft",
+   "position": 5,
+   "typ": "rust",
+   "key": "rust_0"
+  },
+  {
+   "boden": "gras",
+   "position": 1,
+   "typ": "hound",
+   "key": "hound_0"
+  },
+  {
+   "boden": "gras",
+   "position": 2,
+   "typ": "skeleton",
+   "key": "skeleton_0"
+  },
+  {
+   "boden": "gras",
+   "position": 3,
+   "typ": "ghoul",
+   "key": "ghoul_0"
+  },
+  {
+   "boden": "gras",
+   "position": 4,
+   "typ": "rust",
+   "key": "rust_0"
+  },
+  {
+   "boden": "gras",
+   "position": 5,
+   "typ": "warden",
+   "key": "warden_idle"
+  }
+ ],
+ "dateien": [
+  {
+   "name": "horden_bogen_vorher_A_feld_gruft_1x.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 6554,
+   "sha256": "e7728310bc80c9843ebc9b8fe77baf4ef83d53118deaaea9f85f3cc570fb5f63"
+  },
+  {
+   "name": "horden_bogen_vorher_A_feld_gruft_6x.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 52990,
+   "sha256": "46454acae0944215dd5a91f65c395698255a86a9560e7128b531fd7cee6ca81f"
+  },
+  {
+   "name": "horden_bogen_vorher_A_feld_gruft_squint.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 44392,
+   "sha256": "5d09088588afe663c6a63ce83b2907cf25846dd89b25f9f584a7d6493fa12ccb"
+  },
+  {
+   "name": "horden_bogen_vorher_A_feld_gras_1x.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 5336,
+   "sha256": "13d75d5cb2474dc5d0dd3929ba9b183e81ec25b2bcb11f201be63ce768f2d765"
+  },
+  {
+   "name": "horden_bogen_vorher_A_feld_gras_6x.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 41473,
+   "sha256": "353d1860e4456930542fcd33c3e0feb5e11b6f6bb674f1e7a6787044bad1f41b"
+  },
+  {
+   "name": "horden_bogen_vorher_A_feld_gras_squint.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 33412,
+   "sha256": "8f56209dd6fe4e2701c918af12ac1a38e15020575ac23e418ce91a0d97b722d4"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gruft_1x.png",
+   "w": 120,
+   "h": 90,
+   "bytes": 1800,
+   "sha256": "e22bc6b4ca533ebe5f75794350b2b5a9f1b046acb468fb1c7bcc285b303513b5"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gruft_6x.png",
+   "w": 720,
+   "h": 540,
+   "bytes": 10822,
+   "sha256": "0edb032faa6a22532c941e433515c8823ce9197b8e29bb92654b275ce58eca01"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gruft_squint.png",
+   "w": 720,
+   "h": 540,
+   "bytes": 8830,
+   "sha256": "9514e463108c720dfbdd04ff011d4d67c650359e0e69a6d34c8c7aecc3ff8b13"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gras_1x.png",
+   "w": 120,
+   "h": 90,
+   "bytes": 1234,
+   "sha256": "d383a1dcaabde4336e70fcd1a85921fe8feb6fb3534103c2084f87415e614ee7"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gras_6x.png",
+   "w": 720,
+   "h": 540,
+   "bytes": 8600,
+   "sha256": "645c4e7a0f1b7cdf7122714e7c70bcf9847fe021e90048d2cb5309b097e0e676"
+  },
+  {
+   "name": "horden_bogen_vorher_B_knaeuel_gras_squint.png",
+   "w": 720,
+   "h": 540,
+   "bytes": 7312,
+   "sha256": "787786fc33433cfa45a9bcccbb0a30fcad89488863b58907e6b8208dac6b38a6"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gruft_1x.png",
+   "w": 192,
+   "h": 48,
+   "bytes": 2318,
+   "sha256": "5365da0b441ceaeb41ff2ddb19c3c1a3d9464fa7b9d2e164876f3c0f9b7af358"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gruft_6x.png",
+   "w": 1152,
+   "h": 288,
+   "bytes": 10314,
+   "sha256": "83d49806d03a7b27985a5ee058d84fef7735f0be9e9578f741faf4029408dfbf"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gruft_squint.png",
+   "w": 1152,
+   "h": 288,
+   "bytes": 8415,
+   "sha256": "e24fe6136cbc7dce4ff1bf362c49a3525d918f89d88fb5ba111f7074126e77ac"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gras_1x.png",
+   "w": 192,
+   "h": 48,
+   "bytes": 1865,
+   "sha256": "1e046ce1cd7707fa0944f8eae07bcc15f5bc73be9c171a258999196370f6babf"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gras_6x.png",
+   "w": 1152,
+   "h": 288,
+   "bytes": 8444,
+   "sha256": "d44fd3a20e0a352cc89d4204bddcbbd48d04c5c5caaca562ba1dd8d048f37f63"
+  },
+  {
+   "name": "horden_bogen_vorher_C_leiter_gras_squint.png",
+   "w": 1152,
+   "h": 288,
+   "bytes": 6883,
+   "sha256": "0f5fb2f6b8d2f6973ffaa397615be7592a820359bbc9afb5aea315bf09447ea0"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gruft_1x.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 5618,
+   "sha256": "c4ec67fa7f62217781a95004bd65ebc52f0e531a7fad5d6d5d4e271459efef6d"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gruft_6x.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 50143,
+   "sha256": "28362e5ff225e833c0bac02ce0ffdf6cad1fad60d83e80cf4b464aa8527aa070"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gruft_squint.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 42389,
+   "sha256": "ec97c12b9369f6647817c031da3c25cfecc62e2a2a5170aec575354a4799a571"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gras_1x.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 4484,
+   "sha256": "ce15d8ae9454d875b7e179109ea1370287396c64e942b3971909a1d6e8ba5d97"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gras_6x.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 38103,
+   "sha256": "8d0a3ea45446acb9e64f94c96e658b1f23916268c63940023c162860a1dc486c"
+  },
+  {
+   "name": "horden_bogen_vorher_D_schlachtfeld_gras_squint.png",
+   "w": 1920,
+   "h": 1080,
+   "bytes": 30777,
+   "sha256": "f0f74d37b4008b097b6a70752c9680dbfd018f90d4da3a78603bdb39b85438aa"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_1x_01.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 341,
+   "sha256": "bc50969771af34e46d26256c056257ec1fbbd1884c790f0dc05994969a4dac80"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_6x_01.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1264,
+   "sha256": "2ea0457837772a52f264515d60827e3fc98ef689526efce3eb32d5fa71d7a0eb"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_1x_01.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 320,
+   "sha256": "bfc6aeb892ddffe7381436f7ddd44aa6bcce4b66c35a688c28babb49692edc1b"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_6x_01.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1236,
+   "sha256": "056daee21334a4337de908e67978ed3bc00ad26262d5086f5a80c310a4fbb1cb"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_1x_02.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 352,
+   "sha256": "b0e1c4bf0a63a432de871597c6aae979f42cdee6715b900f98918767f1ae38fd"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_6x_02.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1298,
+   "sha256": "3b23cb03cf81654cd5539ff2b7293d7d16bb4db58565eaad0f22248a1c086f00"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_1x_02.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 333,
+   "sha256": "eb5e51461a22044b22c95ba79a737941339b9e4ef2dc46749b2bc97b296ed5ee"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_6x_02.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1275,
+   "sha256": "90a11fd6588999a367a5f7db31f1639b230c57d307772c2aaff987f59c20f916"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_1x_03.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 497,
+   "sha256": "0268168ecd4d63053bba47edd20636b3cfd3921c8ef07d85670bc8b8cd6ae45f"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_6x_03.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1552,
+   "sha256": "f72fb51d98bb51249a6a87ea4fc7ff387b7cf553f8ad9a7722deaa88d41c1713"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_1x_03.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 463,
+   "sha256": "1ef03119ae47b57ddd3d72a1441e38da9e78387bc879dfcbe7d4e9bde193f17d"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_6x_03.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1517,
+   "sha256": "2c85f19510f3eb02ee1558f7656ad9c5b951840c1e11afcd7229c92ee010adf1"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_1x_04.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 358,
+   "sha256": "d8c6484c8e3b2b093b5e0a4438f8e41c7c7d77134cee5aeaccc488e92eba13d3"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_6x_04.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1334,
+   "sha256": "3fb483cac8b8e437b7ff8b05e1eec07fe56add8c7955e5dd5a4d550872f733de"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_1x_04.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 332,
+   "sha256": "7fb0dada7594e975fde70c057d755f34b3ffde2dc06fdf175bd2257d75f01071"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_6x_04.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1304,
+   "sha256": "9671267aef4e0999422b10e63dd2080a7813b2a8369e703c5fc3b11ae1b32367"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_1x_05.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 386,
+   "sha256": "952d57a1d10a8c241e8a5c01f567f1b923ded9ff63dca92f5d4487e930a80174"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_farbe_6x_05.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1355,
+   "sha256": "0859450031f21011081a7e776c6c7bf1a53f7b41b988cab3fe5c3bc3c029e09f"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_1x_05.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 362,
+   "sha256": "b28ad2b60ca049e78e26eb8cfc6479adc367e70c6c9a0f4c6ddd5caef47a091d"
+  },
+  {
+   "name": "horden_blind_vorher_gruft_grau_6x_05.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1328,
+   "sha256": "0b550f159a87b913f72e16c006a7655200853e5cd9e5417475676ef4a2a65d7a"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_1x_01.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 266,
+   "sha256": "172f3a967533b1d8a5c7297086167e10d6a3812761075afee0171adebba189b0"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_6x_01.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1169,
+   "sha256": "ac7c68c85c72ae635867572caaeb291fa4da6f408ca56eec5931ac3510941408"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_1x_01.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 254,
+   "sha256": "762b274fce13677837113bff7cbfe7452026eb6748afefab9df99b4ac8291627"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_6x_01.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1148,
+   "sha256": "91281df2b89634a1e6ac005d2a5e0fd8f9386ec27eb27d955369690e3f8e6744"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_1x_02.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 259,
+   "sha256": "14ef00f747f74fbdc18d49dddb03ec30567e9efd696afafb543b0c1a789810da"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_6x_02.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1138,
+   "sha256": "24d3ffc73b685c7ed574e7665b39e955c96da82b878f4f3bab99de774539741c"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_1x_02.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 250,
+   "sha256": "087e9857abdaf9f296ed173a610d30d769cd8e6ebb6b8f6d9aeaa592d0fdd3e3"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_6x_02.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1116,
+   "sha256": "281b91a09e7d45c4669feab6b7d1d6429c493e1decf267c452b658e2e4f6d601"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_1x_03.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 272,
+   "sha256": "59353082367e0b0d953e9c4fbec83fca6e5c833e13619bc76a6683b88d17f716"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_6x_03.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1219,
+   "sha256": "dc17c7a663ab581e18a716ae1ed3c50c7c772c947009b63e26c6c6e8641101b5"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_1x_03.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 261,
+   "sha256": "347135d23c13317f0166c277b42bf92cf54acb914013ed712a3a64ad349de587"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_6x_03.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1190,
+   "sha256": "3f63d6a0f8665e33c7aa82cefb4d1ad6ac66603efae6f20a87f708827586507c"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_1x_04.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 297,
+   "sha256": "b47156b94be26b83c7a2005a3d22d83e51605f50eb2e8f827a61e0b49e764f37"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_6x_04.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1231,
+   "sha256": "1057ade994d8270e666d37886fee4dc7ab91ce3ce1f3c21cf1095cfbb7e6cf7d"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_1x_04.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 284,
+   "sha256": "3c80b36eab75d1cec5c7829bbe52ca524f0a7717bbeac04c64b6a8902bc43171"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_6x_04.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1207,
+   "sha256": "ed988882035e7eac8db337efc03b71d91adce8a86443c8471f10b1fcb83104f5"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_1x_05.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 447,
+   "sha256": "b2fb43ae7f10150fa77fe482a0db92d068b43b9986b80c6564c3419a7efb6121"
+  },
+  {
+   "name": "horden_blind_vorher_gras_farbe_6x_05.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1456,
+   "sha256": "0a34154f62b81505a8b274b7bb3f2e1c82a1300a2f5493974b2af08ae4b5a96f"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_1x_05.png",
+   "w": 32,
+   "h": 48,
+   "bytes": 419,
+   "sha256": "3cda077116c4de04f4fb5beb32bfacc74cd264bd77ccd7a0cc6ced86edf663f1"
+  },
+  {
+   "name": "horden_blind_vorher_gras_grau_6x_05.png",
+   "w": 192,
+   "h": 288,
+   "bytes": 1424,
+   "sha256": "f8895806096c758b1e5f24739e7b8764d972c6cc2985fb58dee1e1dcd10898c8"
+  }
+ ],
+ "provenienz": [
+  {
+   "datei": "game/js/art/sprites_figuren.js",
+   "sha256": "729e68853ac20be85c0dd81ebb071203f7675f159b918e21246ebb16dce11438"
+  },
+  {
+   "datei": "game/js/art/sprites_tiles.js",
+   "sha256": "46c26c767476999deca74ff88c026e8a007fbe7a4057fda62f8488bdecfcca09"
+  },
+  {
+   "datei": "game/js/art/sprites.js",
+   "sha256": "41d6b7a90c9bdd057e10c4924a460ef8fdd5a665a8b36237642928d4fe81284d"
+  },
+  {
+   "datei": "game/js/art/palette.js",
+   "sha256": "f89ff2e3967c91f785ad8ec468d43be4cbba3b7dc7b91362b37acc438375e46e"
+  }
+ ]
+}

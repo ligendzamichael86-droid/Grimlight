@@ -1,0 +1,153 @@
+FIGUREN-BOGEN VORHER — Legende (erzeugt von tools/figuren_bogen.mjs)
+Spec: design/SPEC_GP7CH1.md E9 (Umfang) + E10 P0.c/P0.e, Review M15/M16/m8,
+Nachfix-Befund R5. WERKZEUG-REV 2.
+
+UMFANG  Rev 2 fuehrt alle Grids, die Spec E9 fuer Phase 1a/1b in den Umfang
+        nimmt: 17 player_-Grids + 3 sword_slash_-Grids (1a) und 15 npc_-Grids
+        (1b). Rev 1 hatte nur 12 Lauf-Frames des Helden und deckte damit bloss
+        27 der 35 Grids ab (Befund R5). NEU in Rev 2: player_attack_down/up/side,
+        player_die_0/1, sword_slash_down/up/side.
+        Die Gegner-Zeile K ist KONTEXT, nicht Umfang (shield_* ist CH-2).
+        Rev 3 (GP7-CH-2 P0.c) legt einen ZWEITEN, eigenstaendigen Bogen mit den
+        27 Gegner-Grids daneben und einen VIERTEN Boden (Gruft-Stein) darunter.
+
+RASTER  Zelle 32x48 px (2x3 Kacheln), Markenband 8 px unter jeder Zeile,
+        Bogen 544x224 px bei 1x, 3264x1344 px bei 6x und squint.
+        Figur horizontal in der Zelle zentriert, Fusskante gemeinsam auf
+        Zellunterkante minus 8 px. Freie Zellen rechts = Boden pur (Referenzflaeche).
+        squint = 1x, per Nearest Neighbour 50 % runter (Quelltexel 2x/2y), dann
+        wieder hoch — deckungsgleich mit dem 6x-Bogen. Das Markenband wird nach
+        dem Halbieren NEU gestempelt (Chrom, nicht Kunst): kollabieren sollen die
+        Figuren, nicht die Beschriftung.
+
+BOEDEN (echte Kacheln, gekachelt — keine Flachfarbe)
+  gras  grass_g5_00   16x16  L(Rec601) 49.9  GRAVEYARD-Gras
+  lehm  dorf_lehm_00  16x16  L(Rec601) 72.8  DORF-Lehm
+  weg   path          16x16  L(Rec601) 90.9  DORF-Weg
+  gruft stone_floor   16x16  L(Rec601) 52.5  CATACOMBS/FLUESTERGRUFT/BOSS_KAMMER Gruft-Stein
+
+SPALTENLEGENDE MENSCHEN-BOGEN (Marke im Band -> Grid-Key -> Grid-Mass)
+  Dateien: figuren_bogen_vorher_<boden>_<1x|6x|squint>.png, 544x224 px bei 1x
+  Zeile H = HELD (17 Zellen)
+    Hinweis: je Richtung 4 Lauf-Frames + 1 Attack-Frame (down, up, side), danach die 2 Sterbe-Frames
+    H01  player_down_0          16x24  Zelle x=0..31
+    H02  player_down_1          16x24  Zelle x=32..63
+    H03  player_down_2          16x24  Zelle x=64..95
+    H04  player_down_3          16x24  Zelle x=96..127
+    H05  player_attack_down     16x24  Zelle x=128..159
+    H06  player_up_0            16x24  Zelle x=160..191
+    H07  player_up_1            16x24  Zelle x=192..223
+    H08  player_up_2            16x24  Zelle x=224..255
+    H09  player_up_3            16x24  Zelle x=256..287
+    H10  player_attack_up       16x24  Zelle x=288..319
+    H11  player_side_0          16x24  Zelle x=320..351
+    H12  player_side_1          16x24  Zelle x=352..383
+    H13  player_side_2          16x24  Zelle x=384..415
+    H14  player_side_3          16x24  Zelle x=416..447
+    H15  player_attack_side     16x24  Zelle x=448..479
+    H16  player_die_0           16x24  Zelle x=480..511
+    H17  player_die_1           16x24  Zelle x=512..543
+  Zeile S = SCHWERTHIEB (Mini-Zeile, Effekt-Overlay) (3 Zellen)
+    Hinweis: gehoert dem Helden (E9/m6), ist aber Overlay: im Spiel auf der Schwert-Hitbox gezeichnet, nicht fussgebunden — hier liegt es wie alles andere auf der gemeinsamen Fusskante (Chrom)
+    S01  sword_slash_down       16x16  Zelle x=0..31
+    S02  sword_slash_up         16x16  Zelle x=32..63
+    S03  sword_slash_side       16x16  Zelle x=64..95
+  Zeile N = NPC (15 Zellen)
+    N01  npc_bran_0             16x24  Zelle x=0..31
+    N02  npc_bran_1             16x24  Zelle x=32..63
+    N03  npc_bran_talk          16x24  Zelle x=64..95
+    N04  npc_hedda_0            16x24  Zelle x=96..127
+    N05  npc_hedda_1            16x24  Zelle x=128..159
+    N06  npc_hedda_talk         16x24  Zelle x=160..191
+    N07  npc_corm_0             16x24  Zelle x=192..223
+    N08  npc_corm_1             16x24  Zelle x=224..255
+    N09  npc_corm_talk          16x24  Zelle x=256..287
+    N10  npc_mile_0             16x24  Zelle x=288..319
+    N11  npc_mile_1             16x24  Zelle x=320..351
+    N12  npc_mile_talk          16x24  Zelle x=352..383
+    N13  npc_torwaechter_0      16x24  Zelle x=384..415
+    N14  npc_torwaechter_1      16x24  Zelle x=416..447
+    N15  npc_torwaechter_talk   16x24  Zelle x=448..479
+  Zeile K = KONTEXT (Gegner) (5 Zellen)
+    K01  skeleton_0             16x16  Zelle x=0..31
+    K02  ghoul_0                16x20  Zelle x=32..63
+    K03  hound_0                16x12  Zelle x=64..95
+    K04  rust_0                 16x18  Zelle x=96..127
+    K05  warden_idle            24x32  Zelle x=128..159
+
+SPALTENLEGENDE GEGNER-BOGEN (Werkzeug-Rev 3, GP7-CH-2 P0.c — ADDITIV)
+  Dateien: figuren_bogen_vorher_gegner_<boden>_<1x|6x|squint>.png, 288x280 px bei 1x
+  Gleiches Raster, gleiche Fusskante, gleiches Squint-Verfahren wie der
+  Menschen-Bogen — die beiden Boegen sind Zelle fuer Zelle vergleichbar
+  ("eine Hand", Spec GP7CH2 Sec.6 V-SPEC).
+  Zeile A = SKELETT (16x16) (3 Zellen)
+    A01  skeleton_0             16x16  Zelle x=0..31
+    A02  skeleton_1             16x16  Zelle x=32..63
+    A03  skeleton_die           16x16  Zelle x=64..95
+  Zeile B = GHUL (16x20) (3 Zellen)
+    B01  ghoul_0                16x20  Zelle x=0..31
+    B02  ghoul_1                16x20  Zelle x=32..63
+    B03  ghoul_die              16x20  Zelle x=64..95
+  Zeile C = GRUFTHUND (16x12) (6 Zellen)
+    Hinweis: Lauf 0/1, dann Telegraph, Sprung, Liegen, Sterben
+    C01  hound_0                16x12  Zelle x=0..31
+    C02  hound_1                16x12  Zelle x=32..63
+    C03  hound_telegraph        16x12  Zelle x=64..95
+    C04  hound_leap             16x12  Zelle x=96..127
+    C05  hound_down             16x12  Zelle x=128..159
+    C06  hound_die              16x12  Zelle x=160..191
+  Zeile D = ROSTPANZER (16x18) + SCHILD (6 Zellen)
+    Hinweis: Lauf 0/1, Sterben, danach die drei Schild-Overlays (gehoeren ihm, E9)
+    D01  rust_0                 16x18  Zelle x=0..31
+    D02  rust_1                 16x18  Zelle x=32..63
+    D03  rust_die               16x18  Zelle x=64..95
+    D04  shield_side            6x12  Zelle x=96..127
+    D05  shield_up              12x6  Zelle x=128..159
+    D06  shield_down            12x6  Zelle x=160..191
+  Zeile W = GRABWAECHTER (24x32) (9 Zellen)
+    Hinweis: Eichkoerper (E-C5): idle, Lauf 0/1, Windup a/b, Dash, Stuck, Summon, Sterben
+    W01  warden_idle            24x32  Zelle x=0..31
+    W02  warden_walk_0          24x32  Zelle x=32..63
+    W03  warden_walk_1          24x32  Zelle x=64..95
+    W04  warden_windup_a        24x32  Zelle x=96..127
+    W05  warden_windup_b        24x32  Zelle x=128..159
+    W06  warden_dash            24x32  Zelle x=160..191
+    W07  warden_stuck           24x32  Zelle x=192..223
+    W08  warden_summon          24x32  Zelle x=224..255
+    W09  warden_die             24x32  Zelle x=256..287
+
+ADDITIVITAETS-ZUSAGE (Rev 3): die 9 Menschen-PNG auf gras/lehm/weg sind
+  byte-gleich mit Rev 2. Neu sind 3 Menschen-PNG auf dem Gruft-Stein und die
+  12 Gegner-PNG. Diese Legende ist das Dateimanifest und waechst deshalb mit.
+
+DATEIEN (Mass, Bytes, sha256)
+  figuren_bogen_vorher_gras_1x.png           544x 224      8119 B  a269cd9c7fa3c3bbed42ab5388219f6fc9d96cc8d259e124fcf3a0886cb9b217
+  figuren_bogen_vorher_gras_6x.png          3264x1344     74851 B  ee6bfc8b5e9330af7bd8f7ff1ed70ce2f2c355ebe5c5f81676524f5388aab227
+  figuren_bogen_vorher_gras_squint.png      3264x1344     63862 B  a0e520f2d6413a33e68a68b45f3becaaa341f11cf3a507f34ab02266873bf284
+  figuren_bogen_vorher_lehm_1x.png           544x 224      8634 B  6e0a4b491156623b37387b30aaee1ae722b90fb2343ed60079e8fff698a2621f
+  figuren_bogen_vorher_lehm_6x.png          3264x1344     84938 B  3fad3714e6a0ad98f0f9cfb5a521c4fa4d845af9cbdea91ad77cdaa8df385deb
+  figuren_bogen_vorher_lehm_squint.png      3264x1344     73087 B  dfee5fba1e952debdd9157114a70142ac274be07c2b4692d523473b8599cb2a7
+  figuren_bogen_vorher_weg_1x.png            544x 224      7937 B  4595ae22449f7718bc8e56f2f08c278150706793af7af29a966ffaa7c19bc2bc
+  figuren_bogen_vorher_weg_6x.png           3264x1344     67517 B  9febc0508f23572387989e6eaf51a78ada760061d2c87a1716b4e5041c3949c5
+  figuren_bogen_vorher_weg_squint.png       3264x1344     65430 B  0b6ec13ed8367005fa36c25924c1b72854211f1ca64025606ba2baa5e77849f8
+  figuren_bogen_vorher_gruft_1x.png          544x 224      8927 B  e14d8b71ca7ca1f2f8c19f4e7277ffe8568bd20130ba051c90f22ea3ca48bb88
+  figuren_bogen_vorher_gruft_6x.png         3264x1344     84923 B  978fec8b73fd93dfafde67d5411c81d32b7caea7e2a251529dd055c60b6d7528
+  figuren_bogen_vorher_gruft_squint.png     3264x1344     77183 B  600c9573f2ff18326cac90ef6901646305da4713ab604995b05da3a6711526b6
+  figuren_bogen_vorher_gegner_gras_1x.png    288x 280      5904 B  210eb41c0cc7351ed7bbd33ead58ac355a4f935e8ca13bafe9b9a5c6895b7056
+  figuren_bogen_vorher_gegner_gras_6x.png   1728x1680     50168 B  2166f55c1a6a0a50fa8c0f6c6c38df88d0e6e76cee7c6b45dd1ca259b33f663d
+  figuren_bogen_vorher_gegner_gras_squint.png  1728x1680     41909 B  758642e21430a106461ac592512698e4f8cc604b701d1b7b2135457b0c233112
+  figuren_bogen_vorher_gegner_lehm_1x.png    288x 280      6136 B  e922f2cd69fa11e63c239d753d21200fafb9c48aa7d2da72d1a08df15cdd1f1d
+  figuren_bogen_vorher_gegner_lehm_6x.png   1728x1680     57087 B  f201d46589d1e4c0275f505c3e42d7cf0c20a81a482bd97e6c7bb73dc998864c
+  figuren_bogen_vorher_gegner_lehm_squint.png  1728x1680     48756 B  af0b75cf0634e9139668b46edbe1ff4f0c38f4bbfe79c060cd7206de34d4af2c
+  figuren_bogen_vorher_gegner_weg_1x.png     288x 280      5765 B  5b2b71e087745bb2fc0d605a13dd15f4fd38cdb126b62c88adb27c57aba6215b
+  figuren_bogen_vorher_gegner_weg_6x.png    1728x1680     45073 B  4adce58022bfdc1904c793c6eee72609ecf905a5ce1579ffb36f7bd323ef55dc
+  figuren_bogen_vorher_gegner_weg_squint.png  1728x1680     42890 B  2921863608a410f81953118c0eaa04cba841951fd1270335107bb1e7d3cd4d49
+  figuren_bogen_vorher_gegner_gruft_1x.png   288x 280      6168 B  3728b5ef2fdeb81e632483606230757bfda1c90bc93c12e71477e5e7bf948c6b
+  figuren_bogen_vorher_gegner_gruft_6x.png  1728x1680     57165 B  eecf0ccab30aa637996dce687277f663f829b3e0b6ea809ecda4b5d56aea8a82
+  figuren_bogen_vorher_gegner_gruft_squint.png  1728x1680     50892 B  004cbc23e013516ef0c4dd6cd17ac75309e862250b3818dd070661ff429b3822
+
+PROVENIENZ (sha256 der Art-Quellen, aus denen dieser Bogen gerendert wurde)
+  game/js/art/sprites_figuren.js     729e68853ac20be85c0dd81ebb071203f7675f159b918e21246ebb16dce11438
+  game/js/art/sprites_tiles.js       46c26c767476999deca74ff88c026e8a007fbe7a4057fda62f8488bdecfcca09
+  game/js/art/sprites.js             41d6b7a90c9bdd057e10c4924a460ef8fdd5a665a8b36237642928d4fe81284d
+  game/js/art/palette.js             f89ff2e3967c91f785ad8ec468d43be4cbba3b7dc7b91362b37acc438375e46e

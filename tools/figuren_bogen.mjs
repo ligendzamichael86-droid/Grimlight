@@ -34,8 +34,21 @@
 //                            zum cwd). Wird angelegt, falls es fehlt.
 //
 // AUSGABE (Schema M16: figuren_bogen_<vorher|nachher>_<boden>_<1x|6x|squint>.png)
-//   9 PNG  = 3 Boeden x 3 Darstellungen
-//   1 TXT  = figuren_bogen_<modus>_legende.txt  (Spaltenlegende + Provenienz)
+//   12 PNG = 4 Boeden x 3 Darstellungen                       (MENSCHEN-Bogen)
+//   12 PNG = figuren_bogen_<modus>_gegner_<boden>_<1x|6x|squint>.png (GEGNER-Bogen)
+//    1 TXT = figuren_bogen_<modus>_legende.txt  (Spaltenlegende + Provenienz)
+//
+// WERKZEUG-REV 3 (GP7-CH-2 P0.c, ADDITIV — Spec SPEC_GP7CH2.md Sec.2 P0.c
+// "figuren_bogen um Gruft-Stein-Boden + Gegner-Zeilen"):
+//   (a) VIERTER BODEN 'gruft' = stone_floor (L 52,45), die Leitklasse von
+//       CATACOMBS / FLUESTERGRUFT / BOSS_KAMMER (Spec E-B1). Die drei
+//       DORF-/GRAVEYARD-Boeden bleiben unveraendert.
+//   (b) ZWEITER BOGEN mit den GEGNER-Zeilen (alle 27 Gegner-Grids, Schild
+//       inbegriffen) als EIGENE Dateien.
+//   BEIDES IST ADDITIV: die 9 Menschen-PNG aus Rev 2 (gras/lehm/weg) bleiben
+//   BYTE-GLEICH, weil weder das Zeilenraster ZEILEN noch BREITE/HOEHE noch die
+//   Zeichenfolge angefasst wurden. Nur die Legenden-TXT waechst (sie ist das
+//   Dateimanifest und muss die neuen Dateien fuehren).
 //
 // ERFOLGS-STRING (Exit-Codes nicht glauben, diesen String greppen):
 //   "FIGUREN-BOGEN FERTIG"
@@ -108,13 +121,40 @@ const ZEILEN = [
   },
 ];
 
-// Die drei ECHTEN Boeden (Spec E10 P0.c / Review M16). L = Rec.601-Luma des
+// ---------------------------------------------------------------------------
+// 1b. GEGNER-ZEILEN (Werkzeug-Rev 3, GP7-CH-2 P0.c) — EIGENER Bogen, eigene
+//     Dateien. Reihenfolge = Roster-Reihenfolge der CH-2-Spec (Skelett, Ghul,
+//     Grufthund, Rostpanzer, Grabwaechter); je Zeile ALLE Grids der Figur in
+//     Animationsreihenfolge, das Sterbe-Grid zuletzt. Die drei shield_*-Grids
+//     stehen in der Rost-Zeile, weil das Schild ihm gehoert (Spec E9/Teil C 6.1).
+//     Der Grabwaechter fuehrt seine 9 Grids vollstaendig (Eichkoerper, E-C5).
+// ---------------------------------------------------------------------------
+const ZEILEN_GEGNER = [
+  { tag: 'A', name: 'SKELETT (16x16)', keys: ['skeleton_0', 'skeleton_1', 'skeleton_die'] },
+  { tag: 'B', name: 'GHUL (16x20)', keys: ['ghoul_0', 'ghoul_1', 'ghoul_die'] },
+  { tag: 'C', name: 'GRUFTHUND (16x12)',
+    hinweis: 'Lauf 0/1, dann Telegraph, Sprung, Liegen, Sterben',
+    keys: ['hound_0', 'hound_1', 'hound_telegraph', 'hound_leap', 'hound_down', 'hound_die'] },
+  { tag: 'D', name: 'ROSTPANZER (16x18) + SCHILD',
+    hinweis: 'Lauf 0/1, Sterben, danach die drei Schild-Overlays (gehoeren ihm, E9)',
+    keys: ['rust_0', 'rust_1', 'rust_die', 'shield_side', 'shield_up', 'shield_down'] },
+  { tag: 'W', name: 'GRABWAECHTER (24x32)',
+    hinweis: 'Eichkoerper (E-C5): idle, Lauf 0/1, Windup a/b, Dash, Stuck, Summon, Sterben',
+    keys: ['warden_idle', 'warden_walk_0', 'warden_walk_1', 'warden_windup_a', 'warden_windup_b',
+      'warden_dash', 'warden_stuck', 'warden_summon', 'warden_die'] },
+];
+
+// Die ECHTEN Boeden (Spec E10 P0.c / Review M16; 'gruft' additiv in Rev 3).
+// L = Rec.601-Luma des
 // Kachel-Grids ueber die Palette, exakt die Konvention der Palettentabelle
 // (palette.js Kopf) — die Sollwerte stehen in der Spec.
 const BOEDEN = [
   { name: 'gras', key: 'grass_g5_00', sollL: 49.9, ort: 'GRAVEYARD-Gras' },
   { name: 'lehm', key: 'dorf_lehm_00', sollL: 72.8, ort: 'DORF-Lehm' },
   { name: 'weg', key: 'path', sollL: 90.9, ort: 'DORF-Weg' },
+  // ADDITIV (Rev 3): Gruft-Stein, die Leitklasse der drei Kampfkarten
+  // CATACOMBS / FLUESTERGRUFT / BOSS_KAMMER (Spec GP7CH2 E-B1, L 52,5).
+  { name: 'gruft', key: 'stone_floor', sollL: 52.45, ort: 'CATACOMBS/FLUESTERGRUFT/BOSS_KAMMER Gruft-Stein' },
 ];
 
 const ZELL_W = 32;        // 2 Kacheln breit
@@ -122,8 +162,13 @@ const ZELL_H = 48;        // 3 Kacheln hoch
 const FUSS_RAND = 8;      // Abstand Fusskante -> Zellunterkante (halbe Kachel)
 const BAND_H = 8;         // Marken-Band unter jeder Figurenzeile
 const SPALTEN = Math.max(...ZEILEN.map((z) => z.keys.length));
-const BREITE = SPALTEN * ZELL_W;                       // 480
-const HOEHE = ZEILEN.length * (ZELL_H + BAND_H);       // 168
+const BREITE = SPALTEN * ZELL_W;                       // 544
+const HOEHE = ZEILEN.length * (ZELL_H + BAND_H);       // 224
+// Eigene Masse fuer den Gegner-Bogen (Rev 3) — sie duerfen BREITE/HOEHE des
+// Menschen-Bogens NICHT beruehren, sonst waeren dessen PNG nicht mehr byte-gleich.
+const SPALTEN_G = Math.max(...ZEILEN_GEGNER.map((z) => z.keys.length));
+const BREITE_G = SPALTEN_G * ZELL_W;                   // 288
+const HOEHE_G = ZEILEN_GEGNER.length * (ZELL_H + BAND_H); // 280
 const ZOOM = 6;
 const BAND_BG = [0, 0, 0];
 const BAND_FG = [180, 180, 180];
@@ -222,6 +267,11 @@ const FONT = {
   '7': ['111', '001', '001', '010', '010'],
   '8': ['111', '101', '111', '101', '111'],
   '9': ['111', '101', '111', '001', '111'],
+  A: ['010', '101', '111', '101', '101'],
+  B: ['110', '101', '110', '101', '110'],
+  C: ['011', '100', '100', '100', '011'],
+  D: ['110', '101', '101', '101', '110'],
+  W: ['101', '101', '101', '111', '101'],
   H: ['101', '101', '111', '101', '101'],
   S: ['011', '100', '010', '001', '110'],
   N: ['101', '111', '111', '101', '101'],
@@ -268,13 +318,13 @@ function nnHalb(cv) {
 // ---------------------------------------------------------------------------
 // 5. Bogen bauen
 // ---------------------------------------------------------------------------
-function bogen(bodenGrid) {
-  const cv = leinwand(BREITE, HOEHE);
-  ZEILEN.forEach((zeile, zi) => {
+function bogen(bodenGrid, zeilen = ZEILEN, breite = BREITE, hoehe = HOEHE) {
+  const cv = leinwand(breite, hoehe);
+  zeilen.forEach((zeile, zi) => {
     const top = zi * (ZELL_H + BAND_H);
     // Boden: pro Zeile bei (0, top) neu angesetzt -> jede Zeile zeigt exakt
     // 3 Kachelreihen, das Kachelraster faellt mit dem Zellraster zusammen.
-    kachle(cv, 0, top, BREITE, ZELL_H, bodenGrid);
+    kachle(cv, 0, top, breite, ZELL_H, bodenGrid);
     zeile.keys.forEach((key, ci) => {
       const g = SPRITES[key];
       const gw = Math.max(...g.map((r) => r.length));
@@ -283,16 +333,16 @@ function bogen(bodenGrid) {
       zeichneGrid(cv, ox, oy, g);
     });
   });
-  zeichneBaender(cv);
+  zeichneBaender(cv, zeilen, breite);
   return cv;
 }
 // Markenband = CHROM, nicht Kunst. Deshalb wird es im Squint-Bogen nach dem
 // Halbieren NEU gestempelt: der Zusammenkniff-Test soll die FIGUREN kollabieren
 // lassen, nicht die Beschriftung (deklarierte Abweichung, siehe Legende).
-function zeichneBaender(cv) {
-  ZEILEN.forEach((zeile, zi) => {
+function zeichneBaender(cv, zeilen = ZEILEN, breite = BREITE) {
+  zeilen.forEach((zeile, zi) => {
     const top = zi * (ZELL_H + BAND_H);
-    rechteck(cv, 0, top + ZELL_H, BREITE, BAND_H, BAND_BG);
+    rechteck(cv, 0, top + ZELL_H, breite, BAND_H, BAND_BG);
     zeile.keys.forEach((_key, ci) => {
       schreibe(cv, ci * ZELL_W + 2, top + ZELL_H + 2, marke(zeile.tag, ci), BAND_FG);
     });
@@ -322,7 +372,7 @@ function main() {
 
   // --- Vollstaendigkeit + Wohlgeformtheit der Figuren-Keys ------------------
   let fehler = 0;
-  for (const z of ZEILEN) {
+  for (const z of [...ZEILEN, ...ZEILEN_GEGNER]) {
     for (const k of z.keys) {
       if (!SPRITES[k]) { console.log(`FEHLER: Figuren-Key fehlt: ${k}`); fehler++; continue; }
       for (const row of SPRITES[k]) {
@@ -352,20 +402,28 @@ function main() {
 
   // --- Rendern ---------------------------------------------------------------
   const dateien = [];
-  for (const b of BOEDEN) {
-    const eins = bogen(TILE_ART[b.key]);
-    const sechs = nnHoch(eins, ZOOM);
-    // Squint: 1x -> NN 50 % runter -> NN x2 wieder auf 1x-Mass -> Bänder neu
-    // stempeln -> NN x6 zum Ansehen. Ergebnis hat exakt die Masse des
-    // 6x-Bogens (pixelgenaues Uebereinanderlegen der beiden Dateien).
-    const halb = nnHoch(nnHalb(eins), 2);
-    zeichneBaender(halb);
-    const squint = nnHoch(halb, ZOOM);
-    for (const [tag, cv] of [['1x', eins], ['6x', sechs], ['squint', squint]]) {
-      const name = `figuren_bogen_${modus}_${b.name}_${tag}.png`;
-      const bytes = pngBytes(cv.w, cv.h, cv.buf);
-      writeFileSync(join(outDir, name), bytes);
-      dateien.push({ name, w: cv.w, h: cv.h, bytes: bytes.length, sha: sha(bytes) });
+  // Zwei Boegen mit identischem Raster und identischem Squint-Verfahren:
+  // 'menschen' (Rev 2, unveraendert) und 'gegner' (Rev 3, additiv).
+  const BOEGEN = [
+    { schluessel: 'menschen', infix: '', zeilen: ZEILEN, breite: BREITE, hoehe: HOEHE },
+    { schluessel: 'gegner', infix: 'gegner_', zeilen: ZEILEN_GEGNER, breite: BREITE_G, hoehe: HOEHE_G },
+  ];
+  for (const bg of BOEGEN) {
+    for (const b of BOEDEN) {
+      const eins = bogen(TILE_ART[b.key], bg.zeilen, bg.breite, bg.hoehe);
+      const sechs = nnHoch(eins, ZOOM);
+      // Squint: 1x -> NN 50 % runter -> NN x2 wieder auf 1x-Mass -> Bänder neu
+      // stempeln -> NN x6 zum Ansehen. Ergebnis hat exakt die Masse des
+      // 6x-Bogens (pixelgenaues Uebereinanderlegen der beiden Dateien).
+      const halb = nnHoch(nnHalb(eins), 2);
+      zeichneBaender(halb, bg.zeilen, bg.breite);
+      const squint = nnHoch(halb, ZOOM);
+      for (const [tag, cv] of [['1x', eins], ['6x', sechs], ['squint', squint]]) {
+        const name = `figuren_bogen_${modus}_${bg.infix}${b.name}_${tag}.png`;
+        const bytes = pngBytes(cv.w, cv.h, cv.buf);
+        writeFileSync(join(outDir, name), bytes);
+        dateien.push({ name, w: cv.w, h: cv.h, bytes: bytes.length, sha: sha(bytes) });
+      }
     }
   }
 
@@ -383,6 +441,8 @@ function main() {
   zeilen.push('        27 der 35 Grids ab (Befund R5). NEU in Rev 2: player_attack_down/up/side,');
   zeilen.push('        player_die_0/1, sword_slash_down/up/side.');
   zeilen.push('        Die Gegner-Zeile K ist KONTEXT, nicht Umfang (shield_* ist CH-2).');
+  zeilen.push('        Rev 3 (GP7-CH-2 P0.c) legt einen ZWEITEN, eigenstaendigen Bogen mit den');
+  zeilen.push('        27 Gegner-Grids daneben und einen VIERTEN Boden (Gruft-Stein) darunter.');
   zeilen.push('');
   zeilen.push(`RASTER  Zelle ${ZELL_W}x${ZELL_H} px (2x3 Kacheln), Markenband ${BAND_H} px unter jeder Zeile,`);
   zeilen.push(`        Bogen ${BREITE}x${HOEHE} px bei 1x, ${BREITE * ZOOM}x${HOEHE * ZOOM} px bei 6x und squint.`);
@@ -396,7 +456,8 @@ function main() {
   zeilen.push('BOEDEN (echte Kacheln, gekachelt — keine Flachfarbe)');
   for (const b of bodenInfo) zeilen.push(`  ${b.name.padEnd(5)} ${b.key.padEnd(13)} ${b.w}x${b.h}  L(Rec601) ${b.L.toFixed(1)}  ${b.ort}`);
   zeilen.push('');
-  zeilen.push('SPALTENLEGENDE (Marke im Band -> Grid-Key -> Grid-Mass)');
+  zeilen.push('SPALTENLEGENDE MENSCHEN-BOGEN (Marke im Band -> Grid-Key -> Grid-Mass)');
+  zeilen.push(`  Dateien: figuren_bogen_${modus}_<boden>_<1x|6x|squint>.png, ${BREITE}x${HOEHE} px bei 1x`);
   for (const z of ZEILEN) {
     zeilen.push(`  Zeile ${z.tag} = ${z.name} (${z.keys.length} Zellen)`);
     if (z.hinweis) zeilen.push(`    Hinweis: ${z.hinweis}`);
@@ -406,6 +467,25 @@ function main() {
       zeilen.push(`    ${marke(z.tag, i)}  ${k.padEnd(22)} ${gw}x${g.length}  Zelle x=${i * ZELL_W}..${i * ZELL_W + ZELL_W - 1}`);
     });
   }
+  zeilen.push('');
+  zeilen.push('SPALTENLEGENDE GEGNER-BOGEN (Werkzeug-Rev 3, GP7-CH-2 P0.c — ADDITIV)');
+  zeilen.push(`  Dateien: figuren_bogen_${modus}_gegner_<boden>_<1x|6x|squint>.png, ${BREITE_G}x${HOEHE_G} px bei 1x`);
+  zeilen.push('  Gleiches Raster, gleiche Fusskante, gleiches Squint-Verfahren wie der');
+  zeilen.push('  Menschen-Bogen — die beiden Boegen sind Zelle fuer Zelle vergleichbar');
+  zeilen.push('  ("eine Hand", Spec GP7CH2 Sec.6 V-SPEC).');
+  for (const z of ZEILEN_GEGNER) {
+    zeilen.push(`  Zeile ${z.tag} = ${z.name} (${z.keys.length} Zellen)`);
+    if (z.hinweis) zeilen.push(`    Hinweis: ${z.hinweis}`);
+    z.keys.forEach((k, i) => {
+      const g = SPRITES[k];
+      const gw = Math.max(...g.map((r) => r.length));
+      zeilen.push(`    ${marke(z.tag, i)}  ${k.padEnd(22)} ${gw}x${g.length}  Zelle x=${i * ZELL_W}..${i * ZELL_W + ZELL_W - 1}`);
+    });
+  }
+  zeilen.push('');
+  zeilen.push('ADDITIVITAETS-ZUSAGE (Rev 3): die 9 Menschen-PNG auf gras/lehm/weg sind');
+  zeilen.push('  byte-gleich mit Rev 2. Neu sind 3 Menschen-PNG auf dem Gruft-Stein und die');
+  zeilen.push('  12 Gegner-PNG. Diese Legende ist das Dateimanifest und waechst deshalb mit.');
   zeilen.push('');
   zeilen.push('DATEIEN (Mass, Bytes, sha256)');
   for (const d of dateien) zeilen.push(`  ${d.name.padEnd(40)} ${String(d.w).padStart(5)}x${String(d.h).padStart(4)}  ${String(d.bytes).padStart(8)} B  ${d.sha}`);
