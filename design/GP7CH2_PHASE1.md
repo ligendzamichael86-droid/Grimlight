@@ -2,8 +2,8 @@
 
 Commits: 5eb42d5 (Engine Schritt 1: Flash-Zaehler, Decal-Liste, 3 Blink-
 Stellen raus, provisorische *_decal-Keys), c2d713b (Engine Schritt 2: 37
-additive smoke-Gates, smoke-Kanon 825 -> 862), Kunst-Commit (siehe git log,
-nach V-TESTS r2/V-SPEC r2). Basis: c60d153 (Phase 0 + Palette +8).
+additive smoke-Gates, smoke-Kanon 825 -> 862), ef1b27e (Kunst: fuenf
+Gegner + vier Decals, diese Doku, Uebergabe). Basis: c60d153 (Phase 0 + Palette +8).
 Ablauf: drei DIREKTE Opus-Agenten parallel (Engine E, Zeichner A Skelett/
 Hund/Warden, Zeichner B Rost/Ghul) in EINER Sprite-Datei unter Mutex
 (.tmp/gp7ch2_p1/LOCK via mkdir), art-first (jede Runde 12x rendern + Read;
