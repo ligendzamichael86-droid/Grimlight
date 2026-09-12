@@ -495,4 +495,116 @@ export const PALETTE = {
   // die Ausnahme steht in ART_DIRECTION.md (Sanktion E4/E8).
   '_': '#e0c3c3', // Rim WARM (Haut/Leder/Holzseite). L 203,7 | C*ab 10,9
   '|': '#abdcda', // Rim KALT (Stoff/Stahl/Steinseite). L 205,1 | C*ab 16,7
+  // =========================================================================
+  // GP7-CH-2 PHASE 0 — ACHT NEUE GEGNER-TOENE (12.09.2026). GUELTIGER STAND.
+  // =========================================================================
+  // Quelle WOERTLICH: .tmp/gp7ch2_p0/toene_ch2.json (Rechner .tmp/gp7ch2_p0/
+  // 17_final.mjs auf dem RGB-Vollscan 11_vollscan.mjs, Phase 0 P0.b), Tabelle
+  // eingefroren in design/GP7CH2_PHASE0.md ("Die 8 neuen Toene") und gebunden
+  // durch R-C1. Kein Hex-Wert ist beim Eintragen nachjustiert worden (byte-
+  // genau aus der JSON uebernommen). VORAB-COMMIT nach R-A9: die Toene stehen
+  // VOR Phase 1 in der Palette, damit beide Zeichner sofort alle Stufen haben
+  // und palette.js aus dem Mutex faellt. Heute nutzt sie KEIN Grid (0 Texel) —
+  // diese Runde hat keine Pixelwirkung.
+  //
+  // WARUM WEITER SYMBOLE: die 61 alnum-Schluessel sind voll ('l' ist verboten),
+  // die Slice-6-Methode (Null-Texel-Toene umwidmen) ist abgeerntet, und die 14
+  // CH-1-Symbole gehoeren dem Menschen-Cast. Die 8 Zeichen " $ / < > { } ` sind
+  // nachgewiesen kollisionsfrei (R-C2, .tmp/gp7ch2_p0/kollision.json): 435
+  // Grids / 214.912 Texel ohne Treffer, die 5 Kartenlegenden in 4 world-Dateien
+  // fuehren nur # , - . = ~, alle Guards pruefen generisch die MITGLIEDSCHAFT
+  // in PALETTE, und keine RegExp-Zeichenklasse laeuft ueber Palettenschluessel
+  // (keines der 8 Zeichen ist dort Metazeichen). Schreibregel: im JS immer
+  // EINFACH gequotet ('"' und '`'), in JSON-Deliverables wird nur " escapt.
+  //
+  //   Ton | Rampe   | Hex      | L601  | C*ab | Hue   | Rolle
+  //   ----+---------+----------+-------+------+-------+-----------------------
+  //    "  | SKELETT | #4b5686  |  88,2 | 29,6 | 287,8 | Knochen Schatten kalt
+  //    $  | SKELETT | #8c7671  | 124,0 |  9,7 |  37,6 | Knochen Mitte
+  //    /  | SKELETT | #ae9a66  | 154,1 | 30,0 |  90,2 | Knochen Licht warm
+  //    <  | GHUL    | #737b71  | 119,5 |  6,7 | 138,5 | Lumpen mittel
+  //    >  | GHUL    | #7f968c  | 142,0 | 10,5 | 166,0 | Lumpen hell
+  //    {  | HUND    | #008190  |  92,1 | 29,1 | 214,6 | Fell dunkel
+  //    }  | HUND    | #268685  | 105,2 | 28,0 | 195,5 | Fell mittel
+  //    `  | HUND    | #3a9897  | 123,8 | 28,4 | 195,7 | Fell licht
+  //
+  // RAMPEN
+  //  * SKELETT-KNOCHEN  " -> $ -> /  (drei neue Stufen): L601 88,2 -> 124,0 ->
+  //    154,1, Schritte 35,8 / 30,0 = Verhaeltnis 1,19, Hue-Drehung 162 Grad
+  //    (kalt-violetter Kantenschatten, neutrale Mitte, warmes Licht). dE00
+  //    innerhalb der Rampe 25,47 ("/$) | 47,11 ("//) | 21,54 ($//).
+  //  * GHUL-LUMPEN  < -> >  PLUS Bestand 'd' (#585a2c) als dunkelste Stufe:
+  //    L601 84,2 -> 119,5 -> 142,0, Schritte 35,3 / 22,5 = Verhaeltnis 1,57,
+  //    Hue-Spanne 58 Grad; dE00 18,10 (d/<) | 27,36 (d/>) | 10,46 (</>).
+  //    'O' (Knochen dunkel) war der Alternativvorschlag und ist VERWORFEN:
+  //    gegen den GRAVEYARD-Weg 'P' nur dE00 5,56.
+  //  * HUND-PETROL  { -> } -> `  (drei neue Stufen): L601 92,1 -> 105,2 ->
+  //    123,8, Schritte 13,0 / 18,6 = Verhaeltnis 1,43, hue 195,5..214,6,
+  //    C*ab 28,0..29,1 (Selbstauflage <= 30,0 unter dem Fackelkern-Deckel
+  //    '1' = 30,5). Kalt-gesaettigtes Petrol, ortsgetrennt zu Corms Wolle
+  //    (DORF) deklariert; dE00 zu & ( ) 10,09, zu t/T/L/D 18,75.
+  //  Zwischen den drei Rampen: Sk/Gh 17,11 ($/<) | Sk/Hu 25,51 ("/{) | Gh/Hu
+  //  12,79 (>/`) — alle ueber der E3-Schranke 12.
+  //
+  // DEKLARATIONEN (R-B5/R-C1 — gemeldet statt erzwungen; Praezedenz CH-1 9,04)
+  //  1. HUND innerhalb der Rampe dE00 6,49 statt >= 8 (Paare 6,67 / 10,43 /
+  //     6,49). Erschoepfend bewiesen: im Fenster hue 195..215 / C*ab 24..30
+  //     traegt KEINE der 960 Fenster-Zellen ein Tripel mit 8 (Band L601 80..95
+  //     erlaubt global nur 10,36..11,71; >= 12 erst ab L601 98). Die Trennung
+  //     laeuft ueber die L601-Schritte 13,0 / 18,6 — Zeichner-Auflage: die
+  //     Hund-Stufen sind WERT-Stufen, nie zwei Nachbarstufen ohne Zwischenzeile.
+  //  2. HUND Hue-Spanne 19,17 statt >= 20 Grad: das Rev-2-Fenster war exakt
+  //     20 Grad breit (Spec-Fehler). Kein Rim nur um die Zahl zu retten.
+  //  3. '"' gegen Held-'X' dE00 10,45 statt 12 (V6 "der Held bleibt das
+  //     einzige Violett"): kalt UND dunkel ist im Bestand unerreichbar, die
+  //     Trennung traegt Wert + Familie + Ort.
+  //  4. '/' gegen Ghul-Bestand 'H' dE00 10,28 statt 12, bei dL 17,9 — das
+  //     Skelett-Licht 154,1 ist DUNKLER als der Ghul-Akzent 'H' (172,0). Der
+  //     Ghul fuehrt 'H' nur als Schaedel-Akzent, nie als Flaeche; die
+  //     Figur-Mittel liegen in getrennten Baendern.
+  //  5. SKELETT-SCHATTEN '"' liegt ERZWUNGEN bei hue 287,8 / L601 88,2 statt
+  //     im gewuenschten kalten Sektor 250..270 bei ~105: dieser Sektor hat im
+  //     gesamten Bereich L601 70..122 KEINE Zelle mit min-dE00 >= 9,5 (C, @,
+  //     [, L, f, D, i belegen ihn; Maximum 9,349 im vollen sRGB-Scan, von V-P0
+  //     unabhaengig nachgerechnet). >= 10 gibt es kalt nur bei L601 85..94 /
+  //     hue 283..289. Zeichner-Auflage Skelett: >= 65 % Lichtstufe '/' im
+  //     Innenraum (Rechnung 0,10/0,25/0,65 = 139,95 im bindenden Band
+  //     139,6..146,7; bei 60 % nur 138,45 = unter der Untergrenze), '"' nur
+  //     als Kanten-/Rippenschatten, nie flaechig.
+  //  Minima zu den Sperrlisten (E-C4): Corm & ( ) 24,09 / 11,46 / 10,09 |
+  //  Katakomben t T L D 13,89 / 13,92 / 18,75 | Hedda ! % G 15,23 / 32,16 /
+  //  46,30 | Bran : ; ? 11,93 / 20,16 / 31,37 | Mile @ [ ] 16,87 / 14,09 /
+  //  10,05 | Held u U X ^ Z 10,45 / 24,60 / 23,36 | Knochen O B b N 10,42 /
+  //  11,03 / 24,41 | Gras e E a m K A 16,05 / 11,11 / 19,14 | Erde z p v M P V
+  //  10,17 / 15,83 / 29,38 | Wasser w W 9 '=' 18,96 / 10,77 / 10,10 | Stein
+  //  g s S F 11,90 / 17,57 / 30,76 | Rost 4 5 6 19,16 / 28,46 / 42,47
+  //  (Reihenfolge je Eintrag: SKELETT / GHUL / HUND).
+  //
+  // 'x' UND 'f' BLEIBEN BESTAND, ALS FIGURENFARBE GESPERRT (E-C3): 'x'
+  // (#e0524c, Trank/Herz) ist mit C*ab 64 der bunteste Ton der Palette und
+  // gehoert dem HUD; 'f' (#8a92a0, fog_blob, 234 Texel, GRAVEYARD fog:true)
+  // ist mit dE00 3,9 zu 'D' ohnehin kein eigener Materialton. Blutakzente
+  // laufen ueber r/R, nie ueber 'x'.
+  //
+  // SANKTIONIERTE FOLGE (KEIN Fehler): .tmp/check_gfx6_art.mjs SYM-Deckel
+  // 17 -> 25 (§5(2), dieselbe Runde) und .tmp/shot_gfx6.py:309 Paletten-Regex
+  // um diese 8 Zeichen (§5(7), zweite Beruehrung — sonst messen die Realmess-
+  // Szenen in einer 78-Ton-Welt). .tmp/check_gp6_art_self.mjs:26 (erwartete
+  // "genau 3 Symboltoene") BLEIBT rot wie seit CH-1 — 6 ROT von 428, KEIN
+  // siebtes (E-A7). smoke_test.mjs:81-93, sprite_factory.js:17-19 und
+  // art_slice3_selfcheck pruefen nur die MITGLIEDSCHAFT in PALETTE und bleiben
+  // gruen. Die mobile/-Spiegelkopie der Palette entsteht je APK-Build neu.
+  // PALETTE NACH CH-2 (R-C2): 86 Toene = 61 alnum + 25 Symbole (3 alt + 14
+  // CH-1 + 8 CH-2).
+  '"': '#4b5686', // Knochen SCHATTEN (kalt), Rampe SKELETT Stufe 1/3. L601 88,2 | C*ab 29,6 | Hue 287,8
+                  // (hue ERZWUNGEN, siehe Deklaration 5; nur Kanten/Rippen, nie Flaeche)
+  '$': '#8c7671', // Knochen MITTE,           Rampe SKELETT Stufe 2/3. L601 124,0 | C*ab 9,7 | Hue 37,6
+  '/': '#ae9a66', // Knochen LICHT (warm),    Rampe SKELETT Stufe 3/3 (Leitton, >= 65 % der
+                  // Innenflaeche). L601 154,1 | C*ab 30,0 | Hue 90,2
+  '<': '#737b71', // Lumpen MITTEL, Rampe GHUL Stufe 2/3 (Leitton; Stufe 1/3 ist Bestand 'd').
+                  // L601 119,5 | C*ab 6,7 | Hue 138,5
+  '>': '#7f968c', // Lumpen HELL,   Rampe GHUL Stufe 3/3. L601 142,0 | C*ab 10,5 | Hue 166,0
+  '{': '#008190', // Fell DUNKEL,   Rampe HUND-PETROL Stufe 1/3. L601 92,1 | C*ab 29,1 | Hue 214,6
+  '}': '#268685', // Fell MITTEL,   Rampe HUND-PETROL Stufe 2/3 (Leitton). L601 105,2 | C*ab 28,0 | Hue 195,5
+  '`': '#3a9897', // Fell LICHT,    Rampe HUND-PETROL Stufe 3/3. L601 123,8 | C*ab 28,4 | Hue 195,7
 };
