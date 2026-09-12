@@ -225,10 +225,6 @@ export function createPlayer(spawn, opts = {}) {
   }
 
   function draw(ctx, cam, gfx, timeSec) {
-    // Unverwundbar: Blinken (jeden zweiten Intervall unsichtbar)
-    if (player.state !== 'dead' && player.invulnTimer > 0 && Math.floor(timeSec * 12) % 2 === 0) {
-      return;
-    }
     const img = gfx[spriteKey()];
     // Größenagnostisch: horizontal auf die Hitbox zentriert, Füße = Hitbox-
     // Unterkante. Maße aus dem Canvas gelesen (Held jetzt 16×24), kein 16²-

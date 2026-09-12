@@ -617,7 +617,6 @@ export function drawEnemy(ctx, cam, e, gfx, timeSec) {
   if (e.state === 'die') {
     key = e.facingLeft ? `${prefix}_die_flip` : `${prefix}_die`;
   } else {
-    if (e.hurtTimer > 0 && Math.floor(timeSec * 20) % 2 === 0) return false; // Blitzen
     if (e.kind === 'hound' && e.state === 'down' && e.downTimer <= 0.3
       && Math.floor(timeSec * 10) % 2 === 0) {
       return false; // Aufsteh-Blinken (letzte 0,3 s am Boden)

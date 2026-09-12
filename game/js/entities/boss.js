@@ -320,8 +320,6 @@ export function drawGraveward(ctx, cam, e, gfx, timeSec) {
     case 'recover': base = 'warden_idle'; break;
     default: base = 'warden_idle';
   }
-  // Hurt-Blitzen wie im generischen Pfad (nicht im Sterben).
-  if (e.state !== 'die' && e.hurtTimer > 0 && Math.floor(timeSec * 20) % 2 === 0) return true;
   const key = (e.facingLeft && gfx[`${base}_flip`]) ? `${base}_flip` : base;
   const img = gfx[key];
   if (!img) return true;

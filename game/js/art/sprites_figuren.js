@@ -2038,4 +2038,51 @@ export const SPRITES = {
     '..6654665k..Jc..',
     '.jjqqkjjqqk.J...',
   ],
+
+  // =========================================================================
+  // GP7-CH-2 §4/V7/E-A4 — BODEN-DECALS (Stufe 2 des zweistufigen Sterbens).
+  // EIGENE KEYS, ANS ENDE (§0.2: die Bestandsreihenfolge ist eingefroren;
+  // Object.keys ist in allen Rigs live gelesen -> anhaengen ist folgenlos).
+  // KEINE *_decal_flip-Keys: eine Leiche traegt keine Blickrichtung (E-A4);
+  // damit bleiben die 37er-Flip-Liste main.js:106-128 und smoke:6396-6408
+  // unangetastet. KEIN warden_decal (§8).
+  //
+  // PROVISORISCHER STAND (Engine-Agent, Phase 1e Schritt 1c): das jeweilige
+  // *_die-Grid auf die untersten N BELEGTEN Zeilen beschnitten, N = min(6,
+  // floor(0,4 * Basisgrid-Hoehe)), Hund hart 4 (E-B9); Breite = Basisgrid HEUTE
+  // (rust 16 — Zeichner B stellt mit dem Rost-Commit auf 20 um und MUSS
+  // rust_decal mit umstellen, sonst reisst das Decalmasse-Gate "Breite =
+  // Basisgrid"). Die KUNST ersetzen die Zeichner unter dem Mutex: E-A4 fordert
+  // einen messbaren Unterschied zu *_die (Texel-Diff >= 30 % ODER >= 2 Zeilen
+  // flacher ODER Wertabsenkung >= 20 L), §1 <= 25 % Rahmenfuellung, und das
+  // Hund-Decal ist eine NEUZEICHNUNG (R-A4, Band 8-11).
+  // =========================================================================
+  skeleton_decal: [
+    '......kbbbbk....',
+    '.....kbNbbNbk...',
+    '...kbkbkkbkbbk..',
+    '..kbBbkbbkbBbbk.',
+    '..kkkkkkkkkkkkk.',
+  ],
+  ghoul_decal: [
+    '...kk3H3kkk.....',
+    '..kC3HggHd3kk...',
+    '..kddggddggdk...',
+    '..kgdggggdggk...',
+    '..kkkkkkkkkkk...',
+  ],
+  hound_decal: [
+    'kvvvvvvvvvvkkk..',
+    'kpzpzpzpvvvvvpk.',
+    'kppppppppvvkkkk.',
+    '.kkkkkkkkkkk....',
+  ],
+  rust_decal: [
+    '......k55k......',
+    '.....k5554k.....',
+    '.kbbkk5544kkbk..',
+    'kbkNbk4544kbNbk.',
+    'kBbbkkkkkkbbBbk.',
+    '.kkkkkkkkkkkkk..',
+  ],
 };

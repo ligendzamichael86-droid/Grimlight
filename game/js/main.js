@@ -131,6 +131,71 @@ for (const key of [
 const tiles = buildAll(TILE_ART, PALETTE);
 
 // ===========================================================================
+// GP7-CH-2 §4 / E-A2 / E-A3 — SIGNAL-CANVASES (FLASH + KALTE UNVERWUNDBARKEIT)
+//
+// WARUM HIER UND NICHT LAZY: .tmp/check_engineB_gp6.mjs:114 haelt JEDES nach
+// dem Boot erzeugte kleine Canvas fuer eine Tint-Maske und prueft es gegen die
+// Alpha-Whitelist (:145-148) und die __noTint-Kontrolle (:238-240). Ein Flash
+// mit Alpha 0,8 waere dort rot. Alles, was VOR dem ersten rAF-Callback
+// entsteht, liegt unter boot (check_engineB_gp6:79) und ist gate-frei. Und
+// weil der Block NACH dem tiles-Bau steht, landen die neuen Canvases in sechs
+// Reihenfolge-Rigs HINTER TILE_ART und bekommen dort den Namen extra_N
+// (check_main_slice1:106, check_inventory_slice2:151, check_save_slice4:194,
+// smoke:5563, smoke:6453, check_engineB_gp6:82) — kein Name verschiebt sich.
+//
+// E-A2 MASKE IST GEOMETRISCH: Kontur-Texel (E5: opaker Texel mit >= 1
+// transparentem 4er-Nachbarn ODER an der Rahmenkante) werden auf '.' gesetzt.
+// Der Tonfilter k/n taugt nicht: er liesse den Held-Umriss zu 47 % weiss
+// ausbrennen und riss 19-33 Loecher ins Innere (Review Linse 1 M1, gemessen).
+// Der Flash fuellt also den INNENRAUM, der Umriss bleibt stehen.
+const FLASH_TON = '#fff8ea';   // E-A2: L 248,5 -> >= 12 L ueber jedem Koerperton
+const KALT_TON = '#abdcda';    // E-A3: die |-Familie (kalt = geschuetzt)
+const FLASH_ALPHA = 0.8;       // E-A2
+// E-A3: der Unverwundbarkeits-Puls nimmt NUR diese Werte an (6 Hz = ein
+// voller Durchlauf je 1/6 s, also Schrittfrequenz 24 Hz).
+const KALT_PULS = [0.16, 0.12, 0.08, 0];
+// Wer ueberhaupt blitzen darf. sword_slash_*, npc_* (inkl. npc_blase), Drops,
+// Projektile und Requisiten stehen NICHT drin (§4: "blitzen nie"); die
+// *_decal-Grids ebenfalls nicht (eine Leiche blitzt nicht).
+const SIGNAL_RE = /^(player|skeleton|ghoul|hound|rust|warden|shield)_(?!.*_decal$)/;
+
+// E5-KONTUR -> '.': liefert das Grid OHNE seine Kontur.
+function innenGrid(grid) {
+  const h = grid.length;
+  const w = grid[0].length;
+  const out = [];
+  for (let y = 0; y < h; y++) {
+    let zeile = '';
+    for (let x = 0; x < w; x++) {
+      const c = grid[y][x];
+      if (c === '.') { zeile += '.'; continue; }
+      const kontur = x === 0 || y === 0 || x === w - 1 || y === h - 1
+        || grid[y - 1][x] === '.' || grid[y + 1][x] === '.'
+        || grid[y][x - 1] === '.' || grid[y][x + 1] === '.';
+      zeile += kontur ? '.' : c;
+    }
+    out.push(zeile);
+  }
+  return out;
+}
+
+// Registry Canvas -> { flash, kalt }. Schluessel ist das gfx-ORIGINAL-Canvas
+// (auch das _flip-Canvas), damit die Fassade beim drawImage direkt trifft.
+const SIGNAL_REG = new Map();
+for (const name of Object.keys(gfx)) {
+  const flip = name.endsWith('_flip');
+  const basis = flip ? name.slice(0, -5) : name;
+  if (!SIGNAL_RE.test(basis)) continue;
+  const roh = SPRITES[basis];
+  if (!roh) continue;
+  const innen = innenGrid(flip ? roh.map((r) => [...r].reverse().join('')) : roh);
+  SIGNAL_REG.set(gfx[name], {
+    flash: buildTintMask(innen, PALETTE, FLASH_TON, FLASH_TON, 'L'),
+    kalt: buildTintMask(innen, PALETTE, KALT_TON, KALT_TON, 'L'),
+  });
+}
+
+// ===========================================================================
 // GRAFIKPASS 6 §4.2 — SPRITE-LICHT: MASKEN-REGISTRY + FASSADE.
 //
 // PROBLEM: Figuren und Props wurden bisher als flache Sprites gezeichnet und
@@ -215,7 +280,7 @@ function tintMaske(eintrag, art) {
 
 // Aktive Toenung des gerade gezeichneten Renderables. Wird VOR jedem r.draw()
 // gesetzt; r.draw() ist synchron, ein zweiter Zustand kann also nie entstehen.
-const tintCfg = { on: false, warmA: 0, kaltA: 0, seite: 'WL' };
+const tintCfg = { on: false, warmA: 0, kaltA: 0, seite: 'WL', flash: 0, invuln: 0 };
 
 // Der abgefangene drawImage-Zug der Fassade.
 function tintDrawImage(img, ...a) {
@@ -225,7 +290,9 @@ function tintDrawImage(img, ...a) {
   if (!eintrag) return; // Tiles, Fringes, HUD-Icons: nicht registriert -> nichts
   const wA = tintCfg.warmA;
   const kA = tintCfg.kaltA;
-  if (wA <= 0 && kA <= 0) return;
+  // GP7-CH-2: der fruehe Ausstieg darf die SIGNAL-Stufe nicht verschlucken —
+  // eine voll ausgeleuchtete Figur hat warmA = kaltA = 0 und blitzt trotzdem.
+  if (wA <= 0 && kA <= 0) { signalDrawImage(img, a); return; }
   // Zustand des Aufrufers sichern: manche Zeichner blinken ueber globalAlpha.
   // Die Masken skalieren mit (eine halb transparente Figur bekommt auch nur
   // halbe Tinte); bei globalAlpha 1 — dem Normalfall und dem Messfall M3 —
@@ -242,6 +309,35 @@ function tintDrawImage(img, ...a) {
     ctx.globalAlpha = wA * vorA;
     ctx.drawImage(tintMaske(eintrag, tintCfg.seite), ...a);
     ctx.globalAlpha = 1; // §4.2: nach JEDEM Masken-Draw
+  }
+  ctx.globalCompositeOperation = vorG;
+  if (vorA !== 1) ctx.globalAlpha = vorA;
+  signalDrawImage(img, a);
+}
+
+// GP7-CH-2 §4 / E-A2 / E-A3 — SIGNAL-STUFE.
+// ZEICHENREIHENFOLGE (E-A2, bindend): Original -> Kalt -> Warm -> Flash.
+// Der Flash ist deshalb der LETZTE Draw. Zoege man ihn vor die Tint-Masken,
+// liefe der Rueckwaerts-Scan check_engineB_gp6:132-139 auf ihn als "Original"
+// und pruefte dessen Alpha -> rot (Negativkontrolle des Reviews, gemessen).
+// Die kalte Unverwundbarkeits-Maske liegt zwischen Warm und Flash: eigene
+// Vokabel (E-A3 "warm = getroffen, kalt = geschuetzt"), nie beides zugleich.
+function signalDrawImage(img, a) {
+  if (tintCfg.flash <= 0 && tintCfg.invuln <= 0) return;
+  const sig = SIGNAL_REG.get(img);
+  if (!sig) return;    // sword_slash, npc_*, Drops, Projektile, Kacheln, Decals
+  const vorA = ctx.globalAlpha;
+  const vorG = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'source-over';  // §4.2: NIE 'lighter'
+  if (tintCfg.invuln > 0) {
+    ctx.globalAlpha = tintCfg.invuln * vorA;
+    ctx.drawImage(sig.kalt, ...a);
+    ctx.globalAlpha = 1;
+  }
+  if (tintCfg.flash > 0) {
+    ctx.globalAlpha = tintCfg.flash * vorA;
+    ctx.drawImage(sig.flash, ...a);
+    ctx.globalAlpha = 1;
   }
   ctx.globalCompositeOperation = vorG;
   if (vorA !== 1) ctx.globalAlpha = vorA;
@@ -269,6 +365,28 @@ const tintCtx = new Proxy(ctx, {
 // (Review P2-M-5). WeakMap, damit Map-Wechsel (buildWorld erzeugt neue
 // Entities) nichts leaken.
 const TINT_PREV = new WeakMap();
+
+// ===========================================================================
+// GP7-CH-2 E-A1 — FLANKEN-ZAEHLER DES TREFFER-FLASHS.
+//
+// NICHT `hurtTimer > 0`: der die-Zweig enemies.js:441-451 macht `continue`
+// VOR der Dekrementzeile :453, der dead-Zweig player.js:98-101 kehrt vor :110
+// zurueck — beide Timer FRIEREN also ein (gemessen: 0,200 ueber alle 25
+// Sterbeframes; invulnTimer 1,000 dauerhaft nach dem Game Over). Eine
+// timergekoppelte Flash-Bedingung wuerde jede Leiche dauerblitzen lassen.
+//
+// Stattdessen: die FLANKE 0 -> >0 setzt einen Frame-Zaehler (Muster
+// AUDIO_HURT/audioInvuln, main.js:1008/1653). Er wird im ZEICHENPFAD
+// dekrementiert (pushTinted, einmal je Entity und Frame) und NICHT im
+// Update-Zweig — der Hitstop-Zweig main.js:2021-2028 ueberspringt das Update
+// komplett, ein dort gefuehrter Zaehler froehre mit ein.
+// Dauer = Hitstop + 1: 3 Frames beim Treffer (HITSTOP_H 2), 4 beim Kill
+// (HITSTOP_K 3).
+const FLASH_REST = new WeakMap();   // Entity -> verbleibende Flash-Frames
+const FLASH_VOR = new WeakMap();    // Entity -> Timerwert des Vorframes
+const FLASH_TOT = new WeakMap();    // Entity -> war im Vorframe schon die/dead
+const FLASH_TREFFER = 3;
+const FLASH_KILL = 4;
 
 const input = createInput();
 // §0.3: der Gesten-Unlock haengt am ECHTEN touchstart-Handler (2. Parameter,
@@ -906,6 +1024,21 @@ let enemies = [];
 let props = [];
 let drops = [];
 let lights = [];       // Fackeln + Spieler-Laterne (letzter Eintrag)
+// GP7-CH-2 §4/V7/E-A4 — BODEN-DECALS (Stufe 2 des Sterbens).
+// FLACHE LISTE OHNE UPDATE: der einzige Schreiber ist der Frame-Diff hinter
+// updateEnemies, der einzige Leser der Zeichner. Kein Event, keine Mutation
+// an enemies/drops/player, kein Timer — DIE_TIME, dieTimer, spawnDeathDrops,
+// events und enemies.splice bleiben byte-gleich (§0.6).
+let decals = [];
+// Diff-Menge des Vorframes. enemies.js:448 ist der EINZIGE splice im Projekt,
+// das Verschwinden einer Entity ist also exakt der Todeszeitpunkt.
+let lebendeVorFrame = new Set();
+const DECAL_MAX = 24;                // §5(5) Deckel; aeltestes faellt
+// Nur diese vier Sorten bekommen ein Decal (§8: Warden ohne).
+const DECAL_KEY = { skeleton: 'skeleton_decal', ghoul: 'ghoul_decal', hound: 'hound_decal', rust: 'rust_decal' };
+// Tint des TODESMOMENTS, einmal eingefroren (E-A4: Leichen behalten das Licht
+// ihres Todesmoments — deklariert, CH-4-Revision).
+const DECAL_TINT = new WeakMap();
 let playerLight = null;
 let portalsArmed = []; // Portal erst scharf, wenn Spieler es einmal verlassen hat
 let fadePhase = 'none'; // 'none' | 'out' | 'in'
@@ -1165,6 +1298,12 @@ function buildWorld(mapKey, spawn, carry) {
       .filter((s) => !(runFlags.bossDead && s.kind === 'graveward'))
       .map(createEnemy),
   ];
+  // GP7-CH-2 E-A4 (Review Linse 1 B2, gemessen): buildWorld raeumt `decals`
+  // UND `lebendeVorFrame`. Ohne das zweite liefe der Frame-Diff im ersten
+  // freien Frame gegen das Gegner-Set der ALTEN Karte und erzeugte 7-17
+  // Phantom-Decals je Kartenwechsel (und 8 je Respawn) — das DORF-Gate
+  // smoke:6612 ist praefixgebunden und wuerde davon rot.
+  decals.length = 0; lebendeVorFrame = new Set();
   // SLICE 4 §3.4: bereits geoeffnete Truhen werden NICHT neu erzeugt (sonst
   // wird der Bestandskompromiss "Truhen fuellen sich beim Wiederbetreten neu"
   // durch das Save zur Gold-Farm). Gefiltert wird auf dem ERGEBNIS von
@@ -2078,6 +2217,21 @@ function update(dt) {
       // Bumerang NACH dem Spieler, VOR den Gegnern: Stun wirkt im selben Tick
       projectiles.update(dt, input, player, enemies, props, map, drops, events);
       updateEnemies(dt, enemies, player, map, drops, events);
+      // GP7-CH-2 §4/V7/E-A4 — DECAL-UEBERGABE. Steht im else-Zweig DIREKT
+      // hinter updateEnemies und damit nie ueber einer buildWorld-Grenze:
+      // wer im Vorframe lebte und jetzt nicht mehr in `enemies` steht, wurde
+      // in enemies.js:448 gesplict, also nach Ablauf von dieTimer. Drops, XP,
+      // 'enemy_died', 'boss_died', Kill-Zaehler und HITSTOP_K feuern am
+      // identischen Tick wie vorher — hier wird NUR gelesen.
+      for (const e of lebendeVorFrame) {
+        if (enemies.includes(e)) continue;
+        const dkey = DECAL_KEY[e.kind];
+        if (!dkey || !gfx[dkey]) continue;   // Warden (§8) und Unbekanntes: keins
+        const dt0 = DECAL_TINT.get(e) || { warmA: 0, kaltA: 0, seite: 'WL' };
+        decals.push({ key: dkey, x: e.x, y: e.y, w: e.w, h: e.h, warmA: dt0.warmA, kaltA: dt0.kaltA, seite: dt0.seite });
+      }
+      if (decals.length > DECAL_MAX) decals.splice(0, decals.length - DECAL_MAX);
+      lebendeVorFrame = new Set(enemies);
       updateProps(dt, props, player, map, drops, events);
       // §3.4: geoeffnete Truhen registrieren (Quelle = props-Liste, s.
       // chestKey-Kommentar). Die Siegtruhe bleibt ausgenommen.
@@ -2658,6 +2812,38 @@ function drawWorld() {
     for (const l of mapDef.extraLights) frameLights.push(l);
   }
 
+  // GP7-CH-2 R-A3: der Rig-Schalter __noTint wird HIER gelesen (vorher stand
+  // die Zeile erst am renderables-Bau). Grund: der Decal-Zeichner darunter
+  // braucht ihn und muss VOR den Weichschatten laufen (E-A4 woertlich "unter
+  // allen Renderables"). SANKTIONIERT in R-A3.
+  const noTint = !!window.__noTint; // Rig-Schalter M3; NUR main.js liest window
+
+  // GP7-CH-2 §4/V7/E-A4 + R-A3 — DECAL-ZEICHNER. UNTER ALLEM, was noch lebt:
+  // nach den Kacheln, VOR den Weichschatten und damit vor den Renderables.
+  // Zeichnet durch DIESELBE Fassade wie die Entities, mit dem EINGEFRORENEN
+  // Tint des Todesmoments. Fusslinie = AABB-Unterkante wie bei den Sprites
+  // (enemies.js:639-641), die Grid-Hoehe des Decals ist damit frei.
+  // tintCfg.flash/invuln werden explizit auf 0 gesetzt (eine Leiche blitzt
+  // nicht), window.__noTint wird genauso respektiert wie in der
+  // renderables-Schleife — sonst schluege bei einem Tod in einer Messszene
+  // check_engineB_gp6:238-240 zu.
+  for (const d of decals) {
+    const dimg = gfx[d.key];
+    if (!dimg) continue;
+    tintCfg.on = !noTint;
+    tintCfg.warmA = d.warmA;
+    tintCfg.kaltA = d.kaltA;
+    tintCfg.seite = d.seite;
+    tintCfg.flash = 0;
+    tintCfg.invuln = 0;
+    tintDrawImage(
+      dimg,
+      Math.round(d.x + d.w / 2 - dimg.width / 2 - camera.x),
+      Math.round(d.y + d.h - dimg.height - camera.y)
+    );
+  }
+  tintCfg.on = false;
+
   // §2.4: Weichschatten VOR der renderables-Schleife (unter allen Entities, über
   // dem Boden) für Spieler, jeden Gegner UND jeden echten Prop.
   drawSoftShadow(player);
@@ -2677,7 +2863,6 @@ function drawWorld() {
   //           Wurfgeschosse sind SIGNALE, keine beleuchteten Koerper — sie
   //           muessen im Dunkeln lesbar bleiben). Props (Vase/Urne/Truhe),
   //           Gegner und Spieler werden GETOENT.
-  const noTint = !!window.__noTint; // Rig-Schalter M3; NUR main.js liest window
   // Fackeln (flicker >= 0.8) fuer die Seitenwahl der Warm-Rampe.
   const tintTorches = frameLights.filter((l) => (l.flicker || 0) >= 0.8);
 
@@ -2707,11 +2892,58 @@ function drawWorld() {
   // Array.sort ist stabil → bei Gleichstand bleibt Einfügereihenfolge
   // (Spieler zuletzt = bei Gleichstand oben).
   const renderables = [];
+  // GP7-CH-2 E-A1 — der Zaehler wird GENAU HIER dekrementiert: pushTinted
+  // laeuft einmal je Entity und Frame, im Zeichenpfad, auch waehrend Hitstop
+  // und Fade (drawWorld kennt keinen Freeze-Zweig).
+  // AUSSCHLUESSE WOERTLICH: Gegner state !== 'die', Spieler state !== 'dead'.
+  function signalFor(ent) {
+    // Nur Koerper mit einem der beiden Timer koennen ueberhaupt blitzen —
+    // NPCs, Requisiten, Drops und Projektile haben keinen.
+    if (ent.hurtTimer === undefined && ent.invulnTimer === undefined) return { flash: 0, invuln: 0 };
+    const t = Math.max(ent.hurtTimer || 0, ent.invulnTimer || 0);
+    const vor = FLASH_VOR.get(ent) || 0;
+    const tot = ent.state === 'die' || ent.state === 'dead';
+    // R-A1: im Zustand die/dead wird KEINE NEUE Flanke mehr ausgewertet. Die
+    // Timer frieren dort ein (enemies.js:441-451 macht `continue` VOR der
+    // Dekrementzeile :453, player.js:98-101 kehrt vor :110 zurueck), ein
+    // Neustart daraus waere der Dauerblitzer. Gemessen wird dazu der
+    // TOT-Zustand des VORFRAMES: der Todesframe selbst ist keine "Flanke im
+    // die-Zustand", sondern der Frame, in dem der Tod EINTRITT (enemies.js:467
+    // setzt hurtTimer und :484 state='die' im selben Tick) — er traegt den
+    // Kill-Flash. Absicherung doppelt: hurtTimer wird NUR in enemies.js:467
+    // (nicht-die-Zweig) gesetzt, invulnTimer NUR in player.js:192 (Guard
+    // state !== 'dead'), eine eingefrorene Zahl kann also gar nicht steigen.
+    const totVor = FLASH_TOT.get(ent) === true;
+    if (t > vor + 1e-9 && !totVor) FLASH_REST.set(ent, (ent.hp ?? 1) <= 0 ? FLASH_KILL : FLASH_TREFFER);
+    FLASH_VOR.set(ent, t);
+    FLASH_TOT.set(ent, tot);
+    let flash = 0;
+    const rest = FLASH_REST.get(ent) || 0;
+    if (rest > 0) {
+      FLASH_REST.set(ent, rest - 1);
+      // R-A1 (Fassung spur_kill): ein bereits gesetzter Zaehler zeichnet ZU
+      // ENDE, auch im die/dead-Zustand. Sonst waere der 4-Frame-Kill-Flash
+      // eine tote Vorschrift (gemessen: toedlicher Hieb 0 Flash-Frames, weil
+      // Treffer und state='die' im selben Tick liegen). Dauerblitzen ist per
+      // Konstruktion unmoeglich: der Zaehler laeuft in <= 4 Zeichenframes leer
+      // und kann im die/dead-Zustand nicht neu gesetzt werden.
+      flash = FLASH_ALPHA;
+    }
+    // E-A3: Unverwundbarkeit ist die KALTE Vokabel, 6 Hz, diskrete Alphas.
+    // Sie tritt zurueck, solange der warme Treffer-Flash laeuft.
+    let invuln = 0;
+    if (!tot && flash === 0 && (ent.invulnTimer || 0) > 0) {
+      invuln = KALT_PULS[Math.floor(timeSec * 24) % KALT_PULS.length];
+    }
+    return { flash, invuln };
+  }
   const pushTinted = (ent, drawFn) => {
     const ax = ent.x + ent.w / 2;
     const ay = ent.y + ent.h - 1;
     const t = tintFor(ent, ax, ay);
-    renderables.push({ fy: ent.y + ent.h, ax, ay, tint: true, warmA: t.warmA, kaltA: t.kaltA, seite: t.seite, draw: drawFn });
+    DECAL_TINT.set(ent, t);   // E-A4: Tint des Todesmoments einfrieren
+    const s = signalFor(ent);
+    renderables.push({ fy: ent.y + ent.h, ax, ay, tint: true, warmA: t.warmA, kaltA: t.kaltA, seite: t.seite, flash: s.flash, invuln: s.invuln, draw: drawFn });
   };
   drops.forEach((d, i) => renderables.push({
     fy: d.y + d.h, ax: d.x + d.w / 2, ay: d.y + d.h - 1, tint: false, warmA: 0, kaltA: 0, seite: 'WL',
@@ -2759,9 +2991,13 @@ function drawWorld() {
     tintCfg.warmA = r.warmA;
     tintCfg.kaltA = r.kaltA;
     tintCfg.seite = r.seite;
+    tintCfg.flash = r.flash || 0;
+    tintCfg.invuln = r.invuln || 0;
     r.draw();
   }
   tintCfg.on = false; // Fassade nach der Schleife neutral (Hygiene wie gco/Alpha)
+  tintCfg.flash = 0;
+  tintCfg.invuln = 0;
 
   // §3: Level-Up-Ring (levelup_0/1, 0,5 s) UEBER der Spieler-Fußkante.
   // §4.2-Deklaration: laeuft NACH der Schleife am ECHTEN ctx und bleibt damit
