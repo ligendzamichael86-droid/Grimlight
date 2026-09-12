@@ -6688,6 +6688,783 @@ const tcc = (tx, ty) => ({ x: tx * 16 + 8, y: ty * 16 + 8 });
   globalThis.document = docVorher;
 }
 
+// --- GP7CH2-BLOCK-START ---
+// ===========================================================================
+// GP7CH2 §5(5) — ADDITIVE GATES DES FLASH-/DECAL-PASSES (Phase 1e, 12.09.2026)
+//
+// REGELN, unter denen dieser Block steht (SPEC_GP7CH2 §5, Rev 2 E-A, PHASE0
+// R-A1..R-A10):
+//   * NUR ADDITIV, am ENDE der Datei. Kein Zeichen oberhalb dieser Zeile wurde
+//     angefasst; §5(6) verbietet Flusstests, Golden und AABB.
+//   * QUELLGEBUNDEN: gemessen wird an den ECHTEN Modulen (drawEnemy,
+//     drawGraveward, player.draw) bzw. am ECHTEN Boot-Pfad von main.js. Kein
+//     Nachbau der Flash-/Decal-Logik im Test.
+//   * Die Rig-Namensordnung ist SPRITES -> 37 Flips -> TILE_ART -> Signal-
+//     Canvases (Flash/Kalt, main.js baut sie EAGER nach dem tiles-Bau). Damit
+//     traegt jedes Signal-Canvas den Namen "<Original>#flash" bzw. "#kalt" und
+//     jeder Signal-Draw ist seinem TRAEGER exakt zuzuordnen.
+//
+//   (1) Silhouetten-Verlust 0 (Gegner, Boss, Spieler) + Hund-Telegraph bleibt
+//   (2) Flash-Draws: 3 Frames je Treffer, <= 4 je Kill, 0 ueber *_decal, NPCs nie
+//   (3) Unverwundbarkeit = kalte Maske 6 Hz, Alpha nur {0, 0,08, 0,12, 0,16}
+//   (4) Decal-Reinheit (Wertkopie, kein Event, keine Timer-Zuweisung)
+//   (5) REISENDES DORF-Gate (R-A6) + CATACOMBS-Wechsel + Respawn
+//   (6) Deckel 24 (Nachweis ueber den nur lesenden Debug-Deckel __decalDeckel)
+//   (7) *_decal-Positivkontrolle je Sorte + Fussposition + Warden nie
+//   (8) Frame-Diff-Untergrenzen der Gegner (>= IST, PHASE0)
+// ===========================================================================
+{
+  const G7 = 'GP7CH2-§5(5)';
+  const q7 = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+  const M7_ROH = q7('game/js/main.js');
+  const M7 = M7_ROH.replace(/^[ \t]*\/\/.*$/gm, '').replace(/[ \t]+\/\/.*$/gm, '');
+  const enemiesMod = await import('../game/js/entities/enemies.js');
+  const bossMod = await import('../game/js/entities/boss.js');
+
+  // -------------------------------------------------------------------------
+  // (1) SILHOUETTEN-VERLUST 0 — an den ECHTEN Zeichnern, ohne Boot.
+  //     Gemessen wird, wie oft der Zeichner den Frame OHNE drawImage verlaesst,
+  //     waehrend der Treffer-/Unverwundbarkeits-Timer laeuft. Danebengestellt
+  //     die ENTFERNTE Blink-Formel (enemies.js:620 / boss.js:324 /
+  //     player.js:229) auf derselben timeSec-Folge: das war der Verlust.
+  // -------------------------------------------------------------------------
+  {
+    const gfx7 = new Proxy({}, { get: () => ({ width: 16, height: 16 }) });
+    const mkCtx7 = () => { const o = { n: 0 }; o.drawImage = () => { o.n += 1; }; return o; };
+    const cam0 = { x: 0, y: 0 };
+
+    // Gegner: HURT_FLASH 0,2 s = 12 Frames.
+    let verlustG = 0; let altG = 0;
+    {
+      const e = enemiesMod.createSkeleton({ x: 100, y: 100 });
+      e.hurtTimer = 0.2; e.state = 'idle';
+      for (let f = 0; f < 12; f++) {
+        const t = f / 60;
+        const c = mkCtx7();
+        enemiesMod.drawEnemy(c, cam0, e, gfx7, t);
+        if (c.n === 0) verlustG += 1;
+        if (e.hurtTimer > 0 && Math.floor(t * 20) % 2 === 0) altG += 1;
+        e.hurtTimer -= 1 / 60;
+      }
+    }
+    check(`${G7}(1) Gegner: 0 Silhouetten-Verlust-Frames im Treffer-Fenster (entfernte Blink-Formel haette ${altG} von 12 verschluckt)`,
+      verlustG === 0 && altG > 0, `Verlust ${verlustG}, Alt-Formel ${altG}`);
+
+    // Boss: derselbe Timer, eigener Zeichner.
+    let verlustB = 0; let altB = 0;
+    {
+      const e = bossMod.createGraveward({ x: 100, y: 100 });
+      e.hurtTimer = 0.2; e.state = 'idle';
+      for (let f = 0; f < 12; f++) {
+        const t = f / 60;
+        const c = mkCtx7();
+        bossMod.drawGraveward(c, cam0, e, gfx7, t);
+        if (c.n === 0) verlustB += 1;
+        if (e.state !== 'die' && e.hurtTimer > 0 && Math.floor(t * 20) % 2 === 0) altB += 1;
+        e.hurtTimer -= 1 / 60;
+      }
+    }
+    check(`${G7}(1) Grabwaechter: 0 Silhouetten-Verlust-Frames im Treffer-Fenster (Alt-Formel ${altB} von 12)`,
+      verlustB === 0 && altB > 0, `Verlust ${verlustB}, Alt-Formel ${altB}`);
+
+    // Spieler: INVULN_TIME 1 s = 60 Frames.
+    let verlustP = 0; let altP = 0;
+    {
+      const p = createPlayer(GRAVEYARD.playerSpawn);
+      p.invulnTimer = 1; p.state = 'idle';
+      for (let f = 0; f < 60; f++) {
+        const t = f / 60;
+        const c = mkCtx7();
+        p.draw(c, cam0, gfx7, t);
+        if (c.n === 0) verlustP += 1;
+        if (p.state !== 'dead' && p.invulnTimer > 0 && Math.floor(t * 12) % 2 === 0) altP += 1;
+        p.invulnTimer -= 1 / 60;
+      }
+    }
+    check(`${G7}(1) Spieler: 0 Silhouetten-Verlust-Frames in der Unverwundbarkeit (Alt-Formel ${altP} von 60)`,
+      verlustP === 0 && altP > 0, `Verlust ${verlustP}, Alt-Formel ${altP}`);
+
+    // POSITIVKONTROLLE: der Grufthund-AUFSTEH-Blink ist KEIN Treffer-Signal
+    // (Telegraph, §8 "bleibt") und blinkt weiter — der Zaehler misst also
+    // wirklich fehlende Draws.
+    let verlustH = 0;
+    {
+      const e = enemiesMod.createHound({ x: 100, y: 100 });
+      e.state = 'down'; e.downTimer = 0.29; e.hurtTimer = 0;
+      for (let f = 0; f < 18; f++) {
+        const c = mkCtx7();
+        enemiesMod.drawEnemy(c, cam0, e, gfx7, f / 60);
+        if (c.n === 0) verlustH += 1;
+      }
+    }
+    check(`${G7}(1) Positivkontrolle: der Grufthund-Aufsteh-Blink (enemies.js:621-624, §8 "bleibt") blinkt weiter`,
+      verlustH > 0, `${verlustH} von 18 Frames ohne Draw`);
+  }
+
+  // -------------------------------------------------------------------------
+  // (8) FRAME-DIFF-UNTERGRENZEN GEGNER (Kunst-Gate, reine Daten).
+  //     Formel Teil A 7.2 / figuren_messung.mjs:1593: Texel-Differenz zweier
+  //     Grids (ungleiche Masse mit '.' aufgefuellt), in Prozent der OPAKEN
+  //     Texel des ERSTEN Grids. Untergrenzen = IST am HEAD (PHASE0), also
+  //     heute exakt erfuellt; sie halten, solange die Zeichner die Regel
+  //     ">= IST" halten.
+  // -------------------------------------------------------------------------
+  {
+    const opak7 = (k) => SPRITES[k].join('').split('').filter((c) => c !== '.').length;
+    const fdiff7 = (ka, kb) => {
+      const A = SPRITES[ka]; const B = SPRITES[kb];
+      const h = Math.max(A.length, B.length);
+      let d = 0; let s = 0;
+      for (let y = 0; y < h; y++) {
+        const ra = A[y] || ''; const rb = B[y] || '';
+        const w = Math.max(ra.length, rb.length);
+        for (let x = 0; x < w; x++) {
+          const ca = ra[x] || '.'; const cb = rb[x] || '.';
+          if (ca !== cb) d += 1;
+          if ((ca === '.') !== (cb === '.')) s += 1;
+        }
+      }
+      return { d, s };
+    };
+    const UNTER = [
+      ['skeleton_0', 'skeleton_1', 8.96, 5.97],
+      ['ghoul_0', 'ghoul_1', 12.32, 6.90],
+      ['hound_0', 'hound_1', 28.83, 18.02],
+      ['rust_0', 'rust_1', 17.98, 8.99],
+      ['warden_walk_0', 'warden_walk_1', 15.03, 15.03],
+    ];
+    for (const [a, b, sollT, sollS] of UNTER) {
+      const r = fdiff7(a, b); const o = opak7(a);
+      const pt = 100 * r.d / o; const ps = 100 * r.s / o;
+      // Die PHASE0-Untergrenzen sind auf 2 Stellen GERUNDETE IST-Werte
+      // (8,96 = 12/134 = 8,9552). Verglichen wird deshalb mit der
+      // Rundungstoleranz 0,005, sonst reisst der Anker an sich selbst.
+      check(`${G7}(8) Frame-Diff ${a}/${b} >= ${sollT.toFixed(2)} % Texel / ${sollS.toFixed(2)} % Silhouette (IST-Untergrenze PHASE0)`,
+        pt >= sollT - 0.005 && ps >= sollS - 0.005,
+        `ist ${pt.toFixed(2)}/${ps.toFixed(2)} % (diff ${r.d}, silh ${r.s}, opak ${o})`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // (4) DECAL-REINHEIT — Quelltext-Waechter nach Muster smoke:5294-5300.
+  // -------------------------------------------------------------------------
+  {
+    const zone = (von, bis) => {
+      const i = M7.indexOf(von); const j = M7.indexOf(bis, i + 1);
+      return (i < 0 || j < 0) ? '' : M7.slice(i, j);
+    };
+    // Die drei neuen Bloecke, an ihren eigenen Ankern geschnitten.
+    const zSignal = zone('const FLASH_TON', 'function tintMaske(');
+    const zUeber = zone('for (const e of lebendeVorFrame)', 'updateProps(dt, props');
+    const zZeichner = zone('for (const d of decals) {', 'drawSoftShadow(player);');
+    const zZaehler = zone('function signalFor(ent)', 'const pushTinted =');
+    const alle = zSignal + zUeber + zZeichner + zZaehler;
+    const TIMER_RE = /(hurtTimer|invulnTimer|dieTimer|hitstop|DIE_TIME)\s*(=[^=]|\+=|-=|\+\+|--)/;
+    check(`${G7}(4) alle vier Flash-/Decal-Zonen in main.js enthalten KEINE Zuweisung an hurtTimer|invulnTimer|dieTimer|hitstop|DIE_TIME`,
+      zSignal.length > 200 && zUeber.length > 200 && zZeichner.length > 200 && zZaehler.length > 200
+      && !TIMER_RE.test(alle),
+      `${zSignal.length}/${zUeber.length}/${zZeichner.length}/${zZaehler.length} Zeichen; Treffer: ${(alle.match(TIMER_RE) || ['-'])[0]}`);
+    check(`${G7}(4) die Decal-Zonen pushen KEIN Event und mutieren enemies/drops/player NICHT`,
+      !/events\.push/.test(zUeber + zZeichner)
+      && !/\benemies\.(push|splice|pop|shift|unshift|sort|length\s*=)/.test(zUeber + zZeichner)
+      && !/\bdrops\.(push|splice|pop|shift|unshift|length\s*=)/.test(zUeber + zZeichner)
+      && !/\bplayer\.\w+\s*=[^=]/.test(zUeber + zZeichner),
+      `${(zUeber + zZeichner).length} Zeichen Decal-Zone`);
+    // Wertkopie: der Push traegt nur Zahlen/Strings, keinen Entity-Verweis und
+    // keinen Flip (E-A4: eine Leiche hat keine Blickrichtung).
+    const push7 = (M7.match(/decals\.push\(\{[^}]*\}\)/g) || []);
+    check(`${G7}(4) genau EIN decals.push, und er ist eine WERTKOPIE (x,y,w,h,key,warmA,kaltA,seite; kein Entity-Verweis, kein flip)`,
+      push7.length === 1
+      && /key: dkey/.test(push7[0]) && /x: e\.x/.test(push7[0]) && /y: e\.y/.test(push7[0])
+      && !/\bflip\b/.test(push7[0]) && !/\bent(ity)?:/.test(push7[0]) && !/:\s*e\s*[,}]/.test(push7[0])
+      && !/_decal_flip/.test(M7),
+      `${push7.length} Push: ${push7[0] || '-'}`);
+    // entities/: Zahl der Timer-Zuweisungen EINGEFROREN (Stand HEAD c60d153,
+    // vorher = nachher; die drei sanktionierten Eingriffe haben nur
+    // Sichtbarkeits-returns entfernt).
+    const ZUW = /(hurtTimer|invulnTimer|dieTimer|hitstop|DIE_TIME)\s*(=[^=]|\+=|-=)/g;
+    const zahl = (rel) => (q7(rel).match(ZUW) || []).length;
+    const zE = zahl('game/js/entities/enemies.js');
+    const zB = zahl('game/js/entities/boss.js');
+    const zP = zahl('game/js/entities/player.js');
+    check(`${G7}(4) entities/ fuehrt genau so viele Timer-Zuweisungen wie vor dem Pass (enemies 5 / boss 1 / player 2)`,
+      zE === 5 && zB === 1 && zP === 2, `${zE}/${zB}/${zP}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // GEMEINSAMES BOOT-RIG fuer (2), (3), (5), (6), (7).
+  // Muster s6boot (oben) + check_main_slice1; NEU: drawImage protokolliert
+  // globalAlpha, und die Namensordnung traegt die SIGNAL-Canvases mit
+  // ("<Original>#flash" / "#kalt"). Damit ist jeder Signal-Draw seinem
+  // TRAEGER (= dem Original-Draw davor) exakt zuzuordnen.
+  // -------------------------------------------------------------------------
+  const G7_FLIP = [
+    'player_side_0', 'player_side_1', 'player_side_2', 'player_side_3',
+    'player_attack_side', 'sword_slash_side',
+    'skeleton_0', 'skeleton_1', 'skeleton_die',
+    'ghoul_0', 'ghoul_1', 'ghoul_die',
+    'hound_0', 'hound_1', 'hound_telegraph', 'hound_leap', 'hound_down', 'hound_die',
+    'rust_0', 'rust_1', 'rust_die', 'shield_side',
+    'warden_idle', 'warden_walk_0', 'warden_walk_1', 'warden_windup_a',
+    'warden_windup_b', 'warden_dash', 'warden_stuck', 'warden_summon', 'warden_die',
+    'npc_mile_0', 'npc_mile_1', 'npc_mile_talk',
+    'npc_torwaechter_0', 'npc_torwaechter_1', 'npc_torwaechter_talk',
+  ];
+  // WOERTLICH main.js:SIGNAL_RE — der Test liest sie aus dem Quelltext, damit
+  // eine Aenderung dort hier auffliegt statt still durchzugehen.
+  const SIG_RE_QUELLE = (M7.match(/const SIGNAL_RE = (\/.*\/);/) || [])[1];
+  const G7_SIG_RE = /^(player|skeleton|ghoul|hound|rust|warden|shield)_(?!.*_decal$)/;
+  const G7_ORDNUNG = (() => {
+    const basis = [...Object.keys(SPRITES), ...G7_FLIP.map((k) => `${k}_flip`)];
+    const sig = [];
+    for (const n of basis) {
+      const b = n.endsWith('_flip') ? n.slice(0, -5) : n;
+      if (!G7_SIG_RE.test(b) || !SPRITES[b]) continue;
+      sig.push(`${n}#flash`, `${n}#kalt`);
+    }
+    return { namen: [...basis, ...Object.keys(TILE_ART), ...sig], sigZahl: sig.length };
+  })();
+  const G7_DIE_RE = /_die(_[01])?(_flip)?$/;
+
+  function g7boot({ search = '', marke = 'x' } = {}) {
+    const ops = [];
+    let uhr = 0;
+    const perfVorher = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+    const zufallVorher = Math.random;
+    const winVorher = globalThis.window;
+    const docVorher = globalThis.document;
+    Math.random = () => 0.5;
+    try { globalThis.performance = { now: () => uhr }; }
+    catch { Object.defineProperty(globalThis, 'performance', { value: { now: () => uhr } }); }
+    const mkCtx = (canvas) => ({
+      canvas, imageSmoothingEnabled: false, globalAlpha: 1,
+      globalCompositeOperation: 'source-over',
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
+      _stack: [],
+      fillRect(...a) { ops.push({ canvas, op: 'fillRect', alpha: this.globalAlpha, fill: this.fillStyle, args: a }); },
+      clearRect() {}, strokeRect() {},
+      drawImage(img, ...a) { ops.push({ canvas, op: 'drawImage', img, args: a, alpha: this.globalAlpha, gco: this.globalCompositeOperation }); },
+      fillText(t, x, y) { ops.push({ canvas, op: 'fillText', text: String(t), x, y }); },
+      beginPath() {}, arc() {}, fill() {}, stroke() {}, closePath() {}, moveTo() {}, lineTo() {}, rect() {},
+      translate() {}, scale() {}, rotate() {}, setTransform() {}, measureText: () => ({ width: 0 }),
+      save() { this._stack.push({ a: this.globalAlpha, f: this.fillStyle }); },
+      restore() { const s = this._stack.pop(); if (s) { this.globalAlpha = s.a; this.fillStyle = s.f; } },
+      createRadialGradient: () => ({ addColorStop() {} }),
+    });
+    const canvases = [];
+    const mkCanvas = () => {
+      const c = { width: 0, height: 0, style: {}, ownerDocument: null };
+      c.getContext = () => (c._ctx || (c._ctx = mkCtx(c)));
+      c.addEventListener = () => {};
+      c.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+      canvases.push(c);
+      return c;
+    };
+    const winL = {}; const docL = {}; const cvL = {}; const rafQ = [];
+    const win = {
+      addEventListener: (t, f) => (winL[t] = winL[t] || []).push(f),
+      devicePixelRatio: 1, innerWidth: 960, innerHeight: 540,
+      location: { search }, requestAnimationFrame: (cb) => rafQ.push(cb),
+    };
+    const haupt = { width: 320, height: 180, style: {} };
+    const doc = {
+      getElementById: () => haupt, createElement: () => mkCanvas(),
+      addEventListener: (t, f) => (docL[t] = docL[t] || []).push(f),
+      defaultView: win, hidden: false,
+    };
+    haupt.getContext = () => (haupt._ctx || (haupt._ctx = mkCtx(haupt)));
+    haupt.addEventListener = (t, f) => (cvL[t] = cvL[t] || []).push(f);
+    haupt.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 180 });
+    haupt.ownerDocument = doc;
+    globalThis.window = win;
+    globalThis.document = doc;
+    const b = {
+      win, doc, haupt, ops, canvases, nameOf: new Map(), frameNr: 0, bootZahl: 0,
+      async start() {
+        await import(`../game/js/main.js?gp7ch2=${marke}`);
+        b.bootZahl = canvases.length;
+        canvases.forEach((c, i) => b.nameOf.set(c, G7_ORDNUNG.namen[i] || `extra_${i}`));
+      },
+      nm: (img) => String(b.nameOf.get(img) || ''),
+      frame() {
+        ops.length = 0;
+        const cb = rafQ.shift();
+        if (!cb) throw new Error('kein rAF-Callback (Boot tot?)');
+        uhr += 1000 / 60 + 0.001;
+        cb();
+        b.frameNr += 1;
+      },
+      key(typ, code) { for (const f of winL[typ] || []) f({ code, repeat: false, preventDefault() {} }); },
+      draws: () => ops.filter((o) => o.op === 'drawImage' && o.canvas === haupt),
+      namen: () => b.draws().map((o) => b.nm(o.img)),
+      texte: () => ops.filter((o) => o.op === 'fillText').map((o) => o.text),
+      hatText: (t) => b.texte().some((s) => s.includes(t)),
+      ambient: () => {
+        const f = ops.find((o) => o.op === 'fillRect' && o.canvas !== haupt && o.alpha > 0 && o.alpha < 1);
+        return f ? f.alpha : null;
+      },
+      signal() {
+        const d = b.draws(); const out = [];
+        for (let i = 0; i < d.length; i++) {
+          const n = b.nm(d[i].img);
+          if (!/#(flash|kalt)$/.test(n)) continue;
+          let traeger = '?';
+          for (let j = i - 1; j >= 0; j--) {
+            const m = b.nm(d[j].img);
+            if (m && !/#(flash|kalt)$/.test(m) && !/^extra_/.test(m)) { traeger = m; break; }
+          }
+          out.push({ name: n, art: n.endsWith('#flash') ? 'flash' : 'kalt', alpha: Number(d[i].alpha.toFixed(6)), traeger });
+        }
+        return out;
+      },
+      // Original-Draws (ohne Signal, ohne lazy Tint-Masken) mit Fusspunkt.
+      figuren(re) {
+        return b.draws().filter((o) => re.test(b.nm(o.img)))
+          .map((o) => ({ name: b.nm(o.img), mx: o.args[0] + o.img.width / 2, fy: o.args[1] + o.img.height, alpha: o.alpha }));
+      },
+      spieler() { const f = b.figuren(/^player_(?!.*#)/); return f.length ? f[f.length - 1] : null; },
+      decals: () => b.figuren(/_decal$/),
+      ende() {
+        Math.random = zufallVorher;
+        if (perfVorher) Object.defineProperty(globalThis, 'performance', perfVorher);
+        globalThis.window = winVorher;
+        globalThis.document = docVorher;
+      },
+    };
+    return b;
+  }
+
+  // Ein Protokoll-Schritt: Frame + alles, was die Gates brauchen.
+  const g7schritt = (b, log) => {
+    b.frame();
+    log.push({
+      f: b.frameNr, amb: b.ambient(), sig: b.signal(),
+      dec: b.decals(), tot: b.figuren(G7_DIE_RE), spieler: b.spieler(),
+      namen: b.namen().filter((n) => !/^extra_/.test(n)),
+    });
+  };
+  const g7halte = (b, log, code, n) => { b.key('keydown', code); for (let i = 0; i < n; i++) g7schritt(b, log); b.key('keyup', code); };
+  // Jagd auf die naechste Figur, die `re` zeichnet; Steuerung ueber SCHIRM-
+  // Deltas (Spieler und Gegner liegen im selben Bild, die Differenz ist also
+  // die Welt-Differenz). Kein Eingriff in die Spiellogik.
+  const g7jage = (b, log, re, budget, stopf) => {
+    let stuck = 0; let letzt = null; let achse = 0;
+    const start = b.frameNr;
+    while (b.frameNr - start < budget) {
+      if (stopf && stopf()) return true;
+      const p = b.spieler(); const gs = b.figuren(re);
+      if (!p || !gs.length) { g7schritt(b, log); continue; }
+      if (letzt && Math.abs(letzt.mx - p.mx) < 0.6 && Math.abs(letzt.fy - p.fy) < 0.6) stuck += 1; else stuck = 0;
+      letzt = p;
+      let best = gs[0]; let bd = Infinity;
+      for (const g of gs) { const d = Math.hypot(g.mx - p.mx, g.fy - p.fy); if (d < bd) { bd = d; best = g; } }
+      const dx = best.mx - p.mx; const dy = best.fy - p.fy;
+      const hz = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+      const vt = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+      if (bd > 13) {
+        if (stuck > 2) { achse = (achse + 1) % 4; g7halte(b, log, ['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'][achse], 12); stuck = 0; }
+        else g7halte(b, log, Math.abs(dx) >= Math.abs(dy) ? hz : vt, 4);
+      } else {
+        g7halte(b, log, Math.abs(dx) >= Math.abs(dy) ? hz : vt, 2);
+        b.key('keydown', 'KeyJ'); g7schritt(b, log); b.key('keyup', 'KeyJ');
+        for (let i = 0; i < 10; i++) g7schritt(b, log);
+      }
+    }
+    return false;
+  };
+  // Flash-Laeufe: zusammenhaengende Frame-Folgen mit Flash-Signal, getrennt
+  // nach TRAEGER-Familie (player/skeleton/...). Jeder Lauf traegt, ueber welche
+  // Sprites er lief.
+  const g7laeufe = (log) => {
+    const proTraeger = new Map();
+    for (const z of log) {
+      for (const s of z.sig) {
+        if (s.art !== 'flash') continue;
+        const fam = s.traeger.split('_')[0];
+        if (!proTraeger.has(fam)) proTraeger.set(fam, []);
+        const l = proTraeger.get(fam);
+        const letzt = l[l.length - 1];
+        if (letzt && letzt.bis === z.f - 1) { letzt.bis = z.f; letzt.frames += 1; letzt.traeger.push(s.traeger); letzt.alphas.add(s.alpha); }
+        else l.push({ von: z.f, bis: z.f, frames: 1, traeger: [s.traeger], alphas: new Set([s.alpha]), fam });
+      }
+    }
+    return [...proTraeger.values()].flat();
+  };
+
+  // Reise zu einem Portal. Grobzug zuerst (die Kampfkarten haben breite
+  // Randkorridore); wird das Ziel dabei nicht getroffen, wird an einem DECAL
+  // kalibriert: ein Decal liegt WELTFEST, sein Schirmort ist also die Kamera.
+  // In der NW-Ecke klemmt die Kamera auf (0,0) — dort ist Schirm == Welt, und
+  // damit ist die Weltlage des Ankers (und ab dann des Spielers) exakt bekannt.
+  // Danach greedy mit Quer-Ausweichen auf ECHTEN Weltkoordinaten.
+  // ACHTUNG Geometrie: der gemessene Ort ist (Sprite-Mitte x, Sprite-Unterkante
+  // y) = (AABB-Mitte x, AABB-UNTERKANTE y). Das Ziel muss deshalb als
+  // AABB-Unterkante angegeben werden, sonst haengt die 14 px hohe Spieler-AABB
+  // mit einem Pixel in der Kachelreihe DARUEBER und wird dort blockiert
+  // (gemessen: Friedhof-Reihe 11 Spalte 1 ist ein Grabstein).
+  const g7reise = (b, log, sollAmb, grobe, zx, zy, budget) => {
+    const da = () => Math.abs((b.ambient() || 0) - sollAmb) < 1e-9;
+    const nach = () => { for (let i = 0; i < 80; i++) g7schritt(b, log); return true; };
+    for (const [c, n] of grobe) { g7halte(b, log, c, n); if (da()) return nach(); }
+    const a0 = b.decals()[0]; const p0 = b.spieler();
+    if (!a0 || !p0 || p0.mx > 150 || p0.fy > 92) {
+      // Keine Kalibrierung moeglich -> Blindkamm als Rueckfall.
+      for (let s = 0; s < 60 && !da(); s++) {
+        g7halte(b, log, grobe[0][0], 20);
+        if (da()) break;
+        g7halte(b, log, grobe[1][0] === 'ArrowUp' ? 'ArrowDown' : grobe[1][0], 8);
+      }
+      return da() ? nach() : false;
+    }
+    const anker = { mx: a0.mx, fy: a0.fy };
+    const welt = () => {
+      const a = b.decals()[0]; const p = b.spieler();
+      if (!a || !p) return null;
+      return { x: p.mx + anker.mx - a.mx, y: p.fy + anker.fy - a.fy };
+    };
+    let ohne = 0; let letzt = null; const t0 = b.frameNr;
+    while (b.frameNr - t0 < budget) {
+      if (da()) return nach();
+      const w = welt();
+      if (!w) break;
+      const dx = zx - w.x; const dy = zy - w.y;
+      const hz = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+      const vt = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+      const haupt = Math.abs(dx) >= Math.abs(dy) ? hz : vt;
+      const quer = Math.abs(dx) >= Math.abs(dy) ? vt : hz;
+      g7halte(b, log, ohne >= 2 ? quer : haupt, ohne >= 2 ? 16 : 10);
+      const w2 = welt();
+      if (w2 && letzt && Math.abs(w2.x - letzt.x) < 1 && Math.abs(w2.y - letzt.y) < 1) ohne += 1; else ohne = 0;
+      letzt = w2;
+    }
+    return da() ? nach() : false;
+  };
+
+  // -------------------------------------------------------------------------
+  // BOOT A — ?god=1 auf dem FRIEDHOF: Kills, Decal-Positivkontrolle, Deckel,
+  //          REISENDES DORF-Gate (R-A6). Ein Boot, eine Reise.
+  // -------------------------------------------------------------------------
+  {
+    const b = g7boot({ search: '?god=1', marke: 'a' });
+    const log = [];
+    let fehler = null;
+    let M = {};
+    try {
+      await b.start();
+      for (let i = 0; i < 3; i++) g7schritt(b, log);
+      b.key('keydown', 'Enter'); b.key('keyup', 'Enter');
+      for (let i = 0; i < 4; i++) g7schritt(b, log);
+      M.bootZahl = b.bootZahl;
+      M.ambStart = b.ambient();
+
+      // --- Kill 1: Skelett -------------------------------------------------
+      const vorKill1 = log.length;
+      g7jage(b, log, /^skeleton_[01](_flip)?$/, 1200, () => log.slice(vorKill1).some((z) => z.tot.some((t) => /^skeleton_die/.test(t.name))));
+      for (let i = 0; i < 60; i++) g7schritt(b, log);   // Sterbephase + Ruhe, KEINE Taste
+      M.i1 = log.length;
+      // Sterbeframes und erster Decal-Frame
+      const dieIdx = [];
+      for (let i = vorKill1; i < log.length; i++) if (log[i].tot.some((t) => /^skeleton_die/.test(t.name))) dieIdx.push(i);
+      M.dieFrames = dieIdx.length;
+      M.dieLetzt = dieIdx.length ? dieIdx[dieIdx.length - 1] : -1;
+      M.decalErst = log.findIndex((z, i) => i > vorKill1 && z.dec.some((d) => d.name === 'skeleton_decal'));
+      // Positivkontrolle: ab dem ersten Decal-Frame in JEDEM Frame GENAU EINS
+      const fenster1 = log.slice(M.decalErst, M.i1);
+      M.alleEins = fenster1.length > 20 && fenster1.every((z) => z.dec.filter((d) => d.name === 'skeleton_decal').length === 1);
+      M.fenster1 = fenster1.length;
+      M.dieUndDecal = fenster1.filter((z) => z.tot.some((t) => /^skeleton_die/.test(t.name))).length;
+      // Fussposition: letzter *_die-Frame gegen ersten *_decal-Frame, bei
+      // STEHENDEM Spieler (Kamera statisch -> der Vergleich ist exakt).
+      const zDie = log[M.dieLetzt]; const zDec = log[M.decalErst];
+      const tDie = zDie && zDie.tot.find((t) => /^skeleton_die/.test(t.name));
+      const tDec = zDec && zDec.dec.find((d) => d.name === 'skeleton_decal');
+      M.kameraRuht = !!(zDie && zDec && zDie.spieler && zDec.spieler
+        && zDie.spieler.mx === zDec.spieler.mx && zDie.spieler.fy === zDec.spieler.fy);
+      M.fuss = (tDie && tDec) ? { dieMx: tDie.mx, dieFy: tDie.fy, decMx: tDec.mx, decFy: tDec.fy } : null;
+
+      // --- Kill 2: Grufthund ----------------------------------------------
+      const vorKill2 = log.length;
+      g7jage(b, log, /^hound_(0|1|telegraph|leap|down)(_flip)?$/, 1200, () => log.slice(vorKill2).some((z) => z.tot.some((t) => /^hound_die/.test(t.name))));
+      for (let i = 0; i < 60; i++) g7schritt(b, log);
+      M.i2 = log.length;
+      M.houndDie = log.slice(vorKill2, M.i2).some((z) => z.tot.some((t) => /^hound_die/.test(t.name)));
+      const hErst = log.findIndex((z, i) => i > vorKill2 && z.dec.some((d) => d.name === 'hound_decal'));
+      M.houndDecalAlle = hErst > 0 && log.slice(hErst, M.i2).length > 20
+        && log.slice(hErst, M.i2).every((z) => z.dec.filter((d) => d.name === 'hound_decal').length === 1);
+      M.houndFenster = hErst > 0 ? M.i2 - hErst : 0;
+
+      // --- Deckel: Debug-Deckel auf 2, zwei weitere Kills -----------------
+      b.win.__decalDeckel = 2;
+      M.maxVorDeckel = Math.max(...log.slice(M.decalErst, M.i2).map((z) => z.dec.length));
+      const vorDeckel = log.length;
+      for (let k = 0; k < 2; k++) {
+        const vor = log.length;
+        g7jage(b, log, /^(skeleton|hound)_(0|1|telegraph|leap|down)(_flip)?$/, 900, () => log.slice(vor).some((z) => z.tot.some((t) => G7_DIE_RE.test(t.name))));
+        for (let i = 0; i < 30; i++) g7schritt(b, log);
+      }
+      M.i3 = log.length;
+      const nachDeckel = log.slice(vorDeckel + 30, M.i3);
+      M.maxNachDeckel = nachDeckel.length ? Math.max(...nachDeckel.map((z) => z.dec.length)) : -1;
+      M.kills = new Set(log.flatMap((z) => z.tot.map((t) => t.name.replace(/_flip$/, '')))).size;
+      // "aeltestes faellt": die Decal-Zahl steht auf dem Deckel und die
+      // gezeichnete Menge hat sich gegenueber dem Stand vor den Kills geaendert.
+      M.decalNamenNachDeckel = [...new Set(nachDeckel.flatMap((z) => z.dec.map((d) => d.name)))].sort().join(',');
+
+      // --- REISE: Westtor tileRect(1,12) -> DORF (R-A6) --------------------
+      const vorReise = log.length;
+      // Westwand zuerst (die Strasse rows 12/13 ist von Spalte 1 bis 33 frei —
+      // wer in ihr nach Westen laeuft, steht auf dem Tor), dann Nordwand, dann
+      // Welt-Navigation auf das Portalzentrum tileRect(1,12) = (24,200).
+      M.reiseOk = g7reise(b, log, 0.28, [['ArrowLeft', 400], ['ArrowUp', 400], ['ArrowLeft', 150], ['ArrowUp', 150]], 24, 207, 2500);
+      const reise = log.slice(vorReise);
+      const gy = reise.filter((z) => Math.abs((z.amb || 0) - 0.22) < 1e-9);
+      const dorf = reise.filter((z) => Math.abs((z.amb || 0) - 0.28) < 1e-9);
+      M.dorfErreicht = dorf.length > 20;
+      M.gyLetztDecals = gy.length ? gy[gy.length - 1].dec.length : -1;
+      M.dorfDecalDraws = dorf.reduce((a, z) => a + z.dec.length, 0);
+      M.dorfFrames = dorf.length;
+
+      // --- Flash-Buchhaltung ueber den GANZEN Boot -------------------------
+      const laeufe = g7laeufe(log);
+      M.laeufe = laeufe.length;
+      M.lebendLaeufe = laeufe.filter((l) => !l.traeger.some((t) => G7_DIE_RE.test(t)));
+      M.todLaeufe = laeufe.filter((l) => l.traeger.some((t) => G7_DIE_RE.test(t)));
+      M.lebendLaengen = [...new Set(M.lebendLaeufe.map((l) => l.frames))].sort((x, y) => x - y);
+      M.todLaengen = [...new Set(M.todLaeufe.map((l) => l.frames))].sort((x, y) => x - y);
+      M.alphas = [...new Set(log.flatMap((z) => z.sig.filter((s) => s.art === 'flash').map((s) => s.alpha)))];
+      M.ueberDecal = log.flatMap((z) => z.sig.filter((s) => /_decal$/.test(s.traeger))).length;
+      M.ueberNpcSchwert = log.flatMap((z) => z.sig.filter((s) => /^(npc_|sword_slash)/.test(s.traeger))).length;
+      M.traegerFalsch = log.flatMap((z) => z.sig.filter((s) => s.name !== `${s.traeger}#${s.art}`)).length;
+      M.sigZahl = G7_ORDNUNG.sigZahl;
+    } catch (e) { fehler = e; }
+    b.ende();
+    if (fehler) check(`${G7} BOOT A (?god=1 Friedhof) laeuft durch`, false, `${fehler.message} (Frame ${b.frameNr})`);
+    else {
+      check(`${G7} BOOT A: Boot baut ${G7_ORDNUNG.namen.length} benannte Canvases (SPRITES+Flips+TILE_ART+${G7_ORDNUNG.sigZahl} Signal) — kein Name verschiebt sich`,
+        M.bootZahl === G7_ORDNUNG.namen.length && Math.abs(M.ambStart - 0.22) < 1e-9,
+        `${M.bootZahl} Canvases, ambient ${M.ambStart}`);
+      // (7) Positivkontrolle Skelett
+      check(`${G7}(7) Skelett: *_die waehrend der Sterbephase, danach in JEDEM Frame GENAU EIN skeleton_decal (${M.fenster1} Frames)`,
+        M.dieFrames >= 20 && M.dieFrames <= 34 && M.alleEins && M.dieUndDecal === 0,
+        `die-Frames ${M.dieFrames}, Decal-Fenster ${M.fenster1}, Ueberlapp die+decal ${M.dieUndDecal}`);
+      check(`${G7}(7) Skelett: das Decal steht auf der FUSSPOSITION der Leiche (Kamera ruht, Vergleich exakt)`,
+        M.kameraRuht && M.fuss && M.fuss.dieMx === M.fuss.decMx && M.fuss.dieFy === M.fuss.decFy,
+        `Kamera ruht ${M.kameraRuht}, ${JSON.stringify(M.fuss)}`);
+      check(`${G7}(7) Grufthund: nach dem Tod in JEDEM Frame GENAU EIN hound_decal (${M.houndFenster} Frames)`,
+        M.houndDie && M.houndDecalAlle, `die ${M.houndDie}, Fenster ${M.houndFenster}`);
+      // (6) Deckel
+      check(`${G7}(6) Deckel: mit dem nur lesenden Debug-Deckel __decalDeckel = 2 werden NIE mehr als 2 Decals gezeichnet (aeltestes faellt)`,
+        M.maxVorDeckel >= 1 && M.maxNachDeckel === 2,
+        `vor dem Deckel max ${M.maxVorDeckel}, mit Deckel 2 max ${M.maxNachDeckel}, Menge {${M.decalNamenNachDeckel}}`);
+      // (5) REISENDES DORF-Gate
+      check(`${G7}(5) R-A6 REISE: Kampfkarte MIT Kills -> Westtor tileRect(1,12) -> DORF: Decal-Zahl ${M.gyLetztDecals} -> 0 am Kartenwechsel`,
+        M.dorfErreicht && M.gyLetztDecals >= 1 && M.dorfDecalDraws === 0,
+        `letzter Friedhof-Frame ${M.gyLetztDecals} Decals, ${M.dorfFrames} DORF-Frames mit ${M.dorfDecalDraws} Decal-Draws`);
+      // (2) Flash-Draws
+      check(`${G7}(2) JEDER Signal-Draw liegt ueber GENAU DEM Sprite, dessen Maske er ist (Name = "<Traeger>#flash|#kalt")`,
+        M.traegerFalsch === 0 && M.laeufe > 0, `${M.traegerFalsch} Fehlzuordnungen in ${M.laeufe} Laeufen`);
+      check(`${G7}(2) Flash-Alpha ist ausschliesslich 0,8 (E-A2), und JEDER Treffer erzeugt einen Lauf von 3 oder 4 Frames — nie mehr`,
+        M.laeufe >= 3 && M.alphas.join(',') === '0.8'
+        && [...M.lebendLaengen, ...M.todLaengen].every((n) => n === 3 || n === 4),
+        `${M.laeufe} Laeufe, lebend {${M.lebendLaengen.join(',')}}, ueber *_die {${M.todLaengen.join(',')}}, Alphas {${M.alphas.join(',')}}`);
+      check(`${G7}(2) Kill = HOECHSTENS 4 Flash-Frames ueber *_die (R-A1: der Zaehler zeichnet zu Ende, kann aber nicht neu starten)`,
+        M.todLaeufe.length >= 1 && M.todLaengen.every((n) => n <= 4),
+        `${M.todLaeufe.length} Kill-Laeufe, Laengen {${M.todLaengen.join(',')}}`);
+      check(`${G7}(2) NULL Signal-Draws ueber *_decal und NULL ueber npc_*/sword_slash_* (eine Leiche und ein NPC blitzen nie)`,
+        M.ueberDecal === 0 && M.ueberNpcSchwert === 0,
+        `${M.ueberDecal} ueber Decal, ${M.ueberNpcSchwert} ueber npc/sword`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BOOT B — ?god=1&map=FLUESTERGRUFT: Ghul-Decal + Kartenwechsel nach
+  //          CATACOMBS (das Portal tileRect(3,2) liegt neben dem Dev-Spawn).
+  // -------------------------------------------------------------------------
+  {
+    const b = g7boot({ search: '?god=1&map=FLUESTERGRUFT', marke: 'b' });
+    const log = [];
+    let fehler = null; const M = {};
+    try {
+      await b.start();
+      for (let i = 0; i < 3; i++) g7schritt(b, log);
+      b.key('keydown', 'Enter'); b.key('keyup', 'Enter');
+      for (let i = 0; i < 4; i++) g7schritt(b, log);
+      M.amb = b.ambient();
+      const vor = log.length;
+      g7jage(b, log, /^ghoul_[01](_flip)?$/, 1500, () => log.slice(vor).some((z) => z.tot.some((t) => /^ghoul_die/.test(t.name))));
+      for (let i = 0; i < 60; i++) g7schritt(b, log);
+      M.ghoulDie = log.slice(vor).some((z) => z.tot.some((t) => /^ghoul_die/.test(t.name)));
+      const gErst = log.findIndex((z, i) => i > vor && z.dec.some((d) => d.name === 'ghoul_decal'));
+      M.ghoulFenster = gErst > 0 ? log.length - gErst : 0;
+      M.ghoulAlle = gErst > 0 && M.ghoulFenster > 20
+        && log.slice(gErst).every((z) => z.dec.filter((d) => d.name === 'ghoul_decal').length === 1);
+      // Reise zum CATACOMBS-Portal (48,32)
+      const vorReise = log.length;
+      // Das CATACOMBS-Portal tileRect(3,2) liegt in der NW-Ecke der Gruft:
+      // Nordwand, dann Westwand reicht als Grobzug.
+      M.reiseOk = g7reise(b, log, 0.55, [['ArrowUp', 400], ['ArrowLeft', 400], ['ArrowUp', 150], ['ArrowLeft', 150]], 56, 47, 2500);
+      const reise = log.slice(vorReise);
+      const fg = reise.filter((z) => Math.abs((z.amb || 0) - 0.52) < 1e-9);
+      const cat = reise.filter((z) => Math.abs((z.amb || 0) - 0.55) < 1e-9);
+      M.catErreicht = cat.length > 20;
+      M.fgLetzt = fg.length ? fg[fg.length - 1].dec.length : -1;
+      M.catDraws = cat.reduce((a, z) => a + z.dec.length, 0);
+      M.catFrames = cat.length;
+      M.ueberDecal = log.flatMap((z) => z.sig.filter((s) => /_decal$/.test(s.traeger))).length;
+    } catch (e) { fehler = e; }
+    b.ende();
+    if (fehler) check(`${G7} BOOT B (Fluestergruft) laeuft durch`, false, `${fehler.message} (Frame ${b.frameNr})`);
+    else {
+      check(`${G7}(7) Ghul: nach dem Tod in JEDEM Frame GENAU EIN ghoul_decal (${M.ghoulFenster} Frames, Fluestergruft)`,
+        M.ghoulDie && M.ghoulAlle, `die ${M.ghoulDie}, Fenster ${M.ghoulFenster}, ambient ${M.amb}`);
+      check(`${G7}(5) Kartenwechsel FLUESTERGRUFT -> CATACOMBS raeumt: Decal-Zahl ${M.fgLetzt} -> 0, und 0 Decal-Draws auf der Zielkarte`,
+        M.catErreicht && M.fgLetzt >= 1 && M.catDraws === 0,
+        `letzter Gruft-Frame ${M.fgLetzt} Decals, ${M.catFrames} CATACOMBS-Frames mit ${M.catDraws} Draws`);
+      check(`${G7}(2) auch hier NULL Signal-Draws ueber *_decal`, M.ueberDecal === 0, `${M.ueberDecal}`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // BOOT C — OHNE ?god=1: Spieler-Treffer (Flash 3 Frames), kalte
+  //          Unverwundbarkeit (6 Hz, diskrete Alphas), Tod (ab Frame 5 = 0),
+  //          Respawn raeumt die Decals.
+  // -------------------------------------------------------------------------
+  {
+    const b = g7boot({ search: '', marke: 'c' });
+    const log = [];
+    let fehler = null; const M = {};
+    try {
+      await b.start();
+      for (let i = 0; i < 5; i++) g7schritt(b, log);
+      b.key('keydown', 'Enter'); b.key('keyup', 'Enter');
+      for (let i = 0; i < 4; i++) g7schritt(b, log);
+      // Ein Skelett toeten (damit zum Respawn wirklich eine Leiche liegt) —
+      // unterwegs kassiert der Spieler die Treffer, die (2)/(3) messen.
+      const vor = log.length;
+      g7jage(b, log, /^skeleton_[01](_flip)?$/, 1500, () => log.slice(vor).some((z) => z.tot.some((t) => /^skeleton_die/.test(t.name))));
+      for (let i = 0; i < 40; i++) g7schritt(b, log);
+      M.decalsVorTod = log[log.length - 1].dec.length;
+      // --- Spieler-Flash-Laeufe --------------------------------------------
+      const alleL = g7laeufe(log);
+      M.lebendAlle = alleL.filter((l) => !l.traeger.some((t) => G7_DIE_RE.test(t)));
+      M.lebendLaengen = [...new Set(M.lebendAlle.map((l) => l.frames))].sort((x, y) => x - y);
+      M.lebendFam = [...new Set(M.lebendAlle.map((l) => l.fam))].sort();
+      const pl = alleL.filter((l) => l.fam === 'player');
+      M.plLaeufe = pl.length;
+      M.plLebend = pl.filter((l) => !l.traeger.some((t) => G7_DIE_RE.test(t)));
+      M.plLebendLaengen = [...new Set(M.plLebend.map((l) => l.frames))].sort((x, y) => x - y);
+      M.plAlphas = [...new Set(pl.flatMap((l) => [...l.alphas]))];
+      // --- kalte Unverwundbarkeit ------------------------------------------
+      const kalt = log.flatMap((z) => z.sig.filter((s) => s.art === 'kalt' && s.traeger.startsWith('player')).map((s) => ({ f: z.f, a: s.alpha })));
+      M.kaltZahl = kalt.length;
+      M.kaltAlphas = [...new Set(kalt.map((k) => k.a))].sort((x, y) => x - y);
+      // 6 Hz: ein voller Durchlauf [0,16 0,12 0,08 0] dauert 1/6 s = 10 Frames
+      // bei 60 Hz. Also muss die Alpha-Folge PRO FRAME 10-periodisch sein.
+      const perFrame = new Map(kalt.map((k) => [k.f, k.a]));
+      const von = kalt.length ? kalt[0].f : 0;
+      const bis = kalt.length ? kalt[kalt.length - 1].f : 0;
+      let periodisch = bis - von > 30;
+      for (let f = von; f + 10 <= bis; f++) {
+        const a = perFrame.get(f) || 0; const c = perFrame.get(f + 10) || 0;
+        // nur innerhalb einer durchgehenden Unverwundbarkeits-Phase pruefen
+        if (!perFrame.has(f) && !perFrame.has(f + 10)) continue;
+        if (a !== c) { periodisch = false; break; }
+      }
+      M.periodisch = periodisch;
+      M.kaltVon = von; M.kaltBis = bis;
+      // Sprite-Alpha bleibt 1 (engineB org.alpha === 1): in JEDEM Frame mit
+      // kaltem Puls ist der ORIGINAL-Spieler-Draw voll deckend.
+      M.origAlpha1 = log.filter((z) => z.sig.some((s) => s.art === 'kalt'))
+        .every((z) => z.spieler && z.spieler.alpha === 1);
+      // --- Tod --------------------------------------------------------------
+      let tot = false;
+      for (let i = 0; i < 500 && !tot; i++) {
+        const p = b.spieler(); const gs = b.figuren(/^(skeleton|hound)_(0|1|telegraph|leap|down)(_flip)?$/);
+        if (!p || !gs.length) { g7schritt(b, log); tot = b.hatText('GAME OVER'); continue; }
+        let best = gs[0]; let bd = Infinity;
+        for (const g of gs) { const d = Math.hypot(g.mx - p.mx, g.fy - p.fy); if (d < bd) { bd = d; best = g; } }
+        const dx = best.mx - p.mx; const dy = best.fy - p.fy;
+        const code = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (dy > 0 ? 'ArrowDown' : 'ArrowUp');
+        b.key('keydown', code);
+        for (let f = 0; f < 6 && !tot; f++) { g7schritt(b, log); tot = b.hatText('GAME OVER'); }
+        b.key('keyup', code);
+      }
+      M.tot = tot;
+      for (let i = 0; i < 60; i++) g7schritt(b, log);
+      // Leichen-Blitz-Sonde: die dead-Frames durchzaehlen.
+      const deadIdx = [];
+      for (let i = 0; i < log.length; i++) if (log[i].namen.some((n) => /^player_die_[01]/.test(n))) deadIdx.push(i);
+      M.deadFrames = deadIdx.length;
+      M.deadMitSignal = deadIdx.filter((i) => log[i].sig.some((s) => s.traeger.startsWith('player_die'))).length;
+      M.deadSignalPositionen = deadIdx.map((i, k) => (log[i].sig.some((s) => s.traeger.startsWith('player_die')) ? k + 1 : 0)).filter((x) => x > 0);
+      // --- Respawn ----------------------------------------------------------
+      b.key('keydown', 'Enter'); b.key('keyup', 'Enter');
+      for (let i = 0; i < 10; i++) g7schritt(b, log);
+      M.nachRespawn = log.slice(-6).reduce((a, z) => a + z.dec.length, 0);
+      M.gameOverWeg = !b.hatText('GAME OVER');
+    } catch (e) { fehler = e; }
+    b.ende();
+    if (fehler) check(`${G7} BOOT C (ohne God, Tod + Respawn) laeuft durch`, false, `${fehler.message} (Frame ${b.frameNr})`);
+    else {
+      check(`${G7}(2) JEDER Treffer an einem LEBENDEN Koerper (Spieler UND Gegner, ohne God-Einhiebtode) = genau 3 Frames Flash`,
+        M.lebendAlle.length >= 2 && M.lebendLaengen.join(',') === '3' && M.lebendFam.length >= 2,
+        `${M.lebendAlle.length} Laeufe, Laengen {${M.lebendLaengen.join(',')}}, Traeger-Familien {${M.lebendFam.join(',')}}`);
+      check(`${G7}(2) Spieler-Treffer = genau 3 Frames Flash Alpha 0,8 ueber dem LEBENDEN Spieler-Sprite`,
+        M.plLebend.length >= 1 && M.plLebendLaengen.join(',') === '3' && M.plAlphas.join(',') === '0.8',
+        `${M.plLebend.length} Laeufe, Laengen {${M.plLebendLaengen.join(',')}}, Alphas {${M.plAlphas.join(',')}}`);
+      check(`${G7}(2) Spieler tot: HOECHSTENS 3 dead-Frames tragen den auslaufenden Kill-Flash, ab Frame 5 KEINER (${M.deadFrames} dead-Frames)`,
+        M.tot && M.deadFrames > 20 && M.deadMitSignal <= 3
+        && M.deadSignalPositionen.every((k) => k <= 4),
+        `${M.deadMitSignal} von ${M.deadFrames} dead-Frames mit Signal, Positionen [${M.deadSignalPositionen.join(',')}]`);
+      check(`${G7}(3) Unverwundbarkeit = KALTE Maske, Alpha ausschliesslich aus {0, 0,08, 0,12, 0,16}`,
+        M.kaltZahl > 30 && M.kaltAlphas.every((a) => a === 0.08 || a === 0.12 || a === 0.16),
+        `${M.kaltZahl} kalte Draws, Alphas {${M.kaltAlphas.join(',')}}`);
+      check(`${G7}(3) der kalte Puls laeuft mit 6 Hz (Alpha-Folge ist bei 60 Hz genau 10-Frame-periodisch)`,
+        M.periodisch, `Fenster ${M.kaltVon}..${M.kaltBis}`);
+      check(`${G7}(3) der kalte Puls faehrt NIE das Sprite-Alpha: der Original-Spieler-Draw bleibt in jedem Puls-Frame bei Alpha 1`,
+        M.origAlpha1, `origAlpha1 ${M.origAlpha1}`);
+      check(`${G7}(5) Respawn raeumt: vor dem Tod lagen ${M.decalsVorTod} Decals, nach dem Respawn 0`,
+        M.decalsVorTod >= 1 && M.nachRespawn === 0 && M.gameOverWeg,
+        `vor ${M.decalsVorTod}, nach ${M.nachRespawn}, Game Over weg ${M.gameOverWeg}`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // QUELLTEXT-ANTEIL von (3), (6), (7) — die Zahlen und die Sortenliste.
+  // -------------------------------------------------------------------------
+  {
+    check(`${G7}(3) Quelle: KALT_TON '#abdcda' (|-Familie), KALT_PULS [0,16 0,12 0,08 0], Schrittfrequenz 24 Hz = 6 Hz Zyklus`,
+      /const KALT_TON = '#abdcda';/.test(M7)
+      && /const KALT_PULS = \[0\.16, 0\.12, 0\.08, 0\];/.test(M7)
+      && /KALT_PULS\[Math\.floor\(timeSec \* 24\) % KALT_PULS\.length\]/.test(M7)
+      && /const FLASH_TON = '#fff8ea';/.test(M7) && /const FLASH_ALPHA = 0\.8;/.test(M7));
+    check(`${G7}(6) Quelle: DECAL_MAX = 24, und der Debug-Deckel liest window NUR (kein window.__decalDeckel = ... in game/js)`,
+      /const DECAL_MAX = 24;/.test(M7)
+      && /return Number\.isFinite\(d\) && d >= 1 \? Math\.floor\(d\) : DECAL_MAX;/.test(M7)
+      && !/window\.__decalDeckel\s*=/.test(q7('game/js/main.js')),
+      'nur lesender Deckel');
+    // (7) Rostpanzer und Warden: der Decal-Pfad ist SORTEN-AGNOSTISCH (eine
+    // Tabelle, ein Push). Der Rost-Kill ist am gebooteten Spiel headless nicht
+    // erreichbar (Frontblock + Blickrasterung, > 8000 Frames Sonde ohne Kill) —
+    // deshalb hier ueber die Tabelle, die Grids und die Einmaligkeit des Pfades.
+    const tabelle = (M7.match(/const DECAL_KEY = \{[^}]*\}/) || [''])[0];
+    check(`${G7}(7) DECAL_KEY fuehrt GENAU die vier Sorten skeleton/ghoul/hound/rust — KEIN warden/graveward (§8)`,
+      /skeleton: 'skeleton_decal'/.test(tabelle) && /ghoul: 'ghoul_decal'/.test(tabelle)
+      && /hound: 'hound_decal'/.test(tabelle) && /rust: 'rust_decal'/.test(tabelle)
+      && !/warden|graveward/.test(tabelle)
+      && Object.keys(SPRITES).filter((k) => /_decal$/.test(k)).sort().join(',') === 'ghoul_decal,hound_decal,rust_decal,skeleton_decal',
+      `${tabelle.replace(/\s+/g, ' ')}`);
+    check(`${G7}(7) der Decal-Pfad ist sortenagnostisch: EIN Frame-Diff, EIN Push, EIN Zeichner — Rost laeuft durch denselben Code wie Skelett`,
+      (M7.match(/decals\.push\(/g) || []).length === 1
+      && (M7.match(/for \(const e of lebendeVorFrame\)/g) || []).length === 1
+      && (M7.match(/for \(const d of decals\)/g) || []).length === 1
+      && /const dkey = DECAL_KEY\[e\.kind\];/.test(M7)
+      && SIG_RE_QUELLE === '/^(player|skeleton|ghoul|hound|rust|warden|shield)_(?!.*_decal$)/',
+      `SIGNAL_RE aus der Quelle: ${SIG_RE_QUELLE}`);
+  }
+}
+// --- GP7CH2-BLOCK-ENDE ---
+
 console.log(`\nSimulierte Ticks gesamt: ${totalTicks}`);
 if (totalTicks < 600) failures.push(`Zu wenige Ticks simuliert: ${totalTicks} < 600`);
 

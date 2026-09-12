@@ -1034,6 +1034,17 @@ let decals = [];
 // das Verschwinden einer Entity ist also exakt der Todeszeitpunkt.
 let lebendeVorFrame = new Set();
 const DECAL_MAX = 24;                // §5(5) Deckel; aeltestes faellt
+// §5(5)-Gate "Deckel 24": NUR LESENDER Debug-Deckel, Muster rigAus/__noTint.
+// 24 echte Leichen sind auf keiner Karte erreichbar (max 17 Gegner, R-A7), die
+// Verdraengung "aeltestes faellt" ist im Spiel also nicht herstellbar. Damit
+// der Test sie trotzdem am ECHTEN Boot messen kann, darf das Rig den Deckel
+// heruntersetzen; window.__decalDeckel wird im Spiel NIE gesetzt -> 24.
+function decalDeckel() {
+  try {
+    const d = Number(window.__decalDeckel);
+    return Number.isFinite(d) && d >= 1 ? Math.floor(d) : DECAL_MAX;
+  } catch { return DECAL_MAX; }
+}
 // Nur diese vier Sorten bekommen ein Decal (§8: Warden ohne).
 const DECAL_KEY = { skeleton: 'skeleton_decal', ghoul: 'ghoul_decal', hound: 'hound_decal', rust: 'rust_decal' };
 // Tint des TODESMOMENTS, einmal eingefroren (E-A4: Leichen behalten das Licht
@@ -2230,7 +2241,8 @@ function update(dt) {
         const dt0 = DECAL_TINT.get(e) || { warmA: 0, kaltA: 0, seite: 'WL' };
         decals.push({ key: dkey, x: e.x, y: e.y, w: e.w, h: e.h, warmA: dt0.warmA, kaltA: dt0.kaltA, seite: dt0.seite });
       }
-      if (decals.length > DECAL_MAX) decals.splice(0, decals.length - DECAL_MAX);
+      const dMax = decalDeckel();
+      if (decals.length > dMax) decals.splice(0, decals.length - dMax);
       lebendeVorFrame = new Set(enemies);
       updateProps(dt, props, player, map, drops, events);
       // §3.4: geoeffnete Truhen registrieren (Quelle = props-Liste, s.
