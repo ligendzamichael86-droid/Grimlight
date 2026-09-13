@@ -1,5 +1,12 @@
 # Grimlight auf einem NEUEN Rechner in Betrieb nehmen
 
+> GitHub (seit 13.09.2026): https://github.com/ligendzamichael86-droid/Grimlight (privat).
+> Clone: `git clone https://github.com/ligendzamichael86-droid/Grimlight.git` (mit eigenem GitHub-Login)
+> oder per SSH `git@github.com:ligendzamichael86-droid/Grimlight.git`. KEIN `--depth 1`
+> (figuren_messung braucht die Historie). Der Server srv1457801 pusht ueber einen
+> Deploy-Key (~/.ssh/grimlight_deploy, core.sshCommand gesetzt); Regel dort: jeder
+> Commit wird sofort gepusht.
+
 Stand 13.09.2026, HEAD `c7458d3` (GP7-CH-2 Phase 1). Diese Datei beschreibt
 den Weg von `git clone` bis „alle Suiten grün, APK gebaut, Michael kann
 testen" auf einer frischen Maschine (Ziel: mehr Kerne als die heutigen zwei).
