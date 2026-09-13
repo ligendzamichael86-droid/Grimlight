@@ -1,0 +1,430 @@
+{
+ "quelle": ".tmp/gp7ch2_p0/17_final.mjs auf vollscan.json (ein RGB-Vollscan)",
+ "bestand": 78,
+ "toene": [
+  {
+   "zeichen": "\"",
+   "hex": "#4b5686",
+   "L601": 88.183,
+   "Cab": 29.639,
+   "hue": 287.82,
+   "rolle": "Schatten (kalt)",
+   "rampe": "SKELETT-KNOCHEN",
+   "min_dE00_bestand": 10.452,
+   "engster_bestandston": "X"
+  },
+  {
+   "zeichen": "$",
+   "hex": "#8c7671",
+   "L601": 124.008,
+   "Cab": 9.712,
+   "hue": 37.598,
+   "rolle": "Mitte",
+   "rampe": "SKELETT-KNOCHEN",
+   "min_dE00_bestand": 11.904,
+   "engster_bestandston": "S"
+  },
+  {
+   "zeichen": "/",
+   "hex": "#ae9a66",
+   "L601": 154.052,
+   "Cab": 29.985,
+   "hue": 90.153,
+   "rolle": "Licht (warm)",
+   "rampe": "SKELETT-KNOCHEN",
+   "min_dE00_bestand": 10.175,
+   "engster_bestandston": "V"
+  },
+  {
+   "zeichen": "<",
+   "hex": "#737b71",
+   "L601": 119.468,
+   "Cab": 6.691,
+   "hue": 138.478,
+   "rolle": "Lumpen mittel",
+   "rampe": "GHUL-LUMPEN",
+   "min_dE00_bestand": 10.773,
+   "engster_bestandston": "="
+  },
+  {
+   "zeichen": ">",
+   "hex": "#7f968c",
+   "L601": 141.983,
+   "Cab": 10.524,
+   "hue": 166.013,
+   "rolle": "Lumpen hell",
+   "rampe": "GHUL-LUMPEN",
+   "min_dE00_bestand": 13.965,
+   "engster_bestandston": "B"
+  },
+  {
+   "zeichen": "{",
+   "hex": "#008190",
+   "L601": 92.139,
+   "Cab": 29.115,
+   "hue": 214.621,
+   "rolle": "Fell dunkel",
+   "rampe": "HUND-PETROL",
+   "min_dE00_bestand": 10.097,
+   "engster_bestandston": "="
+  },
+  {
+   "zeichen": "}",
+   "hex": "#268685",
+   "L601": 105.182,
+   "Cab": 27.99,
+   "hue": 195.455,
+   "rolle": "Fell mittel",
+   "rampe": "HUND-PETROL",
+   "min_dE00_bestand": 10.089,
+   "engster_bestandston": ")"
+  },
+  {
+   "zeichen": "`",
+   "hex": "#3a9897",
+   "L601": 123.78,
+   "Cab": 28.426,
+   "hue": 195.697,
+   "rolle": "Fell licht",
+   "rampe": "HUND-PETROL",
+   "min_dE00_bestand": 10.051,
+   "engster_bestandston": "]"
+  }
+ ],
+ "nachweis": {
+  "zu_bestand": [
+   {
+    "z": "\"",
+    "hex": "#4b5686",
+    "min": 10.452,
+    "partner": "X",
+    "zweit": 10.498,
+    "partner2": "C"
+   },
+   {
+    "z": "$",
+    "hex": "#8c7671",
+    "min": 11.904,
+    "partner": "S",
+    "zweit": 11.933,
+    "partner2": ";"
+   },
+   {
+    "z": "/",
+    "hex": "#ae9a66",
+    "min": 10.175,
+    "partner": "V",
+    "zweit": 10.277,
+    "partner2": "H"
+   },
+   {
+    "z": "<",
+    "hex": "#737b71",
+    "min": 10.773,
+    "partner": "=",
+    "zweit": 11.033,
+    "partner2": "O"
+   },
+   {
+    "z": ">",
+    "hex": "#7f968c",
+    "min": 13.965,
+    "partner": "B",
+    "zweit": 14.087,
+    "partner2": "]"
+   },
+   {
+    "z": "{",
+    "hex": "#008190",
+    "min": 10.097,
+    "partner": "=",
+    "zweit": 10.237,
+    "partner2": "@"
+   },
+   {
+    "z": "}",
+    "hex": "#268685",
+    "min": 10.089,
+    "partner": ")",
+    "zweit": 11.099,
+    "partner2": "("
+   },
+   {
+    "z": "`",
+    "hex": "#3a9897",
+    "min": 10.051,
+    "partner": "]",
+    "zweit": 13.446,
+    "partner2": "["
+   }
+  ],
+  "innen": [
+   {
+    "rampe": "SKELETT-KNOCHEN",
+    "min": 21.543,
+    "paar": "$//",
+    "paare": [
+     "\"/$:25.47",
+     "\"//:47.11",
+     "$//:21.54"
+    ],
+    "L601": [
+     88.183,
+     124.008,
+     154.052
+    ],
+    "schritte": [
+     35.825,
+     30.044
+    ],
+    "verhaeltnis": 1.192
+   },
+   {
+    "rampe": "GHUL-LUMPEN (+ d aus Bestand)",
+    "min": 10.456,
+    "paar": "</>",
+    "paare": [
+     "O/<:18.1",
+     "O/>:27.36",
+     "</>:10.46"
+    ],
+    "L601": [
+     84.158,
+     119.468,
+     141.983
+    ],
+    "schritte": [
+     35.31,
+     22.515
+    ],
+    "verhaeltnis": 1.568
+   },
+   {
+    "rampe": "HUND-PETROL",
+    "min": 6.495,
+    "paar": "}/`",
+    "paare": [
+     "{/}:6.67",
+     "{/`:10.43",
+     "}/`:6.49"
+    ],
+    "L601": [
+     92.139,
+     105.182,
+     123.78
+    ],
+    "schritte": [
+     13.043,
+     18.598
+    ],
+    "verhaeltnis": 1.426
+   }
+  ],
+  "zwischen": [
+   {
+    "paar": "SKELETT vs GHUL",
+    "min": 17.113,
+    "toene": "$/<"
+   },
+   {
+    "paar": "SKELETT vs HUND",
+    "min": 25.509,
+    "toene": "\"/{"
+   },
+   {
+    "paar": "GHUL vs HUND",
+    "min": 12.79,
+    "toene": ">/`"
+   }
+  ],
+  "sperr": {
+   "Corm-Wolle & ( )": [
+    "SKELETT 24.09 (\"/&)",
+    "GHUL 11.46 (</))",
+    "HUND 10.09 (}/))"
+   ],
+   "Katakomben-Stein t T L D": [
+    "SKELETT 13.89 (\"/L)",
+    "GHUL 13.92 (</L)",
+    "HUND 18.75 ({/L)"
+   ],
+   "Hedda ! % G": [
+    "SKELETT 15.23 ($/%)",
+    "GHUL 32.16 (</%)",
+    "HUND 46.3 (}/!)"
+   ],
+   "Bran : ; ?": [
+    "SKELETT 11.93 ($/;)",
+    "GHUL 20.16 (</?)",
+    "HUND 31.37 (`/?)"
+   ],
+   "Mile @ [ ]": [
+    "SKELETT 16.87 (\"/@)",
+    "GHUL 14.09 (>/])",
+    "HUND 10.05 (`/])"
+   ],
+   "Held u U X ^ Z": [
+    "SKELETT 10.45 (\"/X)",
+    "GHUL 24.6 (</^)",
+    "HUND 23.36 ({/^)"
+   ],
+   "Gras e E a m K A": [
+    "SKELETT 16.05 (//A)",
+    "GHUL 11.11 (</m)",
+    "HUND 19.14 (}/m)"
+   ],
+   "Erde/Weg z p v M P V": [
+    "SKELETT 10.17 (//V)",
+    "GHUL 15.83 (</P)",
+    "HUND 29.38 (}/P)"
+   ],
+   "Knochen O B b N": [
+    "SKELETT 10.42 (//B)",
+    "GHUL 11.03 (</O)",
+    "HUND 24.41 (`/B)"
+   ],
+   "Stein g s S F": [
+    "SKELETT 11.9 ($/S)",
+    "GHUL 17.57 (</S)",
+    "HUND 30.76 (`/F)"
+   ],
+   "Wasser w W 9 =": [
+    "SKELETT 18.96 (\"/9)",
+    "GHUL 10.77 (</=)",
+    "HUND 10.1 ({/=)"
+   ],
+   "Ghul-Fleisch d H 3": [
+    "SKELETT 10.28 (//H)",
+    "GHUL 18.1 (</d)",
+    "HUND 27.79 (}/d)"
+   ],
+   "Gesperrt x f": [
+    "SKELETT 17.15 ($/f)",
+    "GHUL 14.6 (>/f)",
+    "HUND 20.89 (`/f)"
+   ],
+   "Rost 4 5 6": [
+    "SKELETT 19.16 ($/6)",
+    "GHUL 28.46 (</6)",
+    "HUND 42.47 ({/5)"
+   ]
+  },
+  "schritte": {},
+  "C": [
+   {
+    "z": "\"",
+    "C": 29.639
+   },
+   {
+    "z": "$",
+    "C": 9.712
+   },
+   {
+    "z": "/",
+    "C": 29.985
+   },
+   {
+    "z": "<",
+    "C": 6.691
+   },
+   {
+    "z": ">",
+    "C": 10.524
+   },
+   {
+    "z": "{",
+    "C": 29.115
+   },
+   {
+    "z": "}",
+    "C": 27.99
+   },
+   {
+    "z": "`",
+    "C": 28.426
+   }
+  ]
+ },
+ "hund_maximalitaet": {
+  "ohne_schrittauflage": {
+   "innen": 6.801,
+   "hexes": [
+    "#008190",
+    "#158685",
+    "#3a9897"
+   ],
+   "verhaeltnis": 2.975
+  },
+  "mit_schritt_1_6": {
+   "innen": 6.495,
+   "hexes": [
+    "#008190",
+    "#268685",
+    "#3a9897"
+   ],
+   "verhaeltnis": 1.426
+  },
+  "kandidaten": 960
+ },
+ "innenraum": {
+  "SKELETT (Ziel 138..148)": {
+   "gewichte": [
+    [
+     88.183,
+     0.1
+    ],
+    [
+     124.008,
+     0.25
+    ],
+    [
+     154.052,
+     0.65
+    ]
+   ],
+   "mittel": 139.954
+  },
+  "GHUL   (Ziel 108..122)": {
+   "gewichte": [
+    [
+     84.158,
+     0.35
+    ],
+    [
+     119.468,
+     0.35
+    ],
+    [
+     141.983,
+     0.15
+    ],
+    [
+     171.964,
+     0.1
+    ],
+    [
+     199.209,
+     0.05
+    ]
+   ],
+   "mittel": 119.723
+  },
+  "HUND   (Ziel  95..108)": {
+   "gewichte": [
+    [
+     92.139,
+     0.4
+    ],
+    [
+     105.182,
+     0.35
+    ],
+    [
+     123.78,
+     0.25
+    ]
+   ],
+   "mittel": 104.614
+  }
+ }
+}

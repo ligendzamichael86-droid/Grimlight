@@ -1,0 +1,285 @@
+{
+  "$format": "GP7CH2/MATERIAL-TABELLE/1",
+  "quelle": "GP7-CH-2 Phase 1, Zeichner A (Skelett, Grufthund, Warden). Ersetzt fuer diese drei Figuren die IST-Handtabelle aus .tmp/gp7ch_p0/gegner_material_IST.json.",
+  "stand": "Phase 1 Zeichner A, Kunst-Stand game/js/art/sprites_figuren.js",
+  "figuren": {
+    "Warden": {
+      "rim": [
+        "|"
+      ],
+      "flaechen": [
+        {
+          "art": "knochen",
+          "name": "Knochen/Panzerplatten",
+          "toene": [
+            "B",
+            "N",
+            "O",
+            "b"
+          ]
+        },
+        {
+          "art": "stoff",
+          "name": "Umhang/Stoff (HELDEN-Rampe u/U/X, Bestand, CH-4-Notiz)",
+          "toene": [
+            "U",
+            "X",
+            "u"
+          ]
+        },
+        {
+          "art": "metall",
+          "name": "Rostschienen",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "metall",
+          "name": "Guertel/Gold",
+          "toene": [
+            "Y",
+            "y"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Glut/Seelenfeuer (Augen + Brustrunen)",
+          "toene": [
+            "7",
+            "8"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Waffe/Klingensaeule (Spalten 11-13, Zeilen 15-31)",
+          "toene": [
+            "C",
+            "i",
+            "I"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Kalter Lichtsaum auf Helmkuppel, Schulterkappen und Klingenoberkante (flip-neutral, CH-2-Nachzug)",
+          "toene": [
+            "|"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ]
+    },
+    "Grufthund": {
+      "rim": [
+        "|"
+      ],
+      "flaechen": [
+        {
+          "art": "fell",
+          "name": "Fell/Haut (EIGENE Petrol-Rampe CH-2, Wertbaender)",
+          "toene": [
+            "{",
+            "}",
+            "`"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Rippenpaar (Sekundaerstruktur, Skelett-Mitte, >= 2 Texel)",
+          "toene": [
+            "$"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Kalter Lichtsaum auf Rueckenkamm und Schaedeloberkante (flip-neutral)",
+          "toene": [
+            "|"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Seelenglut-Auge (ein Texel je Grid)",
+          "toene": [
+            "8"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante unten + Beinspalt",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Skelett": {
+      "rim": [
+        "_"
+      ],
+      "flaechen": [
+        {
+          "art": "knochen",
+          "name": "Knochen (EIGENE Rampe CH-2: Schatten kalt / Mitte / Licht warm)",
+          "toene": [
+            "\"",
+            "$",
+            "/"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Warmer Lichtsaum auf Schaedeldecke, Schluesselbein und Schulterkappen (flip-neutral, Licht von oben)",
+          "toene": [
+            "_"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante unten + Augenhoehlen/Rippenfenster/Beckenkerbe",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Schild": {
+      "flaechen": [
+        {
+          "art": "requisit",
+          "name": "Schildplatte des Rostpanzers (Rampe 4/5/6)",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Rim WARM: '6'-Lichtkante + 2 Texel '_' Glanz (FIX 1)",
+          "toene": [
+            "_",
+            "6"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Nieten",
+          "toene": [
+            "y"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ]
+    },
+    "Ghul": {
+      "flaechen": [
+        {
+          "art": "stoff",
+          "name": "Lumpen (EIGENE Rampe d/</>, Steinrampe g raus)",
+          "toene": [
+            "d",
+            "<",
+            ">"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Schaedel (2-Stufen-AKZENTFLAECHE H/3 — G7-Ausnahme von Fable deklariert, FIX 1: gross und bleich als Identitaet)",
+          "toene": [
+            "H",
+            "3"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Rim KALT in 2-3-Texel-Segmenten (Schaedeldecke + beide Buckelspitzen, kein Lauf > 3)",
+          "toene": [
+            "|"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Nasenschatten (kalt, waagerecht, mittig — check_gfx6_art:200)",
+          "toene": [
+            "C"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ]
+    },
+    "Rostpanzer": {
+      "flaechen": [
+        {
+          "art": "metall",
+          "name": "Rostpanzer (Rampe 4/5/6, ortsgetrennt exklusiv V5)",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Kiefer- und Rippenlinie (schmal, <= 10 %)",
+          "toene": [
+            "B",
+            "b"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Rim WARM: '_' harter Glanzpunkt Helmkuppe + '6' weiche Lichtkante Plattenoberkante (E-B9 NEU, FIX 1)",
+          "toene": [
+            "_",
+            "6"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Augenglut im Visier + Nieten",
+          "toene": [
+            "y"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante (Schattenseite k, Lichtseite 4)",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ]
+    }
+  },
+  "hinweis": "Verbindlich fuer Skelett, Grufthund, Warden (Zeichner A). Rostpanzer, Ghul und Schild in der FIX-1-Fassung von Zeichner B (Rost/Schild rim ['_','6'] statt '|'; Ghul-Schaedel als 2-Stufen-Akzentflaeche, G7-Ausnahme von Fable deklariert).",
+  "$quelle": {
+    "A": "material_A.json (Skelett, Grufthund, Warden)",
+    "B": "material_B.json (Rostpanzer, Schild, Ghul)",
+    "zusammengefuehrt": "Fable 12.09.2026"
+  }
+}

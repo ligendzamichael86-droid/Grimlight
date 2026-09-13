@@ -1,0 +1,595 @@
+{
+  "erzeugt": "2026-08-12",
+  "quelle": "game/js/art/palette.js (HEAD 73de948, read-only)",
+  "metrik": "L = 0,299R + 0,587G + 0,114B (Rec.601); S = (max-min)/max",
+  "gras": {
+    "offset_ideal": 15.087,
+    "offset_real": 15,
+    "hinweis": "Rec.601-Gewichte summieren zu 1 => DL = c exakt. c_ideal nicht ganzzahlig -> c_real = round(c_ideal)."
+  },
+  "wasser": {
+    "schritte": {
+      "9": 28,
+      "w": 16,
+      "W": 22,
+      "=": 34
+    },
+    "hinweis": "je Ton EIN ganzzahliger Kanal-Offset => Kanal-Differenzen (Farbort) exakt erhalten."
+  },
+  "tabelle": [
+    {
+      "key": "e",
+      "rampe": "Gras",
+      "hex_alt": "#19241d",
+      "hex_neu": "#28332c",
+      "rgb_alt": [
+        25,
+        36,
+        29
+      ],
+      "rgb_neu": [
+        40,
+        51,
+        44
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 31.9,
+      "L_neu": 46.9,
+      "L_neu_exakt": 46.913,
+      "dL": 15,
+      "spec_ziel": 47,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.306,
+      "S_neu": 0.216
+    },
+    {
+      "key": "E",
+      "rampe": "Gras",
+      "hex_alt": "#253522",
+      "hex_neu": "#344431",
+      "rgb_alt": [
+        37,
+        53,
+        34
+      ],
+      "rgb_neu": [
+        52,
+        68,
+        49
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 46,
+      "L_neu": 61.1,
+      "L_neu_exakt": 61.05,
+      "dL": 15,
+      "spec_ziel": 61.1,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.358,
+      "S_neu": 0.279
+    },
+    {
+      "key": "a",
+      "rampe": "Gras",
+      "hex_alt": "#394d30",
+      "hex_neu": "#485c3f",
+      "rgb_alt": [
+        57,
+        77,
+        48
+      ],
+      "rgb_neu": [
+        72,
+        92,
+        63
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 67.7,
+      "L_neu": 82.7,
+      "L_neu_exakt": 82.714,
+      "dL": 15,
+      "spec_ziel": 82.8,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.377,
+      "S_neu": 0.315
+    },
+    {
+      "key": "m",
+      "rampe": "Gras",
+      "hex_alt": "#506341",
+      "hex_neu": "#5f7250",
+      "rgb_alt": [
+        80,
+        99,
+        65
+      ],
+      "rgb_neu": [
+        95,
+        114,
+        80
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 89.4,
+      "L_neu": 104.4,
+      "L_neu_exakt": 104.443,
+      "dL": 15,
+      "spec_ziel": 104.5,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.343,
+      "S_neu": 0.298
+    },
+    {
+      "key": "K",
+      "rampe": "Gras",
+      "hex_alt": "#586c38",
+      "hex_neu": "#677b47",
+      "rgb_alt": [
+        88,
+        108,
+        56
+      ],
+      "rgb_neu": [
+        103,
+        123,
+        71
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 96.1,
+      "L_neu": 111.1,
+      "L_neu_exakt": 111.092,
+      "dL": 15,
+      "spec_ziel": 111.2,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.481,
+      "S_neu": 0.423
+    },
+    {
+      "key": "A",
+      "rampe": "Gras",
+      "hex_alt": "#66804a",
+      "hex_neu": "#758f59",
+      "rgb_alt": [
+        102,
+        128,
+        74
+      ],
+      "rgb_neu": [
+        117,
+        143,
+        89
+      ],
+      "offset": [
+        15,
+        15,
+        15
+      ],
+      "L_alt": 114.1,
+      "L_neu": 129.1,
+      "L_neu_exakt": 129.07,
+      "dL": 15,
+      "spec_ziel": 129.2,
+      "abweichung_ziel": -0.1,
+      "S_alt": 0.422,
+      "S_neu": 0.378
+    },
+    {
+      "key": "w",
+      "rampe": "Wasser",
+      "hex_alt": "#162325",
+      "hex_neu": "#263335",
+      "rgb_alt": [
+        22,
+        35,
+        37
+      ],
+      "rgb_neu": [
+        38,
+        51,
+        53
+      ],
+      "offset": [
+        16,
+        16,
+        16
+      ],
+      "L_alt": 31.3,
+      "L_neu": 47.3,
+      "L_neu_exakt": 47.341,
+      "dL": 16,
+      "spec_ziel": 47,
+      "abweichung_ziel": 0.3,
+      "S_alt": 0.405,
+      "S_neu": 0.283
+    },
+    {
+      "key": "W",
+      "rampe": "Wasser",
+      "hex_alt": "#203336",
+      "hex_neu": "#36494c",
+      "rgb_alt": [
+        32,
+        51,
+        54
+      ],
+      "rgb_neu": [
+        54,
+        73,
+        76
+      ],
+      "offset": [
+        22,
+        22,
+        22
+      ],
+      "L_alt": 45.7,
+      "L_neu": 67.7,
+      "L_neu_exakt": 67.661,
+      "dL": 22,
+      "spec_ziel": 67.3,
+      "abweichung_ziel": 0.4,
+      "S_alt": 0.407,
+      "S_neu": 0.289
+    },
+    {
+      "key": "9",
+      "rampe": "Wasser",
+      "hex_alt": "#2a4347",
+      "hex_neu": "#465f63",
+      "rgb_alt": [
+        42,
+        67,
+        71
+      ],
+      "rgb_neu": [
+        70,
+        95,
+        99
+      ],
+      "offset": [
+        28,
+        28,
+        28
+      ],
+      "L_alt": 60,
+      "L_neu": 88,
+      "L_neu_exakt": 87.981,
+      "dL": 28,
+      "spec_ziel": 87.7,
+      "abweichung_ziel": 0.3,
+      "S_alt": 0.408,
+      "S_neu": 0.293
+    },
+    {
+      "key": "=",
+      "rampe": "Wasser",
+      "hex_alt": "#345358",
+      "hex_neu": "#56757a",
+      "rgb_alt": [
+        52,
+        83,
+        88
+      ],
+      "rgb_neu": [
+        86,
+        117,
+        122
+      ],
+      "offset": [
+        34,
+        34,
+        34
+      ],
+      "L_alt": 74.3,
+      "L_neu": 108.3,
+      "L_neu_exakt": 108.301,
+      "dL": 34,
+      "spec_ziel": 108,
+      "abweichung_ziel": 0.3,
+      "S_alt": 0.409,
+      "S_neu": 0.295
+    }
+  ],
+  "bezugstoene_unveraendert": [
+    {
+      "key": "k",
+      "hex": "#14101a",
+      "L": 18.3,
+      "S": 0.385
+    },
+    {
+      "key": "n",
+      "hex": "#221c26",
+      "L": 30.9,
+      "S": 0.263
+    },
+    {
+      "key": "0",
+      "hex": "#0f1a12",
+      "L": 21.8,
+      "S": 0.423
+    },
+    {
+      "key": "*",
+      "hex": "#141f15",
+      "L": 26.6,
+      "S": 0.355
+    },
+    {
+      "key": "+",
+      "hex": "#1a2a1b",
+      "L": 35.5,
+      "S": 0.381
+    },
+    {
+      "key": "D",
+      "hex": "#949eae",
+      "L": 156.8,
+      "S": 0.149
+    },
+    {
+      "key": "t",
+      "hex": "#2a2e36",
+      "L": 45.7,
+      "S": 0.222
+    },
+    {
+      "key": "z",
+      "hex": "#332a23",
+      "L": 43.9,
+      "S": 0.314
+    },
+    {
+      "key": "q",
+      "hex": "#3a291d",
+      "L": 44.7,
+      "S": 0.5
+    },
+    {
+      "key": "c",
+      "hex": "#1d2f3d",
+      "L": 43.2,
+      "S": 0.525
+    },
+    {
+      "key": "g",
+      "hex": "#3a3542",
+      "L": 56,
+      "S": 0.197
+    }
+  ],
+  "auflagen": [
+    {
+      "auflage": "A1a  k < w",
+      "ok": true,
+      "beleg": "k 18.3 < w 47.3  (Delta 29)"
+    },
+    {
+      "auflage": "A1b  w = e (Gleichstand, 8-Bit-Toleranz)",
+      "ok": true,
+      "beleg": "w 47.341 vs e 46.913  ->  |Delta| = 0.428 L (< 1 = kleinste 8-Bit-Stufe)"
+    },
+    {
+      "auflage": "A1c  e < W",
+      "ok": true,
+      "beleg": "e 46.9 < W 67.7  (Delta 20.7)"
+    },
+    {
+      "auflage": "A1d  W < 9",
+      "ok": true,
+      "beleg": "W 67.7 < 9 88  (Delta 20.3)"
+    },
+    {
+      "auflage": "A1e  9 < '='",
+      "ok": true,
+      "beleg": "9 88 < = 108.3  (Delta 20.3)"
+    },
+    {
+      "auflage": "A1f  '=' < A",
+      "ok": true,
+      "beleg": "= 108.3 < A 129.1  (Delta 20.8)"
+    },
+    {
+      "auflage": "A1g  A < D",
+      "ok": true,
+      "beleg": "A 129.1 < D 156.8  (Delta 27.8)"
+    },
+    {
+      "auflage": "A2  S(w) < S(A)",
+      "ok": true,
+      "beleg": "S(w) 0.283 < S(A) 0.378"
+    },
+    {
+      "auflage": "A2  S(W) < S(A)",
+      "ok": true,
+      "beleg": "S(W) 0.289 < S(A) 0.378"
+    },
+    {
+      "auflage": "A2  S(9) < S(A)",
+      "ok": true,
+      "beleg": "S(9) 0.293 < S(A) 0.378"
+    },
+    {
+      "auflage": "A2  S(=) < S(A)",
+      "ok": true,
+      "beleg": "S(=) 0.295 < S(A) 0.378"
+    },
+    {
+      "auflage": "A3  'w' kuehler als 'e' (B > G)",
+      "ok": true,
+      "beleg": "w RGB 38,51,53: B 53 > G 51  |  e RGB 40,51,44: G 51 > B 44"
+    },
+    {
+      "auflage": "A4  Gras-Rampe streng monoton",
+      "ok": true,
+      "beleg": "e 46.9 < E 61.1 < a 82.7 < m 104.4 < K 111.1 < A 129.1"
+    },
+    {
+      "auflage": "A5  Wasser-Schritte gleichmaessig",
+      "ok": true,
+      "beleg": "Schritte 20.32 / 20.32 / 20.32 L"
+    },
+    {
+      "auflage": "A6  §0.11 keine neuen Schluessel",
+      "ok": true,
+      "beleg": "64 Schluessel, Zeichensatz identisch"
+    },
+    {
+      "auflage": "A7  kein Kanal ueber 255",
+      "ok": true,
+      "beleg": "max Kanal = 143"
+    },
+    {
+      "auflage": "A8  '=' < 'A' (Wasser nie hellster Ton)",
+      "ok": true,
+      "beleg": "= 108.3 < A 129.1"
+    }
+  ],
+  "folge_a_water_mid_calm": {
+    "ton_alt": "k",
+    "L_k": 18.3,
+    "ton_neu": "+",
+    "L_plus": 35.5,
+    "L_w_neu": 47.3,
+    "zonensprung_mit_k": 29,
+    "zonensprung_mit_plus": 11.8,
+    "zonensprung_bestand_vorher": 13,
+    "soll": 11.5
+  },
+  "folge_b_rim_kandidaten": [
+    {
+      "key": "t",
+      "hex_neu": "#2a2e36",
+      "L": 45.7,
+      "d_ueber_plus": 10.2,
+      "gruen": false,
+      "kalt": true,
+      "S": 0.222
+    },
+    {
+      "key": "q",
+      "hex_neu": "#3a291d",
+      "L": 44.7,
+      "d_ueber_plus": 9.2,
+      "gruen": false,
+      "kalt": false,
+      "S": 0.5
+    },
+    {
+      "key": "e",
+      "hex_neu": "#28332c",
+      "L": 46.9,
+      "d_ueber_plus": 11.4,
+      "gruen": true,
+      "kalt": true,
+      "S": 0.216
+    },
+    {
+      "key": "z",
+      "hex_neu": "#332a23",
+      "L": 43.9,
+      "d_ueber_plus": 8.4,
+      "gruen": false,
+      "kalt": false,
+      "S": 0.314
+    },
+    {
+      "key": "w",
+      "hex_neu": "#263335",
+      "L": 47.3,
+      "d_ueber_plus": 11.8,
+      "gruen": false,
+      "kalt": true,
+      "S": 0.283
+    },
+    {
+      "key": "c",
+      "hex_neu": "#1d2f3d",
+      "L": 43.2,
+      "d_ueber_plus": 7.7,
+      "gruen": false,
+      "kalt": true,
+      "S": 0.525
+    }
+  ],
+  "variante_zielexakt_NICHT_EMPFOHLEN": {
+    "9": {
+      "hex": "#455f63",
+      "rgb": [
+        69,
+        95,
+        99
+      ],
+      "offset": [
+        27,
+        28,
+        28
+      ],
+      "L": 87.7,
+      "abweichung": 0
+    },
+    "w": {
+      "hex": "#253335",
+      "rgb": [
+        37,
+        51,
+        53
+      ],
+      "offset": [
+        15,
+        16,
+        16
+      ],
+      "L": 47,
+      "abweichung": 0
+    },
+    "W": {
+      "hex": "#35494b",
+      "rgb": [
+        53,
+        73,
+        75
+      ],
+      "offset": [
+        21,
+        22,
+        21
+      ],
+      "L": 67.2,
+      "abweichung": -0.1
+    },
+    "=": {
+      "hex": "#55757a",
+      "rgb": [
+        85,
+        117,
+        122
+      ],
+      "offset": [
+        33,
+        34,
+        34
+      ],
+      "L": 108,
+      "abweichung": 0
+    }
+  }
+}

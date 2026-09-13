@@ -1,0 +1,394 @@
+[
+ {
+  "zeichen": "!",
+  "hex": "#5b3438",
+  "rgb": [
+   91,
+   52,
+   56
+  ],
+  "slot": "G_dunkel",
+  "rampe": "G",
+  "rolle": "Hedda — Krapp-Wolle, G-Rampe geschlossen (Schatten WARM Richtung Braunrot, E3/M12)",
+  "L601": 64.117,
+  "LabL": 26.637,
+  "Laba": 18.101,
+  "Labb": 5.035,
+  "C": 18.789,
+  "hue": 15.545,
+  "minBestand": 10.296,
+  "minBestandKey": "4",
+  "dHeld4": {
+   "u": 15.168,
+   "U": 13.684,
+   "X": 19.129,
+   "Z": 34.511
+  },
+  "hueSpanneRampe": 22.091,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "%",
+  "hex": "#a07887",
+  "rgb": [
+   160,
+   120,
+   135
+  ],
+  "slot": "G_hell",
+  "rampe": "G",
+  "rolle": "Hedda — Krapp-Wolle, G-Rampe geschlossen (Schatten WARM Richtung Braunrot, E3/M12)",
+  "L601": 133.67,
+  "LabL": 54.716,
+  "Laba": 18.036,
+  "Labb": -2.07,
+  "C": 18.155,
+  "hue": 353.453,
+  "minBestand": 11.621,
+  "minBestandKey": "S",
+  "dHeld4": {
+   "u": 33.723,
+   "U": 25.79,
+   "X": 17.183,
+   "Z": 12.028
+  },
+  "hueSpanneRampe": 22.091,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "&",
+  "hex": "#188185",
+  "rgb": [
+   24,
+   129,
+   133
+  ],
+  "slot": "Corm_dunkel",
+  "rampe": "CORM",
+  "rolle": "Corm — Wolle, eigene Petrol-Familie (NICHT Stein g/s/S, NICHT Erde); L601 an das P0.d-Fenster 116,71..159,37 gelegt",
+  "L601": 98.061,
+  "LabL": 48.993,
+  "Laba": -26.139,
+  "Labb": -10.295,
+  "C": 28.094,
+  "hue": 201.497,
+  "minBestand": 10.538,
+  "minBestandKey": "=",
+  "dHeld4": {
+   "u": 41.741,
+   "U": 37.589,
+   "X": 33.33,
+   "Z": 33.788
+  },
+  "hueSpanneRampe": 28.506,
+  "satMaxMitte": false
+ },
+ {
+  "zeichen": "(",
+  "hex": "#4b918a",
+  "rgb": [
+   75,
+   145,
+   138
+  ],
+  "slot": "Corm_mittel",
+  "rampe": "CORM",
+  "rolle": "Corm — Wolle, eigene Petrol-Familie (NICHT Stein g/s/S, NICHT Erde); L601 an das P0.d-Fenster 116,71..159,37 gelegt",
+  "L601": 123.272,
+  "LabL": 55.666,
+  "Laba": -23.84,
+  "Labb": -3.116,
+  "C": 24.043,
+  "hue": 187.446,
+  "minBestand": 13.055,
+  "minBestandKey": "7",
+  "dHeld4": {
+   "u": 44.981,
+   "U": 40.272,
+   "X": 34.648,
+   "Z": 31.436
+  },
+  "hueSpanneRampe": 28.506,
+  "satMaxMitte": false
+ },
+ {
+  "zeichen": ")",
+  "hex": "#71a394",
+  "rgb": [
+   113,
+   163,
+   148
+  ],
+  "slot": "Corm_hell",
+  "rampe": "CORM",
+  "rolle": "Corm — Wolle, eigene Petrol-Familie (NICHT Stein g/s/S, NICHT Erde); L601 an das P0.d-Fenster 116,71..159,37 gelegt",
+  "L601": 146.34,
+  "LabL": 63.213,
+  "Laba": -20.001,
+  "Labb": 2.459,
+  "C": 20.152,
+  "hue": 172.99,
+  "minBestand": 15.261,
+  "minBestandKey": "A",
+  "dHeld4": {
+   "u": 50.059,
+   "U": 45.034,
+   "X": 37.47,
+   "Z": 30.336
+  },
+  "hueSpanneRampe": 28.506,
+  "satMaxMitte": false
+ },
+ {
+  "zeichen": ":",
+  "hex": "#795a57",
+  "rgb": [
+   121,
+   90,
+   87
+  ],
+  "slot": "Bran_dunkel",
+  "rampe": "BRAN",
+  "rolle": "Bran — versengtes Leder, eigene warme Familie (NICHT Rost 4/5/6, NICHT Holz)",
+  "L601": 98.927,
+  "LabL": 41.32,
+  "Laba": 12.264,
+  "Labb": 6.687,
+  "C": 13.968,
+  "hue": 28.604,
+  "minBestand": 11.1,
+  "minBestandKey": "G",
+  "dHeld4": {
+   "u": 23.073,
+   "U": 17.846,
+   "X": 16.201,
+   "Z": 24.827
+  },
+  "hueSpanneRampe": 25.511,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": ";",
+  "hex": "#a77769",
+  "rgb": [
+   167,
+   119,
+   105
+  ],
+  "slot": "Bran_mittel",
+  "rampe": "BRAN",
+  "rolle": "Bran — versengtes Leder, eigene warme Familie (NICHT Rost 4/5/6, NICHT Holz)",
+  "L601": 131.756,
+  "LabL": 54.479,
+  "Laba": 16.923,
+  "Labb": 15.165,
+  "C": 22.724,
+  "hue": 41.864,
+  "minBestand": 10.951,
+  "minBestandKey": "2",
+  "dHeld4": {
+   "u": 36.639,
+   "U": 30.792,
+   "X": 25.348,
+   "Z": 22.313
+  },
+  "hueSpanneRampe": 25.511,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "?",
+  "hex": "#b0988c",
+  "rgb": [
+   176,
+   152,
+   140
+  ],
+  "slot": "Bran_hell",
+  "rampe": "BRAN",
+  "rolle": "Bran — versengtes Leder, eigene warme Familie (NICHT Rost 4/5/6, NICHT Holz)",
+  "L601": 157.808,
+  "LabL": 64.628,
+  "Laba": 6.937,
+  "Labb": 9.588,
+  "C": 11.834,
+  "hue": 54.114,
+  "minBestand": 10.981,
+  "minBestandKey": "h",
+  "dHeld4": {
+   "u": 45.543,
+   "U": 39.46,
+   "X": 30.454,
+   "Z": 20.268
+  },
+  "hueSpanneRampe": 25.511,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "@",
+  "hex": "#327596",
+  "rgb": [
+   50,
+   117,
+   150
+  ],
+  "slot": "Mile_dunkel",
+  "rampe": "MILE",
+  "rolle": "Mile — Kittel, eigene Stahlblau-Familie (NICHT Krapp, NICHT Gruen, NICHT Leinen/Knochen)",
+  "L601": 100.729,
+  "LabL": 46.449,
+  "Laba": -10.366,
+  "Labb": -24.143,
+  "C": 26.275,
+  "hue": 246.763,
+  "minBestand": 10.498,
+  "minBestandKey": "C",
+  "dHeld4": {
+   "u": 34.727,
+   "U": 30.371,
+   "X": 26.011,
+   "Z": 28.404
+  },
+  "hueSpanneRampe": 31.663,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "[",
+  "hex": "#4691b0",
+  "rgb": [
+   70,
+   145,
+   176
+  ],
+  "slot": "Mile_mittel",
+  "rampe": "MILE",
+  "rolle": "Mile — Kittel, eigene Stahlblau-Familie (NICHT Krapp, NICHT Gruen, NICHT Leinen/Knochen)",
+  "L601": 126.109,
+  "LabL": 56.77,
+  "Laba": -13.869,
+  "Labb": -23.245,
+  "C": 27.068,
+  "hue": 239.177,
+  "minBestand": 13.375,
+  "minBestandKey": "i",
+  "dHeld4": {
+   "u": 43.977,
+   "U": 38.666,
+   "X": 31.932,
+   "Z": 27.586
+  },
+  "hueSpanneRampe": 31.663,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "]",
+  "hex": "#62adba",
+  "rgb": [
+   98,
+   173,
+   186
+  ],
+  "slot": "Mile_hell",
+  "rampe": "MILE",
+  "rolle": "Mile — Kittel, eigene Stahlblau-Familie (NICHT Krapp, NICHT Gruen, NICHT Leinen/Knochen)",
+  "L601": 152.057,
+  "LabL": 66.542,
+  "Laba": -19.784,
+  "Labb": -13.905,
+  "C": 24.182,
+  "hue": 215.101,
+  "minBestand": 11.048,
+  "minBestandKey": "i",
+  "dHeld4": {
+   "u": 54.338,
+   "U": 48.733,
+   "X": 38.915,
+   "Z": 30.323
+  },
+  "hueSpanneRampe": 31.663,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "^",
+  "hex": "#6c75a8",
+  "rgb": [
+   108,
+   117,
+   168
+  ],
+  "slot": "Held_zwischen",
+  "rampe": "HELD",
+  "rolle": "Held — Zwischenstufe in der X->Z-Schlucht (Schrittverhaeltnis 1,745 -> <=1,6)",
+  "L601": 120.123,
+  "LabL": 50.379,
+  "Laba": 9.35,
+  "Labb": -28.348,
+  "C": 29.851,
+  "hue": 288.254,
+  "minBestand": 11.145,
+  "minBestandKey": "L",
+  "dHeld4": {
+   "u": 30.326,
+   "U": 22.212,
+   "X": 13.264,
+   "Z": 13.264
+  },
+  "hueSpanneRampe": 22.137,
+  "satMaxMitte": false
+ },
+ {
+  "zeichen": "_",
+  "hex": "#e0c3c3",
+  "rgb": [
+   224,
+   195,
+   195
+  ],
+  "slot": "Rim_warm",
+  "rampe": "RIM",
+  "rolle": "Rim-Toene hell, warm + kalt einsetzbar — deklarierte Ausnahme Stilregel 10",
+  "L601": 203.671,
+  "LabL": 81.191,
+  "Laba": 10.242,
+  "Labb": 3.772,
+  "C": 10.915,
+  "hue": 20.215,
+  "minBestand": 16.265,
+  "minBestandKey": "F",
+  "dHeld4": {
+   "u": 65.755,
+   "U": 52.034,
+   "X": 37.522,
+   "Z": 21.594
+  },
+  "hueSpanneRampe": 174.408,
+  "satMaxMitte": true
+ },
+ {
+  "zeichen": "|",
+  "hex": "#abdcda",
+  "rgb": [
+   171,
+   220,
+   218
+  ],
+  "slot": "Rim_kalt",
+  "rampe": "RIM",
+  "rolle": "Rim-Toene hell, warm + kalt einsetzbar — deklarierte Ausnahme Stilregel 10",
+  "L601": 205.121,
+  "LabL": 84.435,
+  "Laba": -16.147,
+  "Labb": -4.213,
+  "C": 16.688,
+  "hue": 194.624,
+  "minBestand": 13.112,
+  "minBestandKey": "I",
+  "dHeld4": {
+   "u": 73.501,
+   "U": 59.46,
+   "X": 46.368,
+   "Z": 33.511
+  },
+  "hueSpanneRampe": 174.408,
+  "satMaxMitte": true
+ }
+]

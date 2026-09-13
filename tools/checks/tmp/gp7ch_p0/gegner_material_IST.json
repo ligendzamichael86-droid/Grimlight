@@ -1,0 +1,225 @@
+{
+  "$format": "GP7CH2/MATERIAL-TABELLE/1",
+  "figuren": {
+    "Ghul": {
+      "flaechen": [
+        {
+          "art": "stoff",
+          "name": "Lumpen (Stein g + Oliv d, Materialbruch)",
+          "toene": [
+            "d",
+            "g"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Schaedel",
+          "toene": [
+            "3",
+            "H"
+          ]
+        },
+        {
+          "art": "rim",
+          "name": "Rimkante (kuehl, senkrecht links = Flip-Fehler G-F)",
+          "toene": [
+            "C"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Grufthund": {
+      "flaechen": [
+        {
+          "art": "leder",
+          "name": "Fell/Haut (ERDRAMPE — Sperrliste E6/V3)",
+          "toene": [
+            "P",
+            "V",
+            "p",
+            "v",
+            "z"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Zaehne/Knochen",
+          "toene": [
+            "b"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Auge",
+          "toene": [
+            "R",
+            "r"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ],
+      "rim": []
+    },
+    "Rostpanzer": {
+      "flaechen": [
+        {
+          "art": "metall",
+          "name": "Rostpanzer (Rampe 4/5/6, ortsgetrennt exklusiv V5)",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Knochen (geteilter Leitton mit Skelett/Warden)",
+          "toene": [
+            "B",
+            "N",
+            "O",
+            "b"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ],
+      "rim": []
+    },
+    "Schild": {
+      "flaechen": [
+        {
+          "art": "metall",
+          "name": "Rostplatte (Rampe 4/5/6)",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Niete/Glanz",
+          "toene": [
+            "y"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ],
+      "rim": []
+    },
+    "Skelett": {
+      "flaechen": [
+        {
+          "art": "knochen",
+          "name": "Knochen",
+          "toene": [
+            "B",
+            "b",
+            "N"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ],
+      "rim": []
+    },
+    "Warden": {
+      "flaechen": [
+        {
+          "art": "knochen",
+          "name": "Knochen/Panzerplatten",
+          "toene": [
+            "B",
+            "N",
+            "O",
+            "b"
+          ]
+        },
+        {
+          "art": "stoff",
+          "name": "Umhang/Stoff (HELDEN-Rampe u/U/X, Bestand)",
+          "toene": [
+            "U",
+            "X",
+            "u"
+          ]
+        },
+        {
+          "art": "metall",
+          "name": "Rostschienen",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "metall",
+          "name": "Guertel/Gold",
+          "toene": [
+            "Y",
+            "y"
+          ]
+        },
+        {
+          "art": "merkmal",
+          "name": "Glut/Seelenfeuer (Augen + Brustrunen)",
+          "toene": [
+            "7",
+            "8"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Waffe/Klingensaeule (Spalten 11-13, Zeilen 15-31)",
+          "toene": [
+            "C",
+            "I",
+            "i"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ]
+    }
+  },
+  "quelle": "P0.a, handbestimmt aus der Zeilen-/Spaltenlesung der heutigen Grids (Tonzensus gegengeprueft). KEINE Lieferung des Art-Agenten — Phase 1 liefert je Gegner die eigene Tabelle im selben Format (--material-gegner <pfad>).",
+  "stand": "IST vor GP7-CH-2 (Gegner-Grids im Stand game/js/art/sprites_figuren.js)"
+}

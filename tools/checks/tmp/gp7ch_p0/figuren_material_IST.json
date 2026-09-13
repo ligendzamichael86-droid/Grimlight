@@ -1,0 +1,319 @@
+{
+  "$format": "GP7CH1/MATERIAL-TABELLE/1",
+  "figuren": {
+    "Bran": {
+      "flaechen": [
+        {
+          "art": "leder",
+          "name": "Schmiedeschurz (Leder)",
+          "toene": [
+            "J",
+            "c"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Haar/Kappe + Hose",
+          "toene": [
+            "q",
+            "j"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Arme",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Bart",
+          "toene": [
+            "B"
+          ]
+        },
+        {
+          "art": "metall",
+          "name": "Schnalle",
+          "toene": [
+            "5"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Corm": {
+      "flaechen": [
+        {
+          "art": "stein",
+          "name": "Kutte (Stein-Rampe)",
+          "toene": [
+            "s",
+            "g"
+          ]
+        },
+        {
+          "art": "stoff",
+          "name": "Stola",
+          "toene": [
+            "G"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Gesicht",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "knochen",
+          "name": "Haar/Tonsur",
+          "toene": [
+            "B",
+            "b"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Stab",
+          "toene": [
+            "J",
+            "q"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Hedda": {
+      "flaechen": [
+        {
+          "art": "stoff",
+          "name": "Kleid (Krapp)",
+          "toene": [
+            "G",
+            "r"
+          ]
+        },
+        {
+          "art": "stoff",
+          "name": "Kopftuch/Leinen",
+          "toene": [
+            "O",
+            "B"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Gesicht",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Schuhe",
+          "toene": [
+            "q"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Gehstock",
+          "toene": [
+            "j"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Held": {
+      "flaechen": [
+        {
+          "art": "stoff",
+          "name": "Umhang/Stoff",
+          "toene": [
+            "u",
+            "U",
+            "X",
+            "Z"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Gesicht",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "leder",
+          "name": "Stiefel/Guertel",
+          "toene": [
+            "j",
+            "q"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Klinge/Stahl",
+          "toene": [
+            "i",
+            "I",
+            "C"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Klingenreflex/Gold",
+          "toene": [
+            "y",
+            "Y"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k",
+            "n"
+          ]
+        }
+      ],
+      "rim": [
+        "Z"
+      ]
+    },
+    "Mile": {
+      "flaechen": [
+        {
+          "art": "stoff",
+          "name": "Kittel (Leinen/Knochen-Nachbarschaft)",
+          "toene": [
+            "O",
+            "B"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Gesicht",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Kappe/Haar",
+          "toene": [
+            "c",
+            "Q"
+          ]
+        },
+        {
+          "art": "leder",
+          "name": "Guertel + Tasche",
+          "toene": [
+            "j"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Schuhe",
+          "toene": [
+            "q"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    },
+    "Torwaechter": {
+      "flaechen": [
+        {
+          "art": "metall",
+          "name": "Rostpanzer",
+          "toene": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "art": "stein",
+          "name": "Haube (Stein-Rampe)",
+          "toene": [
+            "s",
+            "S"
+          ]
+        },
+        {
+          "art": "haut",
+          "name": "Haut/Gesicht",
+          "toene": [
+            "h",
+            "2"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Hose + Speerschaft",
+          "toene": [
+            "j"
+          ]
+        },
+        {
+          "art": "holz",
+          "name": "Stiefel",
+          "toene": [
+            "q"
+          ]
+        },
+        {
+          "art": "requisit",
+          "name": "Speerspitze",
+          "toene": [
+            "i"
+          ]
+        },
+        {
+          "art": "umriss",
+          "name": "Silhouettenkante",
+          "toene": [
+            "k"
+          ]
+        }
+      ]
+    }
+  },
+  "quelle": "P0.d, handbestimmt aus der Zeilen-/Spaltenlesung der heutigen Grids. KEINE Lieferung des Art-Agenten — Phase 1 ersetzt diese Datei durch die eigene MATERIAL-TABELLE im selben Format (--material <pfad>).",
+  "stand": "IST vor GP7-CH-1 (Grids im Stand sprites_figuren.js nach P0.a-Split)"
+}

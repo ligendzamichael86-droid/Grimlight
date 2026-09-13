@@ -1,0 +1,20 @@
+# Python-Pakete der Mess-Venv (.tmp/venv). Eingefroren aus
+#   .tmp/venv/bin/pip freeze   (13.09.2026, Python 3.13.5)
+# Direkt gebraucht: playwright (Headless-Chromium-Rig), pillow (PNG/Crops),
+# numpy (Luma-/dE00-Rechnung). Der Rest sind Transitiv-Pins von playwright,
+# hier mitgeschrieben, damit ein `pip install -r` auf einem anderen Rechner
+# bitgleiche Versionen zieht.
+#
+# Leser dieser Pakete: .tmp/shot_gfx6.py (Realmessung m3/m4/m5 + M1 g6)
+# und .tmp/slice6_p4/messung_p4.py (M1 DORF d1-d6).
+#
+# Nach dem pip-install noch die Browser-Binaries holen:
+#   .tmp/venv/bin/playwright install chromium
+# (die Binaries liegen NICHT in der venv, sondern unter ~/.cache/ms-playwright;
+#  auf dieser Maschine: chromium-1228 + chromium_headless_shell-1228)
+greenlet==3.5.3
+numpy==2.5.1
+pillow==12.3.0
+playwright==1.61.0
+pyee==13.0.1
+typing_extensions==4.16.0
